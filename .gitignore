@@ -1,3 +1,9 @@
-.dockerignore
 .env
-
+telegram-bot
+obsidian-automation
+stats.json
+attachments/*
+!attachments/.gitkeep
+logs/*
+!logs/.gitkeep
+*.log

@@ -1,0 +1,9 @@
+vault/
+attachments/
+stats.json
+.env
+*.sh
+README.md
+telegram-bot
+obsidian-automation
+.git/

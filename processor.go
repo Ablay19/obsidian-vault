@@ -16,6 +16,9 @@ Category   string
 Tags       []string
 Confidence float64
 Language   string
+Summary    string
+Topics     []string
+Questions  []string
 }
 
 func extractTextFromImage(imagePath string) (string, error) {
@@ -145,4 +148,62 @@ return ProcessedContent{Text: text, Category: "unclear", Tags: []string{"low-tex
 }
 
 return classifyContent(text)
+}
+
+// Enhanced AI processing with Gemini
+func processFileWithGemini(filePath, fileType string) ProcessedContent {
+// Do basic OCR/extraction first
+var text string
+var err error
+
+log.Printf("Processing %s: %s", fileType, filePath)
+
+if fileType == "image" {
+text, err = extractTextFromImage(filePath)
+} else if fileType == "pdf" {
+text, err = extractTextFromPDF(filePath)
+}
+
+result := ProcessedContent{
+Text:     text,
+Category: "general",
+Tags:     []string{},
+}
+
+if err != nil || len(text) < 10 {
+log.Printf("Text extraction issue: %v", err)
+result.Category = "unprocessed"
+result.Tags = []string{"error"}
+return result
+}
+
+// Use Gemini for classification (better than regex)
+if isGeminiAvailable() {
+log.Println("Using Gemini for AI enhancement...")
+
+// Better classification
+result.Category = classifyWithGemini(text)
+
+// Generate summary
+result.Summary = generateSummaryGemini(text, result.Category)
+
+// Extract topics
+result.Topics = extractKeyTopicsGemini(text)
+
+// Generate questions
+result.Questions = generateQuestions(text)
+
+// Build tags from topics and category
+result.Tags = append([]string{result.Category}, result.Topics...)
+result.Confidence = 0.9 // Gemini is quite reliable
+
+} else {
+// Fallback to basic classification
+log.Println("Gemini unavailable, using basic classification")
+result = classifyContent(text)
+}
+
+result.Language = detectLanguage(text)
+
+return result
 }
