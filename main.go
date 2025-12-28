@@ -48,6 +48,22 @@ func main() {
 		log.Fatal(err)
 	}
 
+	commands := []tgbotapi.BotCommand{
+		{Command: "start", Description: "Start the bot and see help"},
+		{Command: "help", Description: "Show help message"},
+		{Command: "stats", Description: "Show usage statistics"},
+		{Command: "lang", Description: "Set AI language (e.g. /lang English)"},
+		{Command: "last", Description: "Show last created note"},
+		{Command: "reprocess", Description: "Reprocess last sent file"},
+		{Command: "switchkey", Description: "Switch to next Gemini API key"},
+	}
+	config := tgbotapi.NewSetMyCommands(commands...)
+	_, err = bot.Request(config)
+	if err != nil {
+		log.Printf("Error setting bot commands: %v", err)
+	}
+
+
 	bot.Debug = false
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
@@ -109,7 +125,7 @@ func handleCommand(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *A
 		globalMutex.Unlock()
 		
 		prompt := fmt.Sprintf("Respond in %s. User message: %s", lang, message.Text)
-		fullResponse, err := aiService.GenerateContent(context.Background(), prompt, nil, ModelProComplex, streamCallback)
+		fullResponse, err := aiService.GenerateContent(context.Background(), prompt, nil, ModelFlashSearch, streamCallback)
 		if err != nil {
 			bot.Send(tgbotapi.NewEditMessageText(sentMsg.Chat.ID, sentMsg.MessageID, "Sorry, I had trouble thinking: "+err.Error()))
 			return

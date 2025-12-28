@@ -27,7 +27,7 @@ RUN mkdir -p attachments vault/Inbox vault/Attachments && \
 
 USER appuser
 
-ENV GEMINI_API_KEY ""
+ENV GEMINI_API_KEY=""
 
 EXPOSE 8080
 
