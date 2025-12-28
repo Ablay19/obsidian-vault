@@ -122,7 +122,7 @@ func handleCommand(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *A
 	switch message.Command() {
 	case "start", "help":
 		msg := tgbotapi.NewMessage(message.Chat.ID,
-			"🤖 Bot active! Send images/PDFs for processing.\n\nCommands:\n/stats - Statistics\n/last - Show last created note\n/reprocess - Reprocess last file\n/lang - Set AI language (e.g. /lang English)\n/help - This message")
+			"🤖 Bot active! Send images/PDFs for processing.\n\nCommands:\n/stats - Statistics\n/last - Show last created note\n/reprocess - Reprocess last file\n/lang - Set AI language (e.g. /lang English)\n/switchkey - Switch to next API key\n/help - This message")
 		bot.Send(msg)
 
 	case "stats":
@@ -185,6 +185,14 @@ func handleCommand(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *A
 			defaultLanguage = lang
 			globalMutex.Unlock()
 			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Language set to: "+lang))
+		}
+	
+	case "switchkey":
+		if aiService != nil {
+			nextKeyIndex := aiService.SwitchKey()
+			bot.Send(tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("Switched to API Key #%d", nextKeyIndex+1)))
+		} else {
+			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "AI service is not available."))
 		}
 	}
 }
