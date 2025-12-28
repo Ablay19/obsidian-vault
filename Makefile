@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Simple Makefile for managing the Obsidian Bot Docker container.
 
 .PHONY: all build up stop rm clean logs status restart health help backup
@@ -74,13 +73,10 @@ start: build-docker
 	  -v "$$(pwd)/vault:/app/vault" \
 	  -v "$$(pwd)/attachments:/app/attachments" \
 	  -v "$$(pwd)/stats.json:/app/stats.json" \
->>>>>>> main
 	  -p 8080:8080 \
-	  --memory="512m" \
 	  --log-driver json-file \
 	  --log-opt max-size=10m \
 	  --log-opt max-file=3 \
-<<<<<<< HEAD
 	  $(IMAGE_NAME)
 	@echo ""
 	@echo "✅ Bot started successfully!"
@@ -122,7 +118,6 @@ help: ## Show this help message.
 	@echo ""
 	@echo "Available targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%%-20s\033[0m %%s\n", $$1, $$2}'
-=======
 	  $(BOT_IMAGE)
 	@echo ""
 	@echo "✅ Bot started successfully!"
@@ -222,4 +217,3 @@ clean:
 	@echo "🧹 Cleaning up old scripts..."
 	@rm -f backup-vault.sh logs.sh quick-start.sh restart.sh setup-all.sh status.sh stop-bot.sh test-bot.sh update.sh view-stats.sh
 	@echo "✅ Scripts removed."
->>>>>>> main
