@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -43,10 +44,6 @@ func main() {
 	bot.Debug = false
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
-	os.MkdirAll(attachmentsDir, 0755)
-	os.MkdirAll(filepath.Join(vaultDir, "Inbox"), 0755)
-	os.MkdirAll(filepath.Join(vaultDir, "Attachments"), 0755)
-
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 	updates := bot.GetUpdatesChan(u)
@@ -76,13 +73,13 @@ func handleCommand(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 	switch message.Text {
 	case "/start":
 		msg := tgbotapi.NewMessage(message.Chat.ID,
-		"🤖 Bot active! Send images/PDFs.\n\nCommands:\n/stats - Statistics\n/help - This message")
+			"🤖 Bot active! Send images/PDFs.\n\nCommands:\n/stats - Statistics\n/help - This message")
 		bot.Send(msg)
 
 	case "/stats":
 		stats.mu.Lock()
 		statsText := fmt.Sprintf("📊 Stats\n\nTotal: %d\nImages: %d\nPDFs: %d\n\nCategories:\n",
-		stats.TotalFiles, stats.ImageCount, stats.PDFCount)
+			stats.TotalFiles, stats.ImageCount, stats.PDFCount)
 		for cat, count := range stats.Categories {
 			statsText += fmt.Sprintf("• %s: %d\n", cat, count)
 		}
@@ -103,22 +100,27 @@ func handlePhoto(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *AIS
 		return
 	}
 
+	placeholder := tgbotapi.NewMessage(message.Chat.ID, "🤖 Processing image...")
+	sentMsg, err := bot.Send(placeholder)
+	if err != nil {
+		log.Printf("Error sending placeholder message: %v", err)
+		return
+	}
+
 	photo := photos[len(photos)-1]
 	filename := downloadFile(bot, photo.FileID, "jpg")
 	if filename == "" {
+		bot.Send(tgbotapi.NewEditMessageText(sentMsg.Chat.ID, sentMsg.MessageID, "⚠️ Download failed."))
 		return
 	}
 
 	if isDuplicate(filename) {
-		msg := tgbotapi.NewMessage(message.Chat.ID, "⚠️ Duplicate")
-		bot.Send(msg)
 		os.Remove(filename)
+		bot.Send(tgbotapi.NewEditMessageText(sentMsg.Chat.ID, sentMsg.MessageID, "⚠️ Duplicate file detected."))
 		return
 	}
 
-	createObsidianNote(filename, "image", message, aiService)
-	msg := tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("✅ Image: %s", filepath.Base(filename)))
-	bot.Send(msg)
+	createObsidianNote(filename, "image", message, aiService, bot, sentMsg.Chat.ID, sentMsg.MessageID)
 }
 
 func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *AIService) {
@@ -133,22 +135,27 @@ func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *
 		bot.Send(msg)
 		return
 	}
+	
+	placeholder := tgbotapi.NewMessage(message.Chat.ID, "🤖 Processing PDF...")
+	sentMsg, err := bot.Send(placeholder)
+	if err != nil {
+		log.Printf("Error sending placeholder message: %v", err)
+		return
+	}
 
 	filename := downloadFile(bot, doc.FileID, "pdf")
 	if filename == "" {
+		bot.Send(tgbotapi.NewEditMessageText(sentMsg.Chat.ID, sentMsg.MessageID, "⚠️ Download failed."))
 		return
 	}
 
 	if isDuplicate(filename) {
-		msg := tgbotapi.NewMessage(message.Chat.ID, "⚠️ Duplicate")
-		bot.Send(msg)
 		os.Remove(filename)
+		bot.Send(tgbotapi.NewEditMessageText(sentMsg.Chat.ID, sentMsg.MessageID, "⚠️ Duplicate file detected."))
 		return
 	}
 
-	createObsidianNote(filename, "pdf", message, aiService)
-	msg := tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("✅ PDF: %s", filepath.Base(filename)))
-	bot.Send(msg)
+	createObsidianNote(filename, "pdf", message, aiService, bot, sentMsg.Chat.ID, sentMsg.MessageID)
 }
 func downloadFile(bot *tgbotapi.BotAPI, fileID, ext string) string {
 	file, err := bot.GetFile(tgbotapi.FileConfig{FileID: fileID})
@@ -164,7 +171,6 @@ func downloadFile(bot *tgbotapi.BotAPI, fileID, ext string) string {
 	}
 	defer resp.Body.Close()
 
-	// Check response status
 	if resp.StatusCode != 200 {
 		log.Printf("Bad response: %d", resp.StatusCode)
 		return ""
@@ -173,20 +179,12 @@ func downloadFile(bot *tgbotapi.BotAPI, fileID, ext string) string {
 	filename := fmt.Sprintf("%s.%s", time.Now().Format("20060102_150405"), ext)
 	fullPath := filepath.Join(attachmentsDir, filename)
 
-	// Ensure directory exists with correct permissions
 	os.MkdirAll(attachmentsDir, 0755)
 
 	out, err := os.Create(fullPath)
 	if err != nil {
 		log.Printf("Create error: %v", err)
-
-		// Try alternative path
-		fullPath = "/tmp/" + filename
-		out, err = os.Create(fullPath)
-		if err != nil {
-			log.Printf("Fallback create error: %v", err)
-			return ""
-		}
+		return ""
 	}
 	defer out.Close()
 
@@ -199,7 +197,38 @@ func downloadFile(bot *tgbotapi.BotAPI, fileID, ext string) string {
 	return fullPath
 }
 
-func createObsidianNote(filePath, fileType string, message *tgbotapi.Message, aiService *AIService) {
+func createObsidianNote(filePath, fileType string, message *tgbotapi.Message, aiService *AIService, bot *tgbotapi.BotAPI, chatID int64, messageID int) {
+	var responseText string
+	var mu sync.Mutex
+	var lastEdit time.Time
+
+	streamCallback := func(chunk string) {
+		mu.Lock()
+		responseText += chunk
+		currentText := responseText
+		mu.Unlock()
+
+		if time.Since(lastEdit) > 1*time.Second {
+			msg := tgbotapi.NewEditMessageText(chatID, messageID, currentText)
+			_, err := bot.Request(msg)
+			if err != nil && !strings.Contains(err.Error(), "message is not modified") {
+				log.Printf("Error editing message: %v", err)
+			}
+			lastEdit = time.Now()
+		}
+	}
+
+	processed := processFileWithAI(filePath, fileType, aiService, streamCallback)
+	stats.recordFile(fileType, processed.Category)
+
+	// Final edit to clean up the message
+	finalText := processed.Summary
+	if finalText == "" {
+		finalText = "Processing complete."
+	}
+	finalMsg := tgbotapi.NewEditMessageText(chatID, messageID, finalText+"\n\n✅ Note created.")
+	bot.Send(finalMsg)
+
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 	baseName := filepath.Base(filePath)
 
@@ -208,59 +237,56 @@ func createObsidianNote(filePath, fileType string, message *tgbotapi.Message, ai
 		caption = "No caption"
 	}
 
-	processed := processFileWithAI(filePath, fileType, aiService)
-	stats.recordFile(fileType, processed.Category)
-
 	tagsStr := strings.Join(processed.Tags, ", ")
 	if tagsStr == "" {
 		tagsStr = "unprocessed"
 	}
 
 	content := fmt.Sprintf(`---
-	source: whatsapp-telegram
-	type: %s
-	category: %s
-	date: %s
-	language: %s
-	confidence: %.2f
-	tags: [%s]
-	ai_provider: %s
-	---
+source: telegram-bot
+type: %s
+category: %s
+date: %s
+language: %s
+confidence: %.2f
+tags: [%s]
+ai_provider: %s
+---
 
-	# %s - %s
+# %s - %s
 
-	**Received:** %s  
-	**Caption:** %s  
-	**Classification:** %s (%.0f%%)  
-	**Language:** %s
+**Received:** %s  
+**Caption:** %s  
+**Classification:** %s (%.0f%%)  
+**Language:** %s
 
-	## File
+## File
 
-	![[%s]]
+![[%s]]
 
-	## AI Summary
+## AI Summary
 
-	%s
+%s
 
-	## Key Topics
+## Key Topics
 
-	%s
+%s
 
-	## Extracted Content
+## Extracted Content
 
-	%s
+%s
 
-	## Review Questions
+## Review Questions
 
-	%s
+%s
 
-	## Notes
+## Notes
 
-	(Add your notes here)
+(Add your notes here)
 
-	---
-	*AI-powered by %s*
-	`,
+---
+*AI-powered by %s*
+`,
 		fileType,
 		processed.Category,
 		timestamp,
@@ -290,7 +316,6 @@ func createObsidianNote(filePath, fileType string, message *tgbotapi.Message, ai
 
 	log.Printf("Created note: %s", notePath)
 
-	// Auto-organize if confidence is high
 	if processed.Confidence > 0.7 && processed.Category != "general" {
 		go func() {
 			time.Sleep(500 * time.Millisecond)
@@ -321,4 +346,3 @@ func formatQuestions(questions []string) string {
 	}
 	return result
 }
-

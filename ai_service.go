@@ -4,8 +4,10 @@ import (
 	"context"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/google/generative-ai-go/genai"
+	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 )
 
@@ -27,12 +29,15 @@ type AIService struct {
 func NewAIService(ctx context.Context) *AIService {
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
-		log.Fatal("GEMINI_API_KEY environment variable not set")
+		// Log and return nil instead of fataling, so the app can run without Gemini
+		log.Println("GEMINI_API_KEY environment variable not set. Gemini AI will be unavailable.")
+		return nil
 	}
 
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("Error creating Gemini client: %v", err)
+		return nil
 	}
 
 	return &AIService{
@@ -40,8 +45,8 @@ func NewAIService(ctx context.Context) *AIService {
 	}
 }
 
-// GenerateContent generates content using the specified model.
-func (s *AIService) GenerateContent(ctx context.Context, prompt string, imageData []byte, modelType string) (string, error) {
+// GenerateContent generates content using the specified model and streams the response.
+func (s *AIService) GenerateContent(ctx context.Context, prompt string, imageData []byte, modelType string, streamCallback func(string)) (string, error) {
 	model := s.client.GenerativeModel(modelType)
 	var parts []genai.Part
 	parts = append(parts, genai.Text(prompt))
@@ -50,26 +55,38 @@ func (s *AIService) GenerateContent(ctx context.Context, prompt string, imageDat
 		parts = append(parts, genai.ImageData("jpeg", imageData))
 	}
 
-	resp, err := model.GenerateContent(ctx, parts...)
-	if err != nil {
-		return "", err
+	iter := model.GenerateContentStream(ctx, parts...)
+	var fullResponse strings.Builder
+
+	for {
+		resp, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+
+		if len(resp.Candidates) > 0 && len(resp.Candidates[0].Content.Parts) > 0 {
+			if txt, ok := resp.Candidates[0].Content.Parts[0].(genai.Text); ok {
+				chunk := string(txt)
+				fullResponse.WriteString(chunk)
+				if streamCallback != nil {
+					streamCallback(chunk)
+				}
+			}
+		}
 	}
 
-	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
-		return "", nil
-	}
-
-	if txt, ok := resp.Candidates[0].Content.Parts[0].(genai.Text); ok {
-		return string(txt), nil
-	}
-	return "", nil
+	return fullResponse.String(), nil
 }
 
 // GenerateImage generates an image using the image generation model.
+// This function does not support streaming.
 func (s *AIService) GenerateImage(ctx context.Context, prompt string) (string, error) {
 	model := s.client.GenerativeModel(ModelImageGen)
 	fullPrompt := "High quality scientific illustration, clean background, detailed, educational: " + prompt
-	
+
 	resp, err := model.GenerateContent(ctx, genai.Text(fullPrompt))
 	if err != nil {
 		return "", err
@@ -80,6 +97,6 @@ func (s *AIService) GenerateImage(ctx context.Context, prompt string) (string, e
 			return string(txt), nil
 		}
 	}
-	
+
 	return "", nil
 }

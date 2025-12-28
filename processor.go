@@ -154,7 +154,7 @@ func processFile(filePath, fileType string) ProcessedContent {
 	return classifyContent(text)
 }
 
-func processFileWithAI(filePath, fileType string, aiService *AIService) ProcessedContent {
+func processFileWithAI(filePath, fileType string, aiService *AIService, streamCallback func(string)) ProcessedContent {
 	// Do basic OCR/extraction first
 	var text string
 	var err error
@@ -191,9 +191,9 @@ func processFileWithAI(filePath, fileType string, aiService *AIService) Processe
 		log.Println("Using Gemini for AI enhancement...")
 		result.AIProvider = "Gemini"
 
-		prompt := fmt.Sprintf(`Analyze the following text and return a JSON object with the following fields:
+		prompt := fmt.Sprintf(`First, provide a 2-3 sentence summary of the following text.
+Then, on a new line, provide a JSON object with the following fields:
 - "category": a single category from the list [physics, math, chemistry, admin, general].
-- "summary": a 2-3 sentence summary of the text.
 - "topics": a list of 3-5 key topics.
 - "questions": a list of 2-3 review questions based on the text.
 
@@ -206,38 +206,68 @@ Here is the text to analyze:
 		}
 
 		// Use ModelProComplex for better analysis
-		aiResponse, err := aiService.GenerateContent(context.Background(), prompt, fileData, model)
+		aiResponse, err := aiService.GenerateContent(context.Background(), prompt, fileData, model, streamCallback)
 		if err != nil {
 			log.Printf("Error from AI service: %v", err)
 			// Fallback to basic classification
 			return classifyContent(text)
 		}
 
-		// Parse the JSON response from the AI
-		var aiResult struct {
-			Category  string   `json:"category"`
-			Summary   string   `json:"summary"`
-			Topics    []string `json:"topics"`
-			Questions []string `json:"questions"`
+		var summary string
+		var jsonStr string
+
+		// Handle markdown code block for JSON
+		jsonBlockStart := strings.Index(aiResponse, "```json")
+		if jsonBlockStart != -1 {
+			summary = strings.TrimSpace(aiResponse[:jsonBlockStart])
+			jsonBlockEnd := strings.Index(aiResponse[jsonBlockStart+7:], "```")
+			if jsonBlockEnd != -1 {
+				jsonStr = aiResponse[jsonBlockStart+7 : jsonBlockStart+7+jsonBlockEnd]
+			}
+		} else {
+			// Fallback if the AI doesn't use a markdown block, look for first {
+			jsonStart := strings.Index(aiResponse, "{")
+			if jsonStart != -1 {
+				summary = strings.TrimSpace(aiResponse[:jsonStart])
+				jsonEnd := strings.LastIndex(aiResponse, "}")
+				if jsonEnd != -1 && jsonEnd > jsonStart {
+					jsonStr = aiResponse[jsonStart : jsonEnd+1]
+				}
+			}
 		}
 
-		// Clean up the response string before unmarshalling
-		aiResponse = strings.TrimPrefix(aiResponse, "```json")
-		aiResponse = strings.TrimSuffix(aiResponse, "```")
-		aiResponse = strings.TrimSpace(aiResponse)
-
-		if err := json.Unmarshal([]byte(aiResponse), &aiResult); err != nil {
-			log.Printf("Error parsing AI response: %v", err)
-			// Fallback to basic classification if parsing fails
-			return classifyContent(text)
+		if summary == "" {
+			// If we couldn't separate them, assume the whole thing is a summary
+			summary = aiResponse
 		}
+		result.Summary = summary
 
-		result.Category = aiResult.Category
-		result.Summary = aiResult.Summary
-		result.Topics = aiResult.Topics
-		result.Questions = aiResult.Questions
-		result.Tags = append([]string{result.Category}, result.Topics...)
-		result.Confidence = 0.95 // Gemini is very reliable
+		if jsonStr != "" {
+			var aiResult struct {
+				Category  string   `json:"category"`
+				Topics    []string `json:"topics"`
+				Questions []string `json:"questions"`
+			}
+
+			if err := json.Unmarshal([]byte(jsonStr), &aiResult); err != nil {
+				log.Printf("Error parsing AI response JSON: %v", err)
+			} else {
+				result.Category = aiResult.Category
+				result.Topics = aiResult.Topics
+				result.Questions = aiResult.Questions
+				result.Tags = append([]string{result.Category}, result.Topics...)
+				result.Confidence = 0.95
+			}
+		}
+		
+		if result.Category == "" || result.Category == "general" {
+			// If JSON parsing failed or category is general, do basic classification for a better guess
+			basicResult := classifyContent(text)
+			result.Category = basicResult.Category
+			if len(result.Tags) == 0 {
+				result.Tags = basicResult.Tags
+			}
+		}
 
 	} else {
 		// Fallback to basic classification
