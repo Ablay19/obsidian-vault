@@ -20,6 +20,13 @@ const (
 	vaultDir       = "./vault"
 )
 
+var (
+	lastProcessedFile string
+	lastCreatedNote   string
+	globalMutex       sync.Mutex
+	defaultLanguage   = "French" // Default language
+)
+
 func main() {
 	startHealthServer()
 	stats.load()
@@ -32,10 +39,10 @@ func main() {
 	ctx := context.Background()
 	aiService := NewAIService(ctx)
 
-	// Create directories first
 	os.MkdirAll(attachmentsDir, 0755)
 	os.MkdirAll(filepath.Join(vaultDir, "Inbox"), 0755)
 	os.MkdirAll(filepath.Join(vaultDir, "Attachments"), 0755)
+
 	bot, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
 		log.Fatal(err)
@@ -56,27 +63,69 @@ func main() {
 		}
 
 		if update.Message.Photo != nil {
-			handlePhoto(bot, update.Message, aiService)
+			go handlePhoto(bot, update.Message, aiService)
 		}
 
 		if update.Message.Document != nil {
-			handleDocument(bot, update.Message, aiService)
+			go handleDocument(bot, update.Message, aiService)
 		}
 
-		if update.Message.Text != "" {
-			handleCommand(bot, update.Message)
+		if update.Message.IsCommand() || update.Message.Text != "" {
+			go handleCommand(bot, update.Message, aiService)
 		}
 	}
 }
 
-func handleCommand(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
-	switch message.Text {
-	case "/start":
+func handleCommand(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *AIService) {
+	if !message.IsCommand() {
+		if aiService == nil {
+			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "AI service is not available."))
+			return
+		}
+
+		bot.Send(tgbotapi.NewChatAction(message.Chat.ID, tgbotapi.ChatTyping))
+		placeholder := tgbotapi.NewMessage(message.Chat.ID, "🤖 Thinking...")
+		sentMsg, _ := bot.Send(placeholder)
+
+		var responseText string
+		var mu sync.Mutex
+		var lastEdit time.Time
+
+		streamCallback := func(chunk string) {
+			mu.Lock()
+			responseText += chunk
+			currentText := responseText
+			mu.Unlock()
+
+			if time.Since(lastEdit) > 1*time.Second {
+				msg := tgbotapi.NewEditMessageText(sentMsg.Chat.ID, sentMsg.MessageID, currentText)
+				bot.Request(msg)
+				lastEdit = time.Now()
+			}
+		}
+		
+		globalMutex.Lock()
+		lang := defaultLanguage
+		globalMutex.Unlock()
+		
+		prompt := fmt.Sprintf("Respond in %s. User message: %s", lang, message.Text)
+		fullResponse, err := aiService.GenerateContent(context.Background(), prompt, nil, ModelProComplex, streamCallback)
+		if err != nil {
+			bot.Send(tgbotapi.NewEditMessageText(sentMsg.Chat.ID, sentMsg.MessageID, "Sorry, I had trouble thinking: "+err.Error()))
+			return
+		}
+
+		bot.Send(tgbotapi.NewEditMessageText(sentMsg.Chat.ID, sentMsg.MessageID, fullResponse))
+		return
+	}
+
+	switch message.Command() {
+	case "start", "help":
 		msg := tgbotapi.NewMessage(message.Chat.ID,
-			"🤖 Bot active! Send images/PDFs.\n\nCommands:\n/stats - Statistics\n/help - This message")
+			"🤖 Bot active! Send images/PDFs for processing.\n\nCommands:\n/stats - Statistics\n/last - Show last created note\n/reprocess - Reprocess last file\n/lang - Set AI language (e.g. /lang English)\n/help - This message")
 		bot.Send(msg)
 
-	case "/stats":
+	case "stats":
 		stats.mu.Lock()
 		statsText := fmt.Sprintf("📊 Stats\n\nTotal: %d\nImages: %d\nPDFs: %d\n\nCategories:\n",
 			stats.TotalFiles, stats.ImageCount, stats.PDFCount)
@@ -87,14 +136,63 @@ func handleCommand(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 		msg := tgbotapi.NewMessage(message.Chat.ID, statsText)
 		bot.Send(msg)
 
-	default:
-		msg := tgbotapi.NewMessage(message.Chat.ID, "✅ Bot running! Send images or PDFs.")
+	case "last":
+		globalMutex.Lock()
+		lastNote := lastCreatedNote
+		globalMutex.Unlock()
+		var text string
+		if lastNote == "" {
+			text = "No note has been created yet."
+		} else {
+			text = "Last created note: " + lastNote
+		}
+		msg := tgbotapi.NewMessage(message.Chat.ID, text)
 		bot.Send(msg)
+
+	case "reprocess":
+		globalMutex.Lock()
+		fileToReprocess := lastProcessedFile
+		globalMutex.Unlock()
+
+		if fileToReprocess == "" {
+			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "No file has been processed yet."))
+			return
+		}
+
+		bot.Send(tgbotapi.NewChatAction(message.Chat.ID, tgbotapi.ChatTyping))
+		placeholder := tgbotapi.NewMessage(message.Chat.ID, "🤖 Reprocessing...")
+		sentMsg, _ := bot.Send(placeholder)
+
+		fileType := ""
+		if strings.HasSuffix(fileToReprocess, ".jpg") {
+			fileType = "image"
+		} else if strings.HasSuffix(fileToReprocess, ".pdf") {
+			fileType = "pdf"
+		}
+
+		dummyMessage := &tgbotapi.Message{Caption: "Reprocessed"}
+		createObsidianNote(fileToReprocess, fileType, dummyMessage, aiService, bot, sentMsg.Chat.ID, sentMsg.MessageID)
+
+	case "lang":
+		lang := message.CommandArguments()
+		if lang == "" {
+			globalMutex.Lock()
+			currentLang := defaultLanguage
+			globalMutex.Unlock()
+			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Current language is "+currentLang+".\nUsage: /lang <language>"))
+		} else {
+			globalMutex.Lock()
+			defaultLanguage = lang
+			globalMutex.Unlock()
+			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Language set to: "+lang))
+		}
 	}
 }
 
 func handlePhoto(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *AIService) {
 	updateActivity()
+	bot.Send(tgbotapi.NewChatAction(message.Chat.ID, tgbotapi.ChatTyping))
+
 	photos := message.Photo
 	if len(photos) == 0 {
 		return
@@ -120,11 +218,17 @@ func handlePhoto(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *AIS
 		return
 	}
 
+	globalMutex.Lock()
+	lastProcessedFile = filename
+	globalMutex.Unlock()
+
 	createObsidianNote(filename, "image", message, aiService, bot, sentMsg.Chat.ID, sentMsg.MessageID)
 }
 
 func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *AIService) {
 	updateActivity()
+	bot.Send(tgbotapi.NewChatAction(message.Chat.ID, tgbotapi.ChatTyping))
+
 	doc := message.Document
 	if doc == nil {
 		return
@@ -135,7 +239,7 @@ func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *
 		bot.Send(msg)
 		return
 	}
-	
+
 	placeholder := tgbotapi.NewMessage(message.Chat.ID, "🤖 Processing PDF...")
 	sentMsg, err := bot.Send(placeholder)
 	if err != nil {
@@ -155,8 +259,13 @@ func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *
 		return
 	}
 
+	globalMutex.Lock()
+	lastProcessedFile = filename
+	globalMutex.Unlock()
+
 	createObsidianNote(filename, "pdf", message, aiService, bot, sentMsg.Chat.ID, sentMsg.MessageID)
 }
+
 func downloadFile(bot *tgbotapi.BotAPI, fileID, ext string) string {
 	file, err := bot.GetFile(tgbotapi.FileConfig{FileID: fileID})
 	if err != nil {
@@ -218,10 +327,12 @@ func createObsidianNote(filePath, fileType string, message *tgbotapi.Message, ai
 		}
 	}
 
-	processed := processFileWithAI(filePath, fileType, aiService, streamCallback)
+	globalMutex.Lock()
+	lang := defaultLanguage
+	globalMutex.Unlock()
+	processed := processFileWithAI(filePath, fileType, aiService, streamCallback, lang)
 	stats.recordFile(fileType, processed.Category)
 
-	// Final edit to clean up the message
 	finalText := processed.Summary
 	if finalText == "" {
 		finalText = "Processing complete."
@@ -313,8 +424,11 @@ ai_provider: %s
 	notePath := filepath.Join(vaultDir, "Inbox", noteName)
 
 	os.WriteFile(notePath, []byte(content), 0644)
-
 	log.Printf("Created note: %s", notePath)
+
+	globalMutex.Lock()
+	lastCreatedNote = notePath
+	globalMutex.Unlock()
 
 	if processed.Confidence > 0.7 && processed.Category != "general" {
 		go func() {
@@ -346,3 +460,4 @@ func formatQuestions(questions []string) string {
 	}
 	return result
 }
+
