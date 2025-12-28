@@ -154,7 +154,7 @@ func processFile(filePath, fileType string) ProcessedContent {
 	return classifyContent(text)
 }
 
-func processFileWithAI(filePath, fileType string, aiService *AIService, streamCallback func(string)) ProcessedContent {
+func processFileWithAI(filePath, fileType string, aiService *AIService, streamCallback func(string), language string) ProcessedContent {
 	// Do basic OCR/extraction first
 	var text string
 	var err error
@@ -178,6 +178,7 @@ func processFileWithAI(filePath, fileType string, aiService *AIService, streamCa
 		Text:     text,
 		Category: "general",
 		Tags:     []string{},
+		Language: language, // Use the provided language
 	}
 
 	if err != nil || len(text) < 10 {
@@ -191,91 +192,57 @@ func processFileWithAI(filePath, fileType string, aiService *AIService, streamCa
 		log.Println("Using Gemini for AI enhancement...")
 		result.AIProvider = "Gemini"
 
-		prompt := fmt.Sprintf(`First, provide a 2-3 sentence summary of the following text.
-Then, on a new line, provide a JSON object with the following fields:
-- "category": a single category from the list [physics, math, chemistry, admin, general].
-- "topics": a list of 3-5 key topics.
-- "questions": a list of 2-3 review questions based on the text.
-
-Here is the text to analyze:
-%s`, text)
-
+		// 1. Get the summary (streaming)
+		summaryPrompt := fmt.Sprintf("Summarize the following text in %s. If the text contains any questions, answer them as part of the summary. Text:\n\n%s", language, text)
+		
 		model := ModelProComplex
 		if len(fileData) > 0 {
 			model = ModelImageGen
 		}
 
-		// Use ModelProComplex for better analysis
-		aiResponse, err := aiService.GenerateContent(context.Background(), prompt, fileData, model, streamCallback)
+		fullSummary, err := aiService.GenerateContent(context.Background(), summaryPrompt, fileData, model, streamCallback)
 		if err != nil {
-			log.Printf("Error from AI service: %v", err)
-			// Fallback to basic classification
+			log.Printf("Error from AI summary service: %v", err)
+			// Fallback to basic classification if summary fails
 			return classifyContent(text)
 		}
+		result.Summary = fullSummary
 
-		var summary string
-		var jsonStr string
-
-		// Handle markdown code block for JSON
-		jsonBlockStart := strings.Index(aiResponse, "```json")
-		if jsonBlockStart != -1 {
-			summary = strings.TrimSpace(aiResponse[:jsonBlockStart])
-			jsonBlockEnd := strings.Index(aiResponse[jsonBlockStart+7:], "```")
-			if jsonBlockEnd != -1 {
-				jsonStr = aiResponse[jsonBlockStart+7 : jsonBlockStart+7+jsonBlockEnd]
-			}
-		} else {
-			// Fallback if the AI doesn't use a markdown block, look for first {
-			jsonStart := strings.Index(aiResponse, "{")
-			if jsonStart != -1 {
-				summary = strings.TrimSpace(aiResponse[:jsonStart])
-				jsonEnd := strings.LastIndex(aiResponse, "}")
-				if jsonEnd != -1 && jsonEnd > jsonStart {
-					jsonStr = aiResponse[jsonStart : jsonEnd+1]
-				}
-			}
-		}
-
-		if summary == "" {
-			// If we couldn't separate them, assume the whole thing is a summary
-			summary = aiResponse
-		}
-		result.Summary = summary
-
-		if jsonStr != "" {
-			var aiResult struct {
-				Category  string   `json:"category"`
-				Topics    []string `json:"topics"`
-				Questions []string `json:"questions"`
-			}
-
-			if err := json.Unmarshal([]byte(jsonStr), &aiResult); err != nil {
-				log.Printf("Error parsing AI response JSON: %v", err)
-			} else {
-				result.Category = aiResult.Category
-				result.Topics = aiResult.Topics
-				result.Questions = aiResult.Questions
-				result.Tags = append([]string{result.Category}, result.Topics...)
-				result.Confidence = 0.95
-			}
-		}
-		
-		if result.Category == "" || result.Category == "general" {
-			// If JSON parsing failed or category is general, do basic classification for a better guess
+		// 2. Get the JSON data (non-streaming)
+		jsonStr, err := aiService.GenerateJSONData(context.Background(), text, language)
+		if err != nil {
+			log.Printf("Error from AI JSON service: %v", err)
+			// Proceed without JSON data, just use basic classification
 			basicResult := classifyContent(text)
 			result.Category = basicResult.Category
-			if len(result.Tags) == 0 {
-				result.Tags = basicResult.Tags
-			}
+			result.Tags = basicResult.Tags
+			return result
+		}
+
+		var aiResult struct {
+			Category  string   `json:"category"`
+			Topics    []string `json:"topics"`
+			Questions []string `json:"questions"`
+		}
+
+		if err := json.Unmarshal([]byte(jsonStr), &aiResult); err != nil {
+			log.Printf("Error parsing AI response JSON: %v", err)
+			// Proceed without JSON data
+			basicResult := classifyContent(text)
+			result.Category = basicResult.Category
+			result.Tags = basicResult.Tags
+		} else {
+			result.Category = aiResult.Category
+			result.Topics = aiResult.Topics
+			result.Questions = aiResult.Questions
+			result.Tags = append([]string{result.Category}, result.Topics...)
+			result.Confidence = 0.95
 		}
 
 	} else {
-		// Fallback to basic classification
 		log.Println("AI service unavailable, using basic classification")
 		result = classifyContent(text)
 	}
-
-	result.Language = detectLanguage(text)
 
 	return result
 }

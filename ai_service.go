@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -12,40 +13,30 @@ import (
 )
 
 const (
-	// ModelFlashSearch represents the 'gemini-3-flash-preview' model.
 	ModelFlashSearch = "gemini-3-flash-preview"
-	// ModelProComplex represents the 'gemini-3-pro-preview' model.
-	ModelProComplex = "gemini-3-pro-preview"
-	// ModelImageGen represents the 'gemini-3-flash-preview' model.
-	ModelImageGen = "gemini-3-flash-preview"
+	ModelProComplex  = "gemini-3-pro-preview"
+	ModelImageGen    = "gemini-3-flash-preview"
 )
 
-// AIService provides methods for interacting with the Gemini AI.
 type AIService struct {
 	client *genai.Client
 }
 
-// NewAIService creates a new AIService.
 func NewAIService(ctx context.Context) *AIService {
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
-		// Log and return nil instead of fataling, so the app can run without Gemini
 		log.Println("GEMINI_API_KEY environment variable not set. Gemini AI will be unavailable.")
 		return nil
 	}
-
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
 		log.Printf("Error creating Gemini client: %v", err)
 		return nil
 	}
-
-	return &AIService{
-		client: client,
-	}
+	return &AIService{client: client}
 }
 
-// GenerateContent generates content using the specified model and streams the response.
+// GenerateContent is for streaming a human-readable response.
 func (s *AIService) GenerateContent(ctx context.Context, prompt string, imageData []byte, modelType string, streamCallback func(string)) (string, error) {
 	model := s.client.GenerativeModel(modelType)
 	var parts []genai.Part
@@ -57,7 +48,6 @@ func (s *AIService) GenerateContent(ctx context.Context, prompt string, imageDat
 
 	iter := model.GenerateContentStream(ctx, parts...)
 	var fullResponse strings.Builder
-
 	for {
 		resp, err := iter.Next()
 		if err == iterator.Done {
@@ -66,7 +56,6 @@ func (s *AIService) GenerateContent(ctx context.Context, prompt string, imageDat
 		if err != nil {
 			return "", err
 		}
-
 		if len(resp.Candidates) > 0 && len(resp.Candidates[0].Content.Parts) > 0 {
 			if txt, ok := resp.Candidates[0].Content.Parts[0].(genai.Text); ok {
 				chunk := string(txt)
@@ -77,26 +66,35 @@ func (s *AIService) GenerateContent(ctx context.Context, prompt string, imageDat
 			}
 		}
 	}
-
 	return fullResponse.String(), nil
 }
 
-// GenerateImage generates an image using the image generation model.
-// This function does not support streaming.
-func (s *AIService) GenerateImage(ctx context.Context, prompt string) (string, error) {
-	model := s.client.GenerativeModel(ModelImageGen)
-	fullPrompt := "High quality scientific illustration, clean background, detailed, educational: " + prompt
+// GenerateJSONData is for getting structured data in JSON format. Non-streaming.
+func (s *AIService) GenerateJSONData(ctx context.Context, text, language string) (string, error) {
+	model := s.client.GenerativeModel(ModelProComplex)
+	prompt := fmt.Sprintf(`Analyze the following text and return ONLY a JSON object with the following fields:
+- "category": a single category from the list [physics, math, chemistry, admin, general].
+- "topics": a list of 3-5 key topics.
+- "questions": a list of 2-3 review questions based on the text.
 
-	resp, err := model.GenerateContent(ctx, genai.Text(fullPrompt))
+The content of "topics" and "questions" fields should be in %s.
+
+Text to analyze:
+%s`, language, text)
+
+	resp, err := model.GenerateContent(ctx, genai.Text(prompt))
 	if err != nil {
 		return "", err
 	}
 
 	if len(resp.Candidates) > 0 && len(resp.Candidates[0].Content.Parts) > 0 {
 		if txt, ok := resp.Candidates[0].Content.Parts[0].(genai.Text); ok {
-			return string(txt), nil
+			jsonStr := string(txt)
+			jsonStr = strings.TrimPrefix(jsonStr, "```json")
+			jsonStr = strings.TrimSuffix(jsonStr, "```")
+			jsonStr = strings.TrimSpace(jsonStr)
+			return jsonStr, nil
 		}
 	}
-
-	return "", nil
+	return "", fmt.Errorf("no content generated from AI for JSON data")
 }
