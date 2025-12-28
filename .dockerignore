@@ -3,6 +3,7 @@ attachments/
 stats.json
 .env
 *.sh
+!start.sh
 README.md
 telegram-bot
 obsidian-automation

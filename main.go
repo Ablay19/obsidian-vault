@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -26,6 +27,10 @@ func main() {
 	if token == "" {
 		log.Fatal("TELEGRAM_BOT_TOKEN not set")
 	}
+
+	ctx := context.Background()
+	aiService := NewAIService(ctx)
+
 	// Create directories first
 	os.MkdirAll(attachmentsDir, 0755)
 	os.MkdirAll(filepath.Join(vaultDir, "Inbox"), 0755)
@@ -54,11 +59,11 @@ func main() {
 		}
 
 		if update.Message.Photo != nil {
-			handlePhoto(bot, update.Message)
+			handlePhoto(bot, update.Message, aiService)
 		}
 
 		if update.Message.Document != nil {
-			handleDocument(bot, update.Message)
+			handleDocument(bot, update.Message, aiService)
 		}
 
 		if update.Message.Text != "" {
@@ -91,7 +96,7 @@ func handleCommand(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 	}
 }
 
-func handlePhoto(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
+func handlePhoto(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *AIService) {
 	updateActivity()
 	photos := message.Photo
 	if len(photos) == 0 {
@@ -111,12 +116,12 @@ func handlePhoto(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 		return
 	}
 
-	createObsidianNote(filename, "image", message)
+	createObsidianNote(filename, "image", message, aiService)
 	msg := tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("✅ Image: %s", filepath.Base(filename)))
 	bot.Send(msg)
 }
 
-func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
+func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *AIService) {
 	updateActivity()
 	doc := message.Document
 	if doc == nil {
@@ -141,7 +146,7 @@ func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 		return
 	}
 
-	createObsidianNote(filename, "pdf", message)
+	createObsidianNote(filename, "pdf", message, aiService)
 	msg := tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("✅ PDF: %s", filepath.Base(filename)))
 	bot.Send(msg)
 }
@@ -194,7 +199,7 @@ func downloadFile(bot *tgbotapi.BotAPI, fileID, ext string) string {
 	return fullPath
 }
 
-func createObsidianNote(filePath, fileType string, message *tgbotapi.Message) {
+func createObsidianNote(filePath, fileType string, message *tgbotapi.Message, aiService *AIService) {
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 	baseName := filepath.Base(filePath)
 
@@ -203,7 +208,7 @@ func createObsidianNote(filePath, fileType string, message *tgbotapi.Message) {
 		caption = "No caption"
 	}
 
-	processed := processFileWithGemini(filePath, fileType)
+	processed := processFileWithAI(filePath, fileType, aiService)
 	stats.recordFile(fileType, processed.Category)
 
 	tagsStr := strings.Join(processed.Tags, ", ")
@@ -219,6 +224,7 @@ func createObsidianNote(filePath, fileType string, message *tgbotapi.Message) {
 	language: %s
 	confidence: %.2f
 	tags: [%s]
+	ai_provider: %s
 	---
 
 	# %s - %s
@@ -253,29 +259,31 @@ func createObsidianNote(filePath, fileType string, message *tgbotapi.Message) {
 	(Add your notes here)
 
 	---
-	*AI-powered by Google Gemini*
+	*AI-powered by %s*
 	`,
-	fileType,
-	processed.Category,
-	timestamp,
-	processed.Language,
-	processed.Confidence,
-	tagsStr,
-	strings.Title(processed.Category),
-	fileType,
-	timestamp,
-	caption,
-	processed.Category,
-	processed.Confidence*100,
-	processed.Language,
-	baseName,
-	processed.Summary,
-	strings.Join(processed.Topics, ", "),
-	formatExtractedText(processed.Text),
-	formatQuestions(processed.Questions))
+		fileType,
+		processed.Category,
+		timestamp,
+		processed.Language,
+		processed.Confidence,
+		tagsStr,
+		processed.AIProvider,
+		strings.Title(processed.Category),
+		fileType,
+		timestamp,
+		caption,
+		processed.Category,
+		processed.Confidence*100,
+		processed.Language,
+		baseName,
+		processed.Summary,
+		strings.Join(processed.Topics, ", "),
+		formatExtractedText(processed.Text),
+		formatQuestions(processed.Questions),
+		processed.AIProvider)
 
 	noteName := fmt.Sprintf("%s_%s_%s.md",
-	time.Now().Format("20060102_150405"), processed.Category, fileType)
+		time.Now().Format("20060102_150405"), processed.Category, fileType)
 	notePath := filepath.Join(vaultDir, "Inbox", noteName)
 
 	os.WriteFile(notePath, []byte(content), 0644)

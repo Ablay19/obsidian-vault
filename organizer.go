@@ -1,36 +1,33 @@
 package main
 
 import (
-"fmt"
-"log"
-"os"
-"path/filepath"
-"time"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
-// Auto-organize notes into category folders
 func organizeNote(notePath string, category string) error {
-// Don't organize unprocessed/general/unclear
-if category == "unprocessed" || category == "general" || category == "unclear" || category == "error" {
-return nil
-}
+	if category == "general" || category == "" {
+		return nil // No need to organize general notes
+	}
 
-// Create category folder if not exists
-categoryDir := filepath.Join(vaultDir, category)
-os.MkdirAll(categoryDir, 0755)
+	// Sanitize category name to be filesystem-friendly
+	safeCategory := strings.ReplaceAll(strings.Title(category), " ", "")
 
-// Move note to category folder
-baseName := filepath.Base(notePath)
-newPath := filepath.Join(categoryDir, baseName)
+	// Create the destination directory if it doesn't exist
+	destDir := filepath.Join(vaultDir, safeCategory)
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return fmt.Errorf("could not create directory %s: %w", destDir, err)
+	}
 
-// Wait a bit to ensure file is written
-time.Sleep(100 * time.Millisecond)
+	// Move the note
+	destPath := filepath.Join(destDir, filepath.Base(notePath))
+	if err := os.Rename(notePath, destPath); err != nil {
+		return fmt.Errorf("could not move note from %s to %s: %w", notePath, destPath, err)
+	}
 
-err := os.Rename(notePath, newPath)
-if err != nil {
-return fmt.Errorf("failed to move note: %v", err)
-}
-
-log.Printf("✅ Organized: %s -> %s/", baseName, category)
-return nil
+	log.Printf("Organized note: %s -> %s", notePath, destPath)
+	return nil
 }

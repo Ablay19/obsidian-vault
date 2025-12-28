@@ -26,7 +26,7 @@ echo "🚀 Starting new container..."
 docker run -d \
   --name obsidian-bot \
   --restart unless-stopped \
-  -e TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN" \
+  --env-file .env \
   -e TZ=Africa/Tunis \
   -v "$(pwd)/vault:/app/vault" \
   -v "$(pwd)/attachments:/app/attachments" \

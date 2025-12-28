@@ -4,7 +4,7 @@
 
 This project is a Go-based Telegram bot designed to automate the process of adding notes to an Obsidian vault. The bot listens for images and PDF files sent to it, processes them to extract text and other relevant information, and then creates new, organized notes in the vault. The project is containerized using Docker for easy deployment and management.
 
-The bot uses Tesseract for OCR and pdftotext for PDF text extraction. It also integrates with Google's Gemini for more advanced content processing, including classification, summarization, and generating key topics and review questions.
+The bot uses Tesseract for OCR and pdftotext for PDF text extraction. It also integrates with Google's Gemini for more advanced content processing, including classification, summarization, and generating key topics and review questions. It also uses Ollama as a fallback.
 
 ## Building and Running
 
@@ -34,10 +34,12 @@ The project includes a set of shell scripts for common tasks:
 
 ### Configuration
 
-Before running the bot, you need to create a `.env` file with your Telegram bot token:
+Before running the bot, you need to create a `.env` file with your Telegram bot token and other environment variables:
 
 ```
 TELEGRAM_BOT_TOKEN=your-token-goes-here
+OLLAMA_HOST=your-ollama-host
+GEMINI_API_KEY=your-gemini-api-key
 ```
 
 ## Development Conventions
@@ -53,4 +55,5 @@ TELEGRAM_BOT_TOKEN=your-token-goes-here
     *   `health.go`: Provides a health check endpoint.
     *   `dedup.go`: Handles duplicate file detection.
     *   `ai_gemini.go`:  Contains the logic for interacting with the Gemini API.
+    *   `ai_ollama.go`: Contains the logic for interacting with the Ollama API.
 *   **Error Handling:** Errors are generally handled by logging them to the console.
