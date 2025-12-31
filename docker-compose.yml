@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  obsidian-bot:
+    build: .
+    container_name: obsidian-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=Africa/Tunis
+    volumes:
+      - ./vault:/app/vault
+      - ./attachments:/app/attachments
+      - ./stats.json:/app/stats.json
+    ports:
+      - "8080:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    command: ["./telegram-bot"]

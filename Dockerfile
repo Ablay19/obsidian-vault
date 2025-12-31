@@ -22,12 +22,9 @@ WORKDIR /app
 
 COPY --from=builder /build/telegram-bot .
 
-RUN mkdir -p attachments vault/Inbox vault/Attachments && \
-    chown -R appuser:appgroup attachments vault/Inbox vault/Attachments telegram-bot
+RUN chown -R appuser:appgroup /app
 
 USER appuser
-
-ENV GEMINI_API_KEY=""
 
 EXPOSE 8080
 
