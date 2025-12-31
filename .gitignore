@@ -1,4 +1,4 @@
-.env
+.env*
 telegram-bot
 obsidian-automation
 stats.json

@@ -24,43 +24,44 @@ type ProcessedContent struct {
 	Questions  []string
 	AIProvider string
 }
+
 func extractTextFromImage(imagePath string) (string, error) {
-cmd := exec.Command("tesseract", imagePath, "stdout", "-l", "eng+fra+ara")
-output, err := cmd.Output()
-if err != nil {
-cmd = exec.Command("tesseract", imagePath, "stdout")
-output, err = cmd.Output()
-if err != nil {
-return "", fmt.Errorf("tesseract failed: %v", err)
-}
-}
-return strings.TrimSpace(string(output)), nil
+	cmd := exec.Command("tesseract", imagePath, "stdout", "-l", "eng+fra+ara")
+	output, err := cmd.Output()
+	if err != nil {
+		cmd = exec.Command("tesseract", imagePath, "stdout")
+		output, err = cmd.Output()
+		if err != nil {
+			return "", fmt.Errorf("tesseract failed: %v", err)
+		}
+	}
+	return strings.TrimSpace(string(output)), nil
 }
 
 func extractTextFromPDF(pdfPath string) (string, error) {
-cmd := exec.Command("pdftotext", pdfPath, "-")
-output, err := cmd.Output()
-if err == nil && len(output) > 0 {
-return strings.TrimSpace(string(output)), nil
-}
+	cmd := exec.Command("pdftotext", pdfPath, "-")
+	output, err := cmd.Output()
+	if err == nil && len(output) > 0 {
+		return strings.TrimSpace(string(output)), nil
+	}
 
-f, r, err := pdf.Open(pdfPath)
-if err != nil {
-return "", err
-}
-defer f.Close()
+	f, r, err := pdf.Open(pdfPath)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
 
-var text strings.Builder
-for pageNum := 1; pageNum <= r.NumPage(); pageNum++ {
-p := r.Page(pageNum)
-if p.V.IsNull() {
-continue
-}
-pageText, _ := p.GetPlainText(nil)
-text.WriteString(pageText)
-text.WriteString("\n\n")
-}
-return strings.TrimSpace(text.String()), nil
+	var text strings.Builder
+	for pageNum := 1; pageNum <= r.NumPage(); pageNum++ {
+		p := r.Page(pageNum)
+		if p.V.IsNull() {
+			continue
+		}
+		pageText, _ := p.GetPlainText(nil)
+		text.WriteString(pageText)
+		text.WriteString("\n\n")
+	}
+	return strings.TrimSpace(text.String()), nil
 }
 
 func classifyContent(text string) ProcessedContent {
@@ -193,8 +194,11 @@ func processFileWithAI(filePath, fileType string, aiService *AIService, streamCa
 		result.AIProvider = "Gemini"
 
 		// 1. Get the summary (streaming)
-		summaryPrompt := fmt.Sprintf("Summarize the following text in %s. If the text contains any questions, answer them as part of the summary. Text:\n\n%s", language, text)
-		
+		summaryPrompt := fmt.Sprintf("Summarize the following text in %s. If the text contains any questions, answer them as part of the summary. Text:\n\n%s",
+			language,
+			text,
+		)
+
 		model := ModelProComplex
 		if len(fileData) > 0 {
 			model = ModelImageGen

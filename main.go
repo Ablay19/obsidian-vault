@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"obsidian-automation/database"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,7 +17,7 @@ import (
 )
 
 const (
-	attachmentsDir = "./attachments"
+	attachmentsDir = "./vault/attachments"
 	vaultDir       = "./vault"
 )
 
@@ -74,7 +75,11 @@ func (t *TelegramBot) GetFile(config tgbotapi.FileConfig) (tgbotapi.File, error)
 func main() {
 	startHealthServer()
 	stats.load()
+	db := database.Open()
 
+	if err := database.InitSchema(db); err != nil {
+		log.Fatal(err)
+	}
 	token := os.Getenv("TELEGRAM_BOT_TOKEN")
 	if token == "" {
 		log.Fatal("TELEGRAM_BOT_TOKEN not set")
@@ -163,7 +168,7 @@ func handleCommand(bot Bot, message *tgbotapi.Message, aiService *AIService) {
 			}
 		}
 
-		prompt := fmt.Sprintf("Respond in %s. User message: %s", state.Language, message.Text)
+		prompt := fmt.Sprintf("Respond in %s. Output your response as valid HTML, with proper headings, paragraphs, and LaTeX formulas using MathJax syntax. User message: %s", state.Language, message.Text)
 		fullResponse, err := aiService.GenerateContent(context.Background(), prompt, nil, ModelFlashSearch, streamCallback)
 		if err != nil {
 			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Sorry, I had trouble thinking: "+err.Error()))

@@ -1,5 +1,4 @@
 ---
-
 description: "Task list for Clarify GEMINI.md Content feature implementation"
 ---
 
