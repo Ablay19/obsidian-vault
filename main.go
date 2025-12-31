@@ -20,12 +20,56 @@ const (
 	vaultDir       = "./vault"
 )
 
+type UserState struct {
+	Language          string
+	LastProcessedFile string
+	LastCreatedNote   string
+}
+
 var (
-	lastProcessedFile string
-	lastCreatedNote   string
-	globalMutex       sync.Mutex
-	defaultLanguage   = "French" // Default language
+	userStates = make(map[int64]*UserState)
+	stateMutex sync.RWMutex
 )
+
+func getUserState(userID int64) *UserState {
+	stateMutex.Lock()
+	defer stateMutex.Unlock()
+
+	if state, exists := userStates[userID]; exists {
+		return state
+	}
+
+	// Create new state with defaults
+	state := &UserState{
+		Language: "French",
+	}
+	userStates[userID] = state
+	return state
+}
+
+// Bot interface for testing
+type Bot interface {
+	Send(c tgbotapi.Chattable) (tgbotapi.Message, error)
+	Request(c tgbotapi.Chattable) (*tgbotapi.APIResponse, error)
+	GetFile(config tgbotapi.FileConfig) (tgbotapi.File, error)
+}
+
+// Production adapter
+type TelegramBot struct {
+	*tgbotapi.BotAPI
+}
+
+func (t *TelegramBot) Send(c tgbotapi.Chattable) (tgbotapi.Message, error) {
+	return t.BotAPI.Send(c)
+}
+
+func (t *TelegramBot) Request(c tgbotapi.Chattable) (*tgbotapi.APIResponse, error) {
+	return t.BotAPI.Request(c)
+}
+
+func (t *TelegramBot) GetFile(config tgbotapi.FileConfig) (tgbotapi.File, error) {
+	return t.BotAPI.GetFile(config)
+}
 
 func main() {
 	startHealthServer()
@@ -43,10 +87,12 @@ func main() {
 	os.MkdirAll(filepath.Join(vaultDir, "Inbox"), 0755)
 	os.MkdirAll(filepath.Join(vaultDir, "Attachments"), 0755)
 
-	bot, err := tgbotapi.NewBotAPI(token)
+	botAPI, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	bot := &TelegramBot{botAPI}
 
 	commands := []tgbotapi.BotCommand{
 		{Command: "start", Description: "Start the bot and see help"},
@@ -64,7 +110,6 @@ func main() {
 		log.Printf("Error setting bot commands: %v", err)
 	}
 
-
 	bot.Debug = false
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
@@ -80,11 +125,11 @@ func main() {
 		}
 
 		if update.Message.Photo != nil {
-			go handlePhoto(bot, update.Message, aiService)
+			go handlePhoto(bot, update.Message, aiService, token)
 		}
 
 		if update.Message.Document != nil {
-			go handleDocument(bot, update.Message, aiService)
+			go handleDocument(bot, update.Message, aiService, token)
 		}
 
 		if update.Message.IsCommand() || update.Message.Text != "" {
@@ -93,16 +138,16 @@ func main() {
 	}
 }
 
-func handleCommand(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *AIService) {
+func handleCommand(bot Bot, message *tgbotapi.Message, aiService *AIService) {
+	state := getUserState(message.From.ID)
+
 	if !message.IsCommand() {
 		if aiService == nil {
 			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "AI service is not available."))
 			return
 		}
 
-		bot.Send(tgbotapi.NewChatAction(message.Chat.ID, tgbotapi.ChatTyping))
-		placeholder := tgbotapi.NewMessage(message.Chat.ID, "🤖 Thinking...")
-		sentMsg, _ := bot.Send(placeholder)
+		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Thinking..."))
 
 		var responseText string
 		var mu sync.Mutex
@@ -111,28 +156,21 @@ func handleCommand(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *A
 		streamCallback := func(chunk string) {
 			mu.Lock()
 			responseText += chunk
-			currentText := responseText
 			mu.Unlock()
 
 			if time.Since(lastEdit) > 1*time.Second {
-				msg := tgbotapi.NewEditMessageText(sentMsg.Chat.ID, sentMsg.MessageID, currentText)
-				bot.Request(msg)
 				lastEdit = time.Now()
 			}
 		}
-		
-		globalMutex.Lock()
-		lang := defaultLanguage
-		globalMutex.Unlock()
-		
-		prompt := fmt.Sprintf("Respond in %s. User message: %s", lang, message.Text)
+
+		prompt := fmt.Sprintf("Respond in %s. User message: %s", state.Language, message.Text)
 		fullResponse, err := aiService.GenerateContent(context.Background(), prompt, nil, ModelFlashSearch, streamCallback)
 		if err != nil {
-			bot.Send(tgbotapi.NewEditMessageText(sentMsg.Chat.ID, sentMsg.MessageID, "Sorry, I had trouble thinking: "+err.Error()))
+			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Sorry, I had trouble thinking: "+err.Error()))
 			return
 		}
 
-		bot.Send(tgbotapi.NewEditMessageText(sentMsg.Chat.ID, sentMsg.MessageID, fullResponse))
+		bot.Send(tgbotapi.NewMessage(message.Chat.ID, fullResponse))
 		return
 	}
 
@@ -154,56 +192,42 @@ func handleCommand(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *A
 		bot.Send(msg)
 
 	case "last":
-		globalMutex.Lock()
-		lastNote := lastCreatedNote
-		globalMutex.Unlock()
 		var text string
-		if lastNote == "" {
+		if state.LastCreatedNote == "" {
 			text = "No note has been created yet."
 		} else {
-			text = "Last created note: " + lastNote
+			text = "Last created note: " + state.LastCreatedNote
 		}
 		msg := tgbotapi.NewMessage(message.Chat.ID, text)
 		bot.Send(msg)
 
 	case "reprocess":
-		globalMutex.Lock()
-		fileToReprocess := lastProcessedFile
-		globalMutex.Unlock()
-
-		if fileToReprocess == "" {
+		if state.LastProcessedFile == "" {
 			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "No file has been processed yet."))
 			return
 		}
 
-		bot.Send(tgbotapi.NewChatAction(message.Chat.ID, tgbotapi.ChatTyping))
-		placeholder := tgbotapi.NewMessage(message.Chat.ID, "🤖 Reprocessing...")
-		sentMsg, _ := bot.Send(placeholder)
+		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Reprocessing..."))
 
 		fileType := ""
-		if strings.HasSuffix(fileToReprocess, ".jpg") {
+		if strings.HasSuffix(state.LastProcessedFile, ".jpg") {
 			fileType = "image"
-		} else if strings.HasSuffix(fileToReprocess, ".pdf") {
+		} else if strings.HasSuffix(state.LastProcessedFile, ".pdf") {
 			fileType = "pdf"
 		}
 
-		dummyMessage := &tgbotapi.Message{Caption: "Reprocessed"}
-		createObsidianNote(fileToReprocess, fileType, dummyMessage, aiService, bot, sentMsg.Chat.ID, sentMsg.MessageID)
+		dummyMessage := &tgbotapi.Message{Caption: "Reprocessed", From: message.From}
+		createObsidianNote(state.LastProcessedFile, fileType, dummyMessage, aiService, bot, message.Chat.ID, 0, "")
 
 	case "lang":
 		lang := message.CommandArguments()
 		if lang == "" {
-			globalMutex.Lock()
-			currentLang := defaultLanguage
-			globalMutex.Unlock()
-			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Current language is "+currentLang+".\nUsage: /lang <language>"))
+			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Current language is "+state.Language+".\nUsage: /lang <language>"))
 		} else {
-			globalMutex.Lock()
-			defaultLanguage = lang
-			globalMutex.Unlock()
+			state.Language = lang
 			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Language set to: "+lang))
 		}
-	
+
 	case "switchkey":
 		if aiService != nil {
 			if geminiProvider, ok := aiService.activeProvider.(*GeminiProvider); ok {
@@ -239,45 +263,36 @@ func handleCommand(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *A
 	}
 }
 
-func handlePhoto(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *AIService) {
+func handlePhoto(bot Bot, message *tgbotapi.Message, aiService *AIService, token string) {
+	state := getUserState(message.From.ID)
 	updateActivity()
-	bot.Send(tgbotapi.NewChatAction(message.Chat.ID, tgbotapi.ChatTyping))
+	bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Processing image..."))
 
 	photos := message.Photo
 	if len(photos) == 0 {
 		return
 	}
 
-	placeholder := tgbotapi.NewMessage(message.Chat.ID, "🤖 Processing image...")
-	sentMsg, err := bot.Send(placeholder)
-	if err != nil {
-		log.Printf("Error sending placeholder message: %v", err)
-		return
-	}
-
 	photo := photos[len(photos)-1]
-	filename := downloadFile(bot, photo.FileID, "jpg")
+	filename := downloadFile(bot, photo.FileID, "jpg", token)
 	if filename == "" {
-		bot.Send(tgbotapi.NewEditMessageText(sentMsg.Chat.ID, sentMsg.MessageID, "⚠️ Download failed."))
+		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "⚠️ Download failed."))
 		return
 	}
 
 	if isDuplicate(filename) {
 		os.Remove(filename)
-		bot.Send(tgbotapi.NewEditMessageText(sentMsg.Chat.ID, sentMsg.MessageID, "⚠️ Duplicate file detected."))
+		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "⚠️ Duplicate file detected."))
 		return
 	}
 
-	globalMutex.Lock()
-	lastProcessedFile = filename
-	globalMutex.Unlock()
-
-	createObsidianNote(filename, "image", message, aiService, bot, sentMsg.Chat.ID, sentMsg.MessageID)
+	state.LastProcessedFile = filename
+	createObsidianNote(filename, "image", message, aiService, bot, message.Chat.ID, 0, token)
 }
 
-func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *AIService) {
+func handleDocument(bot Bot, message *tgbotapi.Message, aiService *AIService, token string) {
+	state := getUserState(message.From.ID)
 	updateActivity()
-	bot.Send(tgbotapi.NewChatAction(message.Chat.ID, tgbotapi.ChatTyping))
 
 	doc := message.Document
 	if doc == nil {
@@ -290,40 +305,32 @@ func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *
 		return
 	}
 
-	placeholder := tgbotapi.NewMessage(message.Chat.ID, "🤖 Processing PDF...")
-	sentMsg, err := bot.Send(placeholder)
-	if err != nil {
-		log.Printf("Error sending placeholder message: %v", err)
-		return
-	}
+	bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Processing PDF..."))
 
-	filename := downloadFile(bot, doc.FileID, "pdf")
+	filename := downloadFile(bot, doc.FileID, "pdf", token)
 	if filename == "" {
-		bot.Send(tgbotapi.NewEditMessageText(sentMsg.Chat.ID, sentMsg.MessageID, "⚠️ Download failed."))
+		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "⚠️ Download failed."))
 		return
 	}
 
 	if isDuplicate(filename) {
 		os.Remove(filename)
-		bot.Send(tgbotapi.NewEditMessageText(sentMsg.Chat.ID, sentMsg.MessageID, "⚠️ Duplicate file detected."))
+		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "⚠️ Duplicate file detected."))
 		return
 	}
 
-	globalMutex.Lock()
-	lastProcessedFile = filename
-	globalMutex.Unlock()
-
-	createObsidianNote(filename, "pdf", message, aiService, bot, sentMsg.Chat.ID, sentMsg.MessageID)
+	state.LastProcessedFile = filename
+	createObsidianNote(filename, "pdf", message, aiService, bot, message.Chat.ID, 0, token)
 }
 
-func downloadFile(bot *tgbotapi.BotAPI, fileID, ext string) string {
+func downloadFile(bot Bot, fileID, ext, token string) string {
 	file, err := bot.GetFile(tgbotapi.FileConfig{FileID: fileID})
 	if err != nil {
 		log.Printf("GetFile error: %v", err)
 		return ""
 	}
 
-	resp, err := http.Get(file.Link(bot.Token))
+	resp, err := http.Get(file.Link(token))
 	if err != nil {
 		log.Printf("HTTP error: %v", err)
 		return ""
@@ -356,7 +363,8 @@ func downloadFile(bot *tgbotapi.BotAPI, fileID, ext string) string {
 	return fullPath
 }
 
-func createObsidianNote(filePath, fileType string, message *tgbotapi.Message, aiService *AIService, bot *tgbotapi.BotAPI, chatID int64, messageID int) {
+func createObsidianNote(filePath, fileType string, message *tgbotapi.Message, aiService *AIService, bot Bot, chatID int64, messageID int, token string) {
+	state := getUserState(message.From.ID)
 	var responseText string
 	var mu sync.Mutex
 	var lastEdit time.Time
@@ -364,31 +372,21 @@ func createObsidianNote(filePath, fileType string, message *tgbotapi.Message, ai
 	streamCallback := func(chunk string) {
 		mu.Lock()
 		responseText += chunk
-		currentText := responseText
 		mu.Unlock()
 
 		if time.Since(lastEdit) > 1*time.Second {
-			msg := tgbotapi.NewEditMessageText(chatID, messageID, currentText)
-			_, err := bot.Request(msg)
-			if err != nil && !strings.Contains(err.Error(), "message is not modified") {
-				log.Printf("Error editing message: %v", err)
-			}
 			lastEdit = time.Now()
 		}
 	}
 
-	globalMutex.Lock()
-	lang := defaultLanguage
-	globalMutex.Unlock()
-	processed := processFileWithAI(filePath, fileType, aiService, streamCallback, lang)
+	processed := processFileWithAI(filePath, fileType, aiService, streamCallback, state.Language)
 	stats.recordFile(fileType, processed.Category)
 
 	finalText := processed.Summary
 	if finalText == "" {
 		finalText = "Processing complete."
 	}
-	finalMsg := tgbotapi.NewEditMessageText(chatID, messageID, finalText+"\n\n✅ Note created.")
-	bot.Send(finalMsg)
+	bot.Send(tgbotapi.NewMessage(chatID, finalText+"\n\n✅ Note created."))
 
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 	baseName := filepath.Base(filePath)
@@ -497,9 +495,7 @@ ai_provider: %s
 	doc := tgbotapi.NewDocument(message.Chat.ID, pdfFile)
 	bot.Send(doc)
 
-	globalMutex.Lock()
-	lastCreatedNote = notePath
-	globalMutex.Unlock()
+	state.LastCreatedNote = notePath
 }
 
 func formatExtractedText(text string) string {
@@ -522,4 +518,3 @@ func formatQuestions(questions []string) string {
 	}
 	return result
 }
-

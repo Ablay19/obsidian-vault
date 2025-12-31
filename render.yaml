@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: obsidian-automation-bot
+    env: go
+    plan: free
+    buildCommand: go build .
+    startCommand: ./obsidian-automation
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        fromSecret: true
+      - key: GEMINI_API_KEYS
+        fromSecret: true
+      - key: GROQ_API_KEY
+        fromSecret: true
