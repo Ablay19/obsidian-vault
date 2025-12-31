@@ -7,3 +7,9 @@ attachments/*
 logs/*
 !logs/.gitkeep
 *.log
+
+# Go-specific ignores
+*.exe
+*.test
+vendor/
+*.out
