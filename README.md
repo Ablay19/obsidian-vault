@@ -14,6 +14,12 @@ A powerful, AI-enhanced Telegram bot to automate your note-taking workflow with 
 -   **Interactive Commands**: Manage the bot and your notes with a rich set of slash commands.
 -   **Dockerized**: Easy to set up and run in a containerized environment.
 
+## 🚀 New Features in this Version
+
+-   **Multi-Provider AI Support**: In addition to Gemini, the bot now supports the **Groq** AI provider for even faster responses.
+-   **Provider Switching**: You can switch between AI providers on the fly using the new `/setprovider` command.
+-   **Improved PDF Conversion**: The bot now uses a headless Chrome instance to convert Markdown notes to PDF, ensuring high-fidelity rendering of complex notes, including those with LaTeX.
+
 ## 🚀 Getting Started
 
 ### Prerequisites
@@ -33,6 +39,9 @@ TELEGRAM_BOT_TOKEN=your-token-goes-here
 # Comma-separated list of your Gemini API Keys (Required for AI features)
 # The bot will automatically rotate keys if one hits its quota.
 GEMINI_API_KEYS=key-1,key-2,key-3
+
+# Your Groq API Key (Required for Groq provider)
+GROQ_API_KEY=your-groq-api-key
 
 # Host for Ollama if you have it (Optional, for future fallback use)
 OLLAMA_HOST=http://localhost:11434
@@ -68,6 +77,7 @@ Send any text message to the bot to start a conversation. It will respond using 
 -   `/start` or `/help`: Shows the welcome message and list of commands.
 -   `/stats`: Displays usage statistics.
 -   `/lang <language>`: Sets the AI's response language (e.g., `/lang English`).
+-   `/setprovider <provider>`: Sets the AI provider (e.g., `/setprovider Groq`).
 -   `/switchkey`: Manually switch to the next Gemini API key.
 -   `/last`: Shows the path of the last note created.
 -   `/reprocess`: Reprocesses the last file you sent.
@@ -102,6 +112,27 @@ make restart
 make backup
 ```
 
+## 🧑‍💻 Development
+
+### Running Tests
+
+To run the unit tests, use the following command:
+
+```bash
+go test ./...
+```
+
+### Linting
+
+This project uses `golangci-lint` to enforce a consistent code style. To run the linter locally, use the following command:
+
+```bash
+golangci-lint run
+```
+
+The linter is also run automatically as part of the CI/CD pipeline.
+
+
 ## ⚙️ Technical Details
 
 ### Architecture
@@ -116,16 +147,26 @@ Telegram User ↔ Telegram Bot API ↔ Go Application (Docker) ↔ Gemini API
 
 ```
 obsidian-automation/
-├── main.go              # Main bot logic and command handler
-├── processor.go         # File processing and AI orchestration
-├── ai_service.go        # Gemini AI service
-├── stats.go             # Statistics tracking
-├── health.go            # Health check endpoint
-├── dedup.go             # Duplicate file detection
-├── Dockerfile           # Container definition
-├── Makefile             # Project management commands
-├── .env                 # Environment variables (gitignored)
-├── vault/               # Your Obsidian vault
-└── attachments/         # Raw files received by the bot
+├── main.go                     # Main bot logic and command handler
+├── processor.go                # File processing and AI orchestration
+├── ai_service.go               # AI service manager for multiple providers
+├── ai_provider.go              # Interface for AI providers
+├── gemini_provider.go          # Gemini AI provider
+├── groq_provider.go            # Groq AI provider
+├── converter.go                # Markdown to PDF conversion
+├── stats.go                    # Statistics tracking
+├── health.go                   # Health check endpoint
+├── dedup.go                    # Duplicate file detection
+├── Dockerfile                  # Container definition
+├── Makefile                    # Project management commands
+├── .env                        # Environment variables (gitignored)
+├── vault/                      # Your Obsidian vault
+├── attachments/                # Raw files received by the bot
+├── .github/workflows/          # CI/CD pipelines
+│   ├── ci.yml                  # Run tests and build
+│   └── lint.yml                # Run linter
+├── ai_service_test.go          # Tests for the AI service
+├── converter_test.go           # Tests for the converter
+└── mock_provider.go            # Mock AI providers for testing
 ```
 
