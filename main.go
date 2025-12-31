@@ -56,6 +56,7 @@ func main() {
 		{Command: "last", Description: "Show last created note"},
 		{Command: "reprocess", Description: "Reprocess last sent file"},
 		{Command: "switchkey", Description: "Switch to next Gemini API key"},
+		{Command: "setprovider", Description: "Set AI provider (e.g. /setprovider Groq)"},
 	}
 	config := tgbotapi.NewSetMyCommands(commands...)
 	_, err = bot.Request(config)
@@ -138,7 +139,7 @@ func handleCommand(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *A
 	switch message.Command() {
 	case "start", "help":
 		msg := tgbotapi.NewMessage(message.Chat.ID,
-			"🤖 Bot active! Send images/PDFs for processing.\n\nCommands:\n/stats - Statistics\n/last - Show last created note\n/reprocess - Reprocess last file\n/lang - Set AI language (e.g. /lang English)\n/switchkey - Switch to next API key\n/help - This message")
+			"🤖 Bot active! Send images/PDFs for processing.\n\nCommands:\n/stats - Statistics\n/last - Show last created note\n/reprocess - Reprocess last file\n/lang - Set AI language (e.g. /lang English)\n/switchkey - Switch to next API key (Gemini only)\n/setprovider - Set AI provider (e.g. /setprovider Groq)\n/help - This message")
 		bot.Send(msg)
 
 	case "stats":
@@ -205,10 +206,35 @@ func handleCommand(bot *tgbotapi.BotAPI, message *tgbotapi.Message, aiService *A
 	
 	case "switchkey":
 		if aiService != nil {
-			nextKeyIndex := aiService.SwitchKey()
-			bot.Send(tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("Switched to API Key #%d", nextKeyIndex+1)))
+			if geminiProvider, ok := aiService.activeProvider.(*GeminiProvider); ok {
+				nextKeyIndex := geminiProvider.SwitchKey()
+				bot.Send(tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("Switched to API Key #%d", nextKeyIndex+1)))
+			} else {
+				bot.Send(tgbotapi.NewMessage(message.Chat.ID, "The /switchkey command is only available for the Gemini provider."))
+			}
 		} else {
 			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "AI service is not available."))
+		}
+
+	case "setprovider":
+		if aiService == nil {
+			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "AI service is not available."))
+			return
+		}
+
+		providerName := message.CommandArguments()
+		if providerName == "" {
+			currentProvider := aiService.GetActiveProviderName()
+			availableProviders := aiService.GetAvailableProviders()
+			bot.Send(tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("Current provider is %s.\nAvailable providers: %s\nUsage: /setprovider <provider>", currentProvider, strings.Join(availableProviders, ", "))))
+			return
+		}
+
+		err := aiService.SetProvider(providerName)
+		if err != nil {
+			bot.Send(tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("Error setting provider: %s", err)))
+		} else {
+			bot.Send(tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("AI provider set to: %s", providerName)))
 		}
 	}
 }
@@ -450,18 +476,30 @@ ai_provider: %s
 	os.WriteFile(notePath, []byte(content), 0644)
 	log.Printf("Created note: %s", notePath)
 
+	// Convert markdown to HTML
+	htmlContent := convertMarkdownToHTML(content)
+
+	// Convert HTML to PDF
+	pdfData, err := convertHTMLToPDF(htmlContent)
+	if err != nil {
+		log.Printf("Error converting to PDF: %v", err)
+		// Send the markdown file as a fallback
+		doc := tgbotapi.NewDocument(message.Chat.ID, tgbotapi.FilePath(notePath))
+		bot.Send(doc)
+		return
+	}
+
+	// Send the PDF file
+	pdfFile := tgbotapi.FileBytes{
+		Name:  strings.Replace(noteName, ".md", ".pdf", 1),
+		Bytes: pdfData,
+	}
+	doc := tgbotapi.NewDocument(message.Chat.ID, pdfFile)
+	bot.Send(doc)
+
 	globalMutex.Lock()
 	lastCreatedNote = notePath
 	globalMutex.Unlock()
-
-	if processed.Confidence > 0.7 && processed.Category != "general" {
-		go func() {
-			time.Sleep(500 * time.Millisecond)
-			if err := organizeNote(notePath, processed.Category); err != nil {
-				log.Printf("Organization error: %v", err)
-			}
-		}()
-	}
 }
 
 func formatExtractedText(text string) string {
