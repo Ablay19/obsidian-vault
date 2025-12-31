@@ -478,11 +478,8 @@ ai_provider: %s
 	os.WriteFile(notePath, []byte(content), 0644)
 	log.Printf("Created note: %s", notePath)
 
-	// Convert markdown to HTML
-	htmlContent := convertMarkdownToHTML(content)
-
-	// Convert HTML to PDF
-	pdfData, err := convertHTMLToPDF(htmlContent)
+	// Convert Markdown to PDF
+	pdfData, err := convertMarkdownToPDF(content)
 	if err != nil {
 		log.Printf("Error converting to PDF: %v", err)
 		// Send the markdown file as a fallback

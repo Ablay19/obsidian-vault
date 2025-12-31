@@ -1,61 +1,49 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
-
-	"github.com/chromedp/cdproto/page"
-	"github.com/chromedp/chromedp"
-	"github.com/russross/blackfriday/v2"
+	"os/exec"
 )
 
-// convertMarkdownToHTML converts a Markdown string to an HTML string.
-func convertMarkdownToHTML(markdownContent string) string {
-	html := blackfriday.Run([]byte(markdownContent))
-	return string(html)
-}
-
-// convertHTMLToPDF converts an HTML string to a PDF byte slice using headless Chrome.
-func convertHTMLToPDF(htmlContent string) ([]byte, error) {
-	// Create a new context
-	ctx, cancel := chromedp.NewContext(context.Background())
-	defer cancel()
-
-	// Create a temporary file for the HTML content
-	tmpfile, err := ioutil.TempFile("", "htmltopdf.*.html")
+// convertMarkdownToPDF converts a Markdown string to a PDF byte slice using pandoc and tectonic.
+func convertMarkdownToPDF(markdownContent string) ([]byte, error) {
+	// Create a temporary file for the Markdown content
+	tmpMarkdownFile, err := ioutil.TempFile("", "markdowntopdf.*.md")
 	if err != nil {
-		return nil, fmt.Errorf("failed to create temp file: %w", err)
+		return nil, fmt.Errorf("failed to create temp markdown file: %w", err)
 	}
-	defer os.Remove(tmpfile.Name())
+	defer os.Remove(tmpMarkdownFile.Name())
 
-	if _, err := tmpfile.Write([]byte(htmlContent)); err != nil {
-		tmpfile.Close()
-		return nil, fmt.Errorf("failed to write to temp file: %w", err)
+	if _, err := tmpMarkdownFile.Write([]byte(markdownContent)); err != nil {
+		tmpMarkdownFile.Close()
+		return nil, fmt.Errorf("failed to write to temp markdown file: %w", err)
 	}
-	if err := tmpfile.Close(); err != nil {
-		return nil, fmt.Errorf("failed to close temp file: %w", err)
+	if err := tmpMarkdownFile.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close temp markdown file: %w", err)
 	}
 
-	var pdfBuffer []byte
-	err = chromedp.Run(ctx,
-		chromedp.Navigate(fmt.Sprintf("file://%s", tmpfile.Name())),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			buf, _, err := page.PrintToPDF().Do(ctx)
-			if err != nil {
-				return err
-			}
-			pdfBuffer = buf
-			return nil
-		}),
-	)
-
+	// Create a temporary file for the PDF output
+	tmpPDFFile, err := ioutil.TempFile("", "output.*.pdf")
 	if err != nil {
-		return nil, fmt.Errorf("chromedp failed: %w", err)
+		return nil, fmt.Errorf("failed to create temp pdf file: %w", err)
+	}
+	tmpPDFFile.Close() // Close it immediately, pandoc will write to it.
+	defer os.Remove(tmpPDFFile.Name())
+
+	cmd := exec.Command("pandoc", tmpMarkdownFile.Name(), "-o", tmpPDFFile.Name(), "--pdf-engine=tectonic")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("pandoc failed: %w\n%s", err, string(output))
 	}
 
-	log.Println("Successfully converted HTML to PDF")
+	pdfBuffer, err := ioutil.ReadFile(tmpPDFFile.Name())
+	if err != nil {
+		return nil, fmt.Errorf("failed to read temp pdf file: %w", err)
+	}
+
+	log.Println("Successfully converted Markdown to PDF using pandoc")
 	return pdfBuffer, nil
 }

@@ -8,9 +8,9 @@ import (
 )
 
 const (
-	ModelFlashSearch = "gemini-1.5-flash-latest"
-	ModelProComplex  = "gemini-1.5-pro-latest"
-	ModelImageGen    = "gemini-1.5-flash-latest"
+	ModelFlashSearch = "gemini-1.5-flash"
+	ModelProComplex  = "gemini-1.5-pro"
+	ModelImageGen    = "gemini-1.5-flash"
 )
 
 // AIService manages multiple AI providers and selects the active one.

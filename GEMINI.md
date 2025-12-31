@@ -47,50 +47,39 @@ configuration system. It is fully containerized with Docker for easy deployment 
 
 The bot's architecture is centered around a main Go application running inside a Docker container.
 
-```text
-+----------------------------------------------------------------+
-| User (Telegram)                                                |
-+----------------------------------------------------------------+
-     ↑                                     │
-     │ (Text, Images, PDFs, Commands)      │ (Streamed AI Responses, Messages)
-     ↓                                     │
-+----------------------------------------------------------------+
-| Telegram Bot API                                               |
-+----------------------------------------------------------------+
-     ↑                                     │
-     │ (API Requests)                      │ (Webhook/Long-polling Updates)
-     ↓                                     │
-+----------------------------------------------------------------+
-| Go Application (in Docker Container)                           |
-|----------------------------------------------------------------|
-| main.go: Bot Entrypoint & Command/Message Router               |
-|    - Handles incoming updates from Telegram.                   |
-|    - Routes messages to handlers (file, command, chat).        |
-|    - Manages streaming callbacks to Telegram.                  |
-|----------------------------------------------------------------|
-| processor.go: Core Processing Logic                            |
-|    - Extracts text from files (OCR/PDF).                       |
-|    - Orchestrates two-call AI interaction (summary & JSON).    |
-|    - Creates final note content.                               |
-|----------------------------------------------------------------|
-| ai_service.go: Gemini AI Service                               |
-|    - Manages multiple API keys and clients.                    |
-|    - Implements automatic key rotation on quota errors.        |
-|    - Provides methods for streaming & non-streaming AI calls.  |
-|----------------------------------------------------------------|
-| Utilities:                                                     |
-|    - stats.go: Usage statistics.                               |
-|    - dedup.go: Duplicate file detection.                       |
-|    - health.go: Health check endpoint.                         |
-+----------------------------------------------------------------+
-     │                                     ↑
-     │ (API Requests to Gemini)            │ (AI Responses)
-     ↓                                     │
-+----------------------------------------------------------------+
-| Google Gemini API                                              |
-+----------------------------------------------------------------+
+```mermaid
+graph TD
+    subgraph "User"
+        A[User on Telegram]
+    end
+
+    subgraph "Telegram"
+        B[Telegram Bot API]
+    end
+
+    subgraph "Go Application (Docker)"
+        C[main.go: Entrypoint & Router]
+        D[processor.go: Core Logic]
+        E[ai_service.go: Gemini AI Service]
+        F[Utilities: stats, dedup, health]
+    end
+
+    subgraph "Google AI"
+        G[Google Gemini API]
+    end
+
+    A -- "Text, Images, PDFs, Commands" --> B
+    B -- "Streamed AI Responses, Messages" --> A
+    B -- "Webhook/Long-polling Updates" --> C
+    C -- "API Requests" --> B
+    C --> D
+    D -- "Orchestrates AI interaction" --> E
+    E -- "API Requests to Gemini" --> G
+    G -- "AI Responses" --> E
+    C --> F
 ```
-_Note: For future enhancements, considering a visual diagram tool (e.g., PlantUML, Mermaid) could improve clarity and maintainability of the architecture overview._
+
+_Note: This Mermaid diagram replaces the previous text-based version for better clarity and maintainability._
 
 ## 4. Configuration
 
