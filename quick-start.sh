@@ -1,7 +1,8 @@
 #!/bin/bash
 set -e
 
-cd ~/obsidian-automation
+# Change to the script's directory
+cd "$(dirname "$0")"
 
 if [ ! -f .env ]; then
     echo "ERROR: .env file not found!"
@@ -15,34 +16,20 @@ if [ -z "$TELEGRAM_BOT_TOKEN" ]; then
     exit 1
 fi
 
-echo "🔨 Building Docker image..."
-docker build -t obsidian-bot . || exit 1
+if ! command -v docker-compose &> /dev/null; then
+    echo "ERROR: docker-compose not found. Please install it to run the bot."
+    exit 1
+fi
 
-echo "🛑 Stopping old container..."
-docker stop obsidian-bot 2>/dev/null || true
-docker rm obsidian-bot 2>/dev/null || true
-
-echo "🚀 Starting new container..."
-docker run -d \
-  --name obsidian-bot \
-  --restart unless-stopped \
-  --env-file .env \
-  -e TZ=Africa/Tunis \
-  -v "$(pwd)/vault:/app/vault" \
-  -v "$(pwd)/attachments:/app/attachments" \
-  -v "$(pwd)/stats.json:/app/stats.json" \
-  -p 8080:8080 \
-  --memory="512m" \
-  --log-driver json-file \
-  --log-opt max-size=10m \
-  --log-opt max-file=3 \
-  obsidian-bot
+echo "🔨 Building and starting Obsidian Bot with Docker Compose..."
+docker-compose up -d --build
 
 echo ""
 echo "✅ Bot started successfully!"
 echo ""
 echo "Commands:"
-echo "  docker logs -f obsidian-bot    # View logs"
+echo "  docker-compose logs -f         # View logs"
 echo "  curl localhost:8080/health     # Health check"
-echo "  docker restart obsidian-bot    # Restart"
+echo "  docker-compose restart         # Restart"
+echo "  docker-compose down            # Stop and remove containers"
 echo ""
