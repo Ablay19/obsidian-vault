@@ -161,7 +161,7 @@ obsidian-automation/
 ├── Makefile                    # Project management commands
 ├── .env                        # Environment variables (gitignored)
 ├── vault/                      # Your Obsidian vault
-├── attachments/                # Raw files received by the bot
+│   ├── attachments/            # Raw files received by the bot
 ├── .github/workflows/          # CI/CD pipelines
 │   ├── ci.yml                  # Run tests and build
 │   └── lint.yml                # Run linter
