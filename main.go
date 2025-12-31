@@ -48,7 +48,6 @@ func getUserState(userID int64) *UserState {
 	return state
 }
 
-// Bot interface for testing
 type Bot interface {
 	Send(c tgbotapi.Chattable) (tgbotapi.Message, error)
 	Request(c tgbotapi.Chattable) (*tgbotapi.APIResponse, error)
