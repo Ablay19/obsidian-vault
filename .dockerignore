@@ -8,3 +8,8 @@ README.md
 telegram-bot
 obsidian-automation
 .git/
+
+# Docker-specific ignores
+*.log*
+coverage/
+*.test
