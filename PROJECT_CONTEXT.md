@@ -9,6 +9,8 @@ primary_technologies:
   - "Google Gemini"
   - "Groq"
   - "Tesseract OCR"
+  - "Poppler utils"
+  - "sqlc"
   - "Pandoc"
   - "Tectonic"
 entrypoint: "cmd/bot/main.go"

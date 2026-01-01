@@ -8,8 +8,9 @@ CREATE TABLE IF NOT EXISTS chat_history (
     content_type VARCHAR(20) NOT NULL, -- 'text', 'photo', 'document'
     text_content TEXT,
     file_path TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_user_id (user_id),
-    INDEX idx_chat_id (chat_id),
-    INDEX idx_created_at (created_at)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX IF NOT EXISTS idx_user_id ON chat_history (user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_id ON chat_history (chat_id);
+CREATE INDEX IF NOT EXISTS idx_created_at ON chat_history (created_at);
