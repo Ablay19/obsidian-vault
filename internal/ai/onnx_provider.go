@@ -15,7 +15,7 @@ type ONNXProvider struct {
 }
 
 // NewONNXProvider creates a new provider for a local ONNX model.
-func NewONNXProvider(modelPath string) (*ONNXProvider, error) {
+func NewONNXProvider(modelPath string) (*ONNXProvider, error) {	
 	pipeline, err := hugot.NewSequenceClassificationPipeline(modelPath, "onnx", "ort")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ONNX pipeline: %w", err)
@@ -24,7 +24,7 @@ func NewONNXProvider(modelPath string) (*ONNXProvider, error) {
 	return &ONNXProvider{
 		pipeline:  pipeline,
 		modelPath: modelPath,
-	},
+	};
 }
 
 // Process is adapted for a classification model. It runs prediction on the prompt.
