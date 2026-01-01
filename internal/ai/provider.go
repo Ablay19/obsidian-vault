@@ -1,6 +1,12 @@
-package main
+package ai
 
 import "context"
+
+const (
+	ModelFlashSearch = "gemini-pro"
+	ModelProComplex  = "gemini-1.5-pro-latest"
+	ModelImageGen    = "gemini-pro"
+)
 
 // AIProvider defines the interface for an AI service.
 // This allows for multiple AI providers (e.g., Gemini, Groq) to be used interchangeably.

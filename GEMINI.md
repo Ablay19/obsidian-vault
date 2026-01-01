@@ -16,13 +16,14 @@ configuration system. It is fully containerized with Docker for easy deployment 
 
 ### AI & Content Processing
 
--   **AI-Powered Analysis**: Leverages Google's Gemini models (`gemini-flash` and `gemini-pro`) for content summarization,
-    question answering, and categorization.
+-   **AI-Powered Analysis**: Leverages Google's Gemini models (`gemini-flash` and `gemini-pro`) and **Groq** for content summarization, question answering, and categorization.
+-   **Multi-Provider AI Support**: Seamlessly switch between Google Gemini and Groq AI providers, offering flexibility and optimized performance.
 -   **Streaming Responses**: AI-generated responses are streamed in real-time to the user for an interactive, "live-typing" experience.
 -   **Multi-Language Support**: AI responses can be configured to default to any language on-the-fly via
-    the `/lang` command. This flexibility is enabled by the underlying Gemini models' multilingual capabilities.
+    the `/lang` command. This flexibility is enabled by the underlying AI models' multilingual capabilities.
 -   **Question Answering**: The AI is prompted to answer any questions it finds within the text of a provided document.
 -   **OCR & Text Extraction**: Uses Tesseract for OCR on images and `pdftotext` for extracting content from PDF files.
+-   **Improved PDF Conversion**: Utilizes a headless Chrome instance to convert Markdown notes to PDF, ensuring high-fidelity rendering of complex notes, including those with LaTeX.
 -   **Reliable AI Interaction**: Implements a two-call AI strategy. The first call obtains a human-readable summary, streamed
     in real-time. The second, separate call, is used to extract structured JSON data (e.g., category, topics). This separation
     significantly reduces the risk of JSON parsing errors, as the AI can focus on generating valid JSON without interference
@@ -31,7 +32,7 @@ configuration system. It is fully containerized with Docker for easy deployment 
 ### Bot & User Interaction
 
 -   **Chatbot Mode**: Functions as a general-purpose chatbot, treating any non-command text message as a prompt for the AI.
--   **Interactive Commands**: A rich set of slash commands for managing the bot and accessing features.
+-   **Interactive Commands**: A rich set of slash commands for managing the bot and accessing features, including `/setprovider` to switch AI models, `/last` to show the last note created, `/reprocess` to reprocess the last sent file, and `/pid` to get the process ID of the bot.
 -   **Command Autocompletion**: Registers its command list with Telegram, providing users with an easy-to-use command menu.
 -   **"Typing" Indicator**: Provides real-time user feedback by displaying the "typing..." status while processing requests.
 
@@ -58,25 +59,29 @@ graph TD
     end
 
     subgraph "Go Application (Docker)"
-        C[main.go: Entrypoint & Router]
-        D[processor.go: Core Logic]
-        E[ai_service.go: Gemini AI Service]
-        F[Utilities: stats, dedup, health]
+        C[cmd/bot/main.go: Entrypoint]
+        D[internal/bot: Core Bot Logic]
+        E[internal/ai: AI Service]
+        F[internal/converter: File Conversion]
+        G[internal/database: Database]
+        H[internal/health: Health & Control]
     end
 
-    subgraph "Google AI"
-        G[Google Gemini API]
+    subgraph "AI Providers"
+        I[Google Gemini API]
+        J[Groq API]
     end
 
     A -- "Text, Images, PDFs, Commands" --> B
     B -- "Streamed AI Responses, Messages" --> A
     B -- "Webhook/Long-polling Updates" --> C
-    C -- "API Requests" --> B
-    C --> D
-    D -- "Orchestrates AI interaction" --> E
-    E -- "API Requests to Gemini" --> G
-    G -- "AI Responses" --> E
-    C --> F
+    C -- "Starts Bot" --> D
+    D -- "Uses" --> E
+    D -- "Uses" --> F
+    D -- "Uses" --> G
+    D -- "Uses" --> H
+    E -- "API Requests" --> I
+    E -- "API Requests" --> J
 ```
 
 _Note: This Mermaid diagram replaces the previous text-based version for better clarity and maintainability._
@@ -88,12 +93,14 @@ The application is configured via a `.env` file in the project root.
 -   `TELEGRAM_BOT_TOKEN` (Required): Your token from Telegram's BotFather.
 -   `GEMINI_API_KEYS` (Required): A **comma-separated list** of your Gemini API keys. Do not include spaces between the keys.
     The bot will use these keys and rotate them automatically upon hitting quota limits.
+-   `GROQ_API_KEY` (Required for Groq provider): Your Groq API key.
 -   `OLLAMA_HOST` (Optional): The host for a local Ollama instance. *Note: The fallback to Ollama is not yet implemented.*
 
 **Example `.env` file:**
 ```dotenv
 TELEGRAM_BOT_TOKEN=12345:your-long-telegram-token
 GEMINI_API_KEYS=key-one,key-two,key-three
+GROQ_API_KEY=your-groq-api-key
 OLLAMA_HOST=http://localhost:11434
 ```
 
@@ -116,37 +123,43 @@ into the project's CI/CD pipeline to ensure adherence to standards.
 
 ## 6. Codebase Deep Dive
 
-### `main.go`
+### `cmd/bot/main.go`
 
--   **`main()`**: Initializes services (AI, Bot API), sets up the command autocompletion menu with Telegram, and starts the
-    main update loop.
--   **Update Loop**: Handles incoming messages concurrently using goroutines for better responsiveness.
--   **`handleCommand()`**: A sophisticated command router that handles both slash commands (e.g., `/stats`) and general text
-    messages (chatbot mode).
--   **`handlePhoto()` / `handleDocument()`**: These functions manage the file download and processing workflow. They are
-    responsible for sending the initial "Processing..." message and initiating the streaming process.
--   **`createObsidianNote()`**: Orchestrates the entire note creation process, including defining the streaming callback function,
-    calling the AI processor, and saving the final `.md` file.
+-   **`main()`**: The main entrypoint of the application. It initializes the PID lock, handles signals for graceful shutdown, and starts the bot.
 
-### `processor.go`
+### `internal/bot`
 
--   **`processFileWithAI()`**: This is the core orchestration function. It takes the file path, AI service, and a streaming
-    callback as input.
-    1.  Extracts text from the file.
-    2.  Makes the **first AI call** (`GenerateContent`) to get a human-readable summary, streaming the response back via the callback.
-    3.  Makes the **second AI call** (`GenerateJSONData`) to get structured data (category, topics, etc.) in a reliable way.
-    4.  Parses the JSON and combines all the information into the `ProcessedContent` struct.
--   **`extractTextFrom...()`**: Helper functions that use external tools (`tesseract`, `pdftotext`) to get text from files.
--   **`classifyContent()`**: A simple, non-AI-based classifier used as a fallback if the AI service fails.
+-   This package contains the core bot logic.
+-   **`main.go`**: Contains the main `Run` function that initializes the bot, sets up command handlers, and enters the main update loop.
+-   **`handler.go`**: (Assuming this file exists) Contains the `handleCommand`, `handlePhoto`, and `handleDocument` functions.
+-   **`processor.go`**: Contains the `processFileWithAI` function, which orchestrates text extraction, AI processing, and note creation.
+-   **`dedup.go`**: Contains the `IsDuplicate` function for checking for duplicate files.
+-   **`stats.go`**: Contains the logic for tracking usage statistics.
 
-### `ai_service.go`
+### `internal/ai`
 
--   **`AIService` struct**: Holds the list of `genai.Client` instances and tracks the `currentKeyIndex`.
--   **`NewAIService()`**: Reads the `GEMINI_API_KEYS` from the environment, splits them, and creates a client for each valid key.
--   **`GenerateContent()` / `GenerateJSONData()`**: These functions contain the core retry logic. They loop through the available
-    clients, making the API call. If they receive a `429` error, they call `switchToNextKey()` and retry the request with
-    the next client. This provides seamless, automatic failover between API keys.
--   **`SwitchKey()`**: A public method to allow manual triggering of the key rotation via the `/switchkey` command.
+-   **`ai_service.go`**: Contains the `AIService` struct, which manages multiple AI providers.
+-   **`provider.go`**: Defines the `AIProvider` interface.
+-   **`gemini_provider.go`**: Implements the `AIProvider` interface for the Google Gemini API.
+-   **`groq_provider.go`**: Implements the `AIProvider` interface for the Groq API.
+-   **`mock_provider.go`**: Implements mock providers for testing.
+
+### `internal/converter`
+
+-   **`converter.go`**: Contains the `ConvertMarkdownToPDF` function for converting Markdown to PDF using pandoc and tectonic.
+
+### `internal/database`
+
+-   **`db.go`**: Contains the database initialization logic.
+-   **`schema.go`**: Contains the database schema.
+
+### `internal/health`
+
+-   **`health.go`**: Contains the health and control endpoints: `/status`, `/pause`, and `/resume`.
+
+### `internal/pid`
+
+-   **`pid.go`**: Contains the PID lock mechanism to ensure only one instance of the bot is running.
 
 ## 7. Future Improvements
 
@@ -159,3 +172,28 @@ Key areas for future development include:
 -   **More Advanced Commands**: Adding functionality like `/search` or `/config` commands.
 -   **Observability**: Adding a web dashboard for monitoring bot statistics and health.
 -   **Broader File Type Support**: Expanding the range of document types the bot can process (e.g., .docx, .txt).
+
+## 8. Bot Instance Management
+
+### PID File Lock
+The bot implements a PID (Process ID) file lock mechanism to prevent multiple instances from running simultaneously, which would cause Telegram API conflicts.
+
+**How it works:**
+1. On startup, the bot creates a `bot.pid` file containing its process ID
+2. If the file already exists, the bot checks if that process is still running
+3. If another instance is active, the new instance exits gracefully
+4. On shutdown, the PID file is automatically removed
+
+**Files:**
+- PID file location: `./bot.pid` (project root)
+- Signal handling: SIGINT, SIGTERM for graceful shutdown
+
+This prevents the "Conflict: terminated by other getUpdates request" error during deployments or when accidentally starting multiple instances.
+
+### Observability
+
+The bot provides several endpoints for monitoring and control:
+
+-   `/status`: Returns a JSON object with the current status of the bot, including PID, uptime, Go version, OS, architecture, and last activity time. The same information is also available in the response headers.
+-   `/pause`: Pauses the bot's listening activity. The bot will stop processing new updates from Telegram.
+-   `/resume`: Resumes the bot's listening activity.

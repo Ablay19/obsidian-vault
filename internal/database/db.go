@@ -8,7 +8,9 @@ import (
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
 )
 
-func Open() *sql.DB {
+var DB *sql.DB
+
+func OpenDB() *sql.DB {
 	url := os.Getenv("TURSO_DATABASE_URL")
 	token := os.Getenv("TURSO_AUTH_TOKEN")
 
@@ -22,6 +24,6 @@ func Open() *sql.DB {
 	if err != nil {
 		log.Fatal(err)
 	}
-
+	DB = db
 	return db
 }

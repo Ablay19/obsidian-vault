@@ -4,21 +4,17 @@ A powerful, AI-enhanced Telegram bot to automate your note-taking workflow with 
 
 ## ✨ Features
 
--   **AI-Powered Content Analysis**: Uses Google's Gemini Pro to summarize text, answer questions, and categorize content.
+-   **AI-Powered Content Analysis**: Uses Google's Gemini Pro and **Groq** to summarize text, answer questions, and categorize content.
+-   **Multi-Provider AI Support**: Seamlessly switch between Google Gemini and Groq AI providers, offering flexibility and optimized performance.
 -   **Streaming Responses**: Get real-time answers from the AI, just like a modern chatbot.
 -   **Chatbot Mode**: Chat directly with the bot for quick questions and answers.
 -   **Multi-Language Support**: Defaults to French, but you can change the language at any time with the `/lang` command.
 -   **File Processing**: Extracts text from images (via Tesseract OCR) and PDFs.
+-   **Improved PDF Conversion**: The bot now uses a headless Chrome instance to convert Markdown notes to PDF, ensuring high-fidelity rendering of complex notes, including those with LaTeX.
 -   **Intelligent Categorization**: Automatically categorizes content into topics like `physics`, `math`, `chemistry`, etc.
 -   **Duplicate Detection**: Prevents processing the same file twice.
 -   **Interactive Commands**: Manage the bot and your notes with a rich set of slash commands.
 -   **Dockerized**: Easy to set up and run in a containerized environment.
-
-## 🚀 New Features in this Version
-
--   **Multi-Provider AI Support**: In addition to Gemini, the bot now supports the **Groq** AI provider for even faster responses.
--   **Provider Switching**: You can switch between AI providers on the fly using the new `/setprovider` command.
--   **Improved PDF Conversion**: The bot now uses a headless Chrome instance to convert Markdown notes to PDF, ensuring high-fidelity rendering of complex notes, including those with LaTeX.
 
 ## 🚀 Getting Started
 
@@ -81,6 +77,7 @@ Send any text message to the bot to start a conversation. It will respond using 
 -   `/switchkey`: Manually switch to the next Gemini API key.
 -   `/last`: Shows the path of the last note created.
 -   `/reprocess`: Reprocesses the last file you sent.
+-   `/pid`: Shows the process ID of the bot instance.
 
 ## 🛠️ Project Management
 
@@ -138,7 +135,7 @@ The linter is also run automatically as part of the CI/CD pipeline.
 ### Architecture
 
 ```
-Telegram User ↔ Telegram Bot API ↔ Go Application (Docker) ↔ Gemini API
+Telegram User ↔ Telegram Bot API ↔ Go Application (Docker) ↔ AI Providers (Gemini/Groq)
                                         │
                                         └─► Obsidian Vault
 ```
@@ -147,16 +144,14 @@ Telegram User ↔ Telegram Bot API ↔ Go Application (Docker) ↔ Gemini API
 
 ```
 obsidian-automation/
-├── main.go                     # Main bot logic and command handler
-├── processor.go                # File processing and AI orchestration
-├── ai_service.go               # AI service manager for multiple providers
-├── ai_provider.go              # Interface for AI providers
-├── gemini_provider.go          # Gemini AI provider
-├── groq_provider.go            # Groq AI provider
-├── converter.go                # Markdown to PDF conversion
-├── stats.go                    # Statistics tracking
-├── health.go                   # Health check endpoint
-├── dedup.go                    # Duplicate file detection
+├── cmd/bot/main.go             # Main application entrypoint
+├── internal/
+│   ├── ai/                     # AI service and providers
+│   ├── bot/                    # Core bot logic, handlers, and processor
+│   ├── converter/              # File conversion utilities
+│   ├── database/               # Database schema and queries
+│   ├── health/                 # Health and control endpoints
+│   └── pid/                    # PID lock mechanism
 ├── Dockerfile                  # Container definition
 ├── Makefile                    # Project management commands
 ├── .env                        # Environment variables (gitignored)
@@ -165,9 +160,16 @@ obsidian-automation/
 ├── .github/workflows/          # CI/CD pipelines
 │   ├── ci.yml                  # Run tests and build
 │   └── lint.yml                # Run linter
-├── ai_service_test.go          # Tests for the AI service
-├── converter_test.go           # Tests for the converter
-└── mock_provider.go            # Mock AI providers for testing
 ```
 
+### Bot Instance Management
 
+The bot uses a PID file lock mechanism to prevent multiple instances from running simultaneously, avoiding conflicts with the Telegram API. For more technical details, refer to `GEMINI.md`.
+
+### Observability
+
+The bot provides several endpoints for monitoring and control on port 8080:
+
+-   `/status`: Returns a JSON object with the current status of the bot, including PID, uptime, Go version, OS, architecture, and last activity time.
+-   `/pause`: Pauses the bot's listening activity.
+-   `/resume`: Resumes the bot's listening activity.

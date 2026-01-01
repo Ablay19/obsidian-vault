@@ -1,4 +1,4 @@
-package main
+package ai
 
 import (
 	"context"
@@ -7,33 +7,35 @@ import (
 	"sync"
 )
 
-const (
-	ModelFlashSearch = "gemini-1.5-flash"
-	ModelProComplex  = "gemini-1.5-pro"
-	ModelImageGen    = "gemini-1.5-flash"
-)
-
 // AIService manages multiple AI providers and selects the active one.
 type AIService struct {
 	providers      map[string]AIProvider
-	activeProvider AIProvider
+	ActiveProvider AIProvider
 	mu             sync.RWMutex
 }
 
-// NewAIService initializes all available AI providers.
-func NewAIService(ctx context.Context) *AIService {
+// NewAIService initializes the AI service with provided providers.
+// If no providers are given, it attempts to initialize Gemini and Groq providers from environment variables.
+func NewAIService(ctx context.Context, initialProviders ...AIProvider) *AIService {
 	providers := make(map[string]AIProvider)
 
-	// Initialize Gemini provider
-	geminiProvider := NewGeminiProvider(ctx)
-	if geminiProvider != nil {
-		providers[geminiProvider.ProviderName()] = geminiProvider
-	}
+	if len(initialProviders) > 0 {
+		for _, p := range initialProviders {
+			providers[p.ProviderName()] = p
+		}
+	} else {
+		// Existing logic to initialize Gemini and Groq from env vars
+		// Initialize Gemini provider
+		geminiProvider := NewGeminiProvider(ctx)
+		if geminiProvider != nil {
+			providers[geminiProvider.ProviderName()] = geminiProvider
+		}
 
-	// Initialize Groq provider
-	groqProvider := NewGroqProvider(ctx)
-	if groqProvider != nil {
-		providers[groqProvider.ProviderName()] = groqProvider
+		// Initialize Groq provider
+		groqProvider := NewGroqProvider(ctx)
+		if groqProvider != nil {
+			providers[groqProvider.ProviderName()] = groqProvider
+		}
 	}
 
 	if len(providers) == 0 {
@@ -42,20 +44,20 @@ func NewAIService(ctx context.Context) *AIService {
 	}
 
 	// Set default provider (e.g., Gemini)
-	activeProvider, ok := providers["Gemini"]
+	ActiveProvider, ok := providers["Gemini"]
 	if !ok {
 		// Fallback to the first available provider if Gemini isn't there
 		for _, p := range providers {
-			activeProvider = p
+			ActiveProvider = p
 			break
 		}
 	}
 
-	log.Printf("AI Service initialized. Available providers: %v. Active provider: %s", getMapKeys(providers), activeProvider.ProviderName())
+	log.Printf("AI Service initialized. Available providers: %v. Active provider: %s", getMapKeys(providers), ActiveProvider.ProviderName())
 
 	return &AIService{
 		providers:      providers,
-		activeProvider: activeProvider,
+		ActiveProvider: ActiveProvider,
 	}
 }
 
@@ -68,7 +70,7 @@ func (s *AIService) SetProvider(providerName string) error {
 	if !ok {
 		return fmt.Errorf("provider '%s' not found or not configured", providerName)
 	}
-	s.activeProvider = provider
+	s.ActiveProvider = provider
 	log.Printf("Switched AI provider to %s", providerName)
 	return nil
 }
@@ -77,10 +79,17 @@ func (s *AIService) SetProvider(providerName string) error {
 func (s *AIService) GetActiveProviderName() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if s.activeProvider == nil {
+	if s.ActiveProvider == nil {
 		return "None"
 	}
-	return s.activeProvider.ProviderName()
+	return s.ActiveProvider.ProviderName()
+}
+
+// GetActiveProvider returns the active AI provider.
+func (s *AIService) GetActiveProvider() AIProvider {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.ActiveProvider
 }
 
 // GetAvailableProviders returns a list of available provider names.
@@ -93,7 +102,7 @@ func (s *AIService) GetAvailableProviders() []string {
 // GenerateContent delegates the call to the active provider.
 func (s *AIService) GenerateContent(ctx context.Context, prompt string, imageData []byte, modelType string, streamCallback func(string)) (string, error) {
 	s.mu.RLock()
-	provider := s.activeProvider
+	provider := s.ActiveProvider
 	s.mu.RUnlock()
 
 	if provider == nil {
@@ -105,7 +114,7 @@ func (s *AIService) GenerateContent(ctx context.Context, prompt string, imageDat
 // GenerateJSONData delegates the call to the active provider.
 func (s *AIService) GenerateJSONData(ctx context.Context, text, language string) (string, error) {
 	s.mu.RLock()
-	provider := s.activeProvider
+	provider := s.ActiveProvider
 	s.mu.RUnlock()
 
 	if provider == nil {

@@ -13,3 +13,7 @@ logs/*
 *.test
 vendor/
 *.out
+.Makefile.swp
+/config/.env
+vault/
+*.log*
