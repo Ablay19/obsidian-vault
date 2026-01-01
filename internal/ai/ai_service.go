@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"sync"
 )
@@ -21,20 +22,20 @@ func NewAIService(ctx context.Context, initialProviders ...AIProvider) *AIServic
 
 	if len(initialProviders) > 0 {
 		for _, p := range initialProviders {
-			providers[p.ProviderName()] = p
+			providers[p.GetModelInfo().ProviderName] = p
 		}
 	} else {
 		// Existing logic to initialize Gemini and Groq from env vars
 		// Initialize Gemini provider
 		geminiProvider := NewGeminiProvider(ctx)
 		if geminiProvider != nil {
-			providers[geminiProvider.ProviderName()] = geminiProvider
+			providers[geminiProvider.GetModelInfo().ProviderName] = geminiProvider
 		}
 
 		// Initialize Groq provider
 		groqProvider := NewGroqProvider(ctx)
 		if groqProvider != nil {
-			providers[groqProvider.ProviderName()] = groqProvider
+			providers[groqProvider.GetModelInfo().ProviderName] = groqProvider
 		}
 	}
 
@@ -53,7 +54,7 @@ func NewAIService(ctx context.Context, initialProviders ...AIProvider) *AIServic
 		}
 	}
 
-	log.Printf("AI Service initialized. Available providers: %v. Active provider: %s", getMapKeys(providers), ActiveProvider.ProviderName())
+	log.Printf("AI Service initialized. Available providers: %v. Active provider: %s", getMapKeys(providers), ActiveProvider.GetModelInfo().ProviderName)
 
 	return &AIService{
 		providers:      providers,
@@ -82,7 +83,7 @@ func (s *AIService) GetActiveProviderName() string {
 	if s.ActiveProvider == nil {
 		return "None"
 	}
-	return s.ActiveProvider.ProviderName()
+	return s.ActiveProvider.GetModelInfo().ProviderName
 }
 
 // GetActiveProvider returns the active AI provider.
@@ -97,6 +98,30 @@ func (s *AIService) GetAvailableProviders() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return getMapKeys(s.providers)
+}
+
+// GetProvidersInfo returns a list of model information for all available providers.
+func (s *AIService) GetProvidersInfo() []ModelInfo {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var infos []ModelInfo
+	for _, p := range s.providers {
+		infos = append(infos, p.GetModelInfo())
+	}
+	return infos
+}
+
+// Process delegates the call to the active provider.
+func (s *AIService) Process(ctx context.Context, w io.Writer, system, prompt string, images []string) error {
+	s.mu.RLock()
+	provider := s.ActiveProvider
+	s.mu.RUnlock()
+
+	if provider == nil {
+		return fmt.Errorf("no active AI provider")
+	}
+	return provider.Process(ctx, w, system, prompt, images)
 }
 
 // GenerateContent delegates the call to the active provider.

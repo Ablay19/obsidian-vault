@@ -1,0 +1,38 @@
+providers:
+  gemini:
+    model: gemini-3-pro-image-preview
+  groq:
+    model: llama-3.1-8b-instant
+
+classification:
+  patterns:
+    physics:
+      - force
+      - energy
+      - mass
+      - velocity
+      - acceleration
+    math:
+      - equation
+      - function
+      - derivative
+      - integral
+      - matrix
+    chemistry:
+      - molecule
+      - atom
+      - reaction
+      - chemical
+    admin:
+      - invoice
+      - contract
+      - form
+      - certificate
+
+language_detection:
+  french_words:
+    - le
+    - la
+    - de
+    - et
+    - un

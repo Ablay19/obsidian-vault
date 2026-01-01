@@ -1,17 +1,24 @@
 package ai
 
-import "context"
-
-const (
-	ModelFlashSearch = "gemini-pro"
-	ModelProComplex  = "gemini-1.5-pro-latest"
-	ModelImageGen    = "gemini-pro"
+import (
+	"context"
+	"io"
 )
 
-// AIProvider defines the interface for an AI service.
-// This allows for multiple AI providers (e.g., Gemini, Groq) to be used interchangeably.
+// AIProvider defines the interface for AI services.
 type AIProvider interface {
+	// Process sends a request to the AI service and returns a stream of responses.
+	Process(ctx context.Context, w io.Writer, system, prompt string, images []string) error
+	// GenerateContent streams a human-readable response from AI.
 	GenerateContent(ctx context.Context, prompt string, imageData []byte, modelType string, streamCallback func(string)) (string, error)
+	// GenerateJSONData gets structured data in JSON format from AI.
 	GenerateJSONData(ctx context.Context, text, language string) (string, error)
-	ProviderName() string
+	// GetModelInfo returns information about the model.
+	GetModelInfo() ModelInfo
+}
+
+// ModelInfo holds information about an AI model.
+type ModelInfo struct {
+	ProviderName string `json:"provider_name"`
+	ModelName    string `json:"model_name"`
 }

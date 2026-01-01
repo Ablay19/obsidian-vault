@@ -65,5 +65,16 @@ func StartHealthServer() {
 		json.NewEncoder(w).Encode(data)
 	})
 
+	http.HandleFunc("/info", func(w http.ResponseWriter, r *http.Request) {
+		if aiService == nil {
+			http.Error(w, "AI service not available", http.StatusInternalServerError)
+			return
+		}
+
+		infos := aiService.GetProvidersInfo()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(infos)
+	})
+
 	go http.ListenAndServe(":8080", nil)
 }

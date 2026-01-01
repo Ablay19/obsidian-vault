@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"obsidian-automation/internal/ai"
+	"obsidian-automation/internal/config"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -74,12 +75,7 @@ func classifyContent(text string) ProcessedContent {
 		AIProvider: "None",
 	}
 
-	patterns := map[string][]string{
-		"physics":   {`force`, `energy`, `mass`, `velocity`, `acceleration`},
-		"math":      {`equation`, `function`, `derivative`, `integral`, `matrix`},
-		"chemistry": {`molecule`, `atom`, `reaction`, `chemical`},
-		"admin":     {`invoice`, `contract`, `form`, `certificate`},
-	}
+	patterns := config.AppConfig.Classification.Patterns
 
 	scores := make(map[string]int)
 	for category, pats := range patterns {
@@ -119,7 +115,7 @@ func countMatches(text string, patterns []string) int {
 }
 
 func detectLanguage(text string) string {
-	frWords := []string{"le", "la", "de", "et", "un"}
+	frWords := config.AppConfig.LanguageDetection.FrenchWords
 	count := 0
 	for _, w := range frWords {
 		if strings.Contains(" "+text+" ", " "+w+" ") {
@@ -167,11 +163,15 @@ func processFileWithAI(filePath, fileType string, aiService *ai.AIService, strea
 
 	if fileType == "image" {
 		text, err = extractTextFromImage(filePath)
-		if err == nil {
-			fileData, err = ioutil.ReadFile(filePath)
-			if err != nil {
-				log.Printf("Error reading image file: %v", err)
-			}
+		if err != nil {
+			log.Printf("Error extracting text from image: %v", err)
+			// Continue with image data only if text extraction fails
+		}
+		fileData, err = ioutil.ReadFile(filePath)
+		if err != nil {
+			log.Printf("Error reading image file: %v", err)
+			updateStatus("⚠️ Could not read image file.")
+			return ProcessedContent{Category: "unprocessed", Tags: []string{"error", "read-error"}}
 		}
 	} else if fileType == "pdf" {
 		text, err = extractTextFromPDF(filePath)
@@ -193,22 +193,31 @@ func processFileWithAI(filePath, fileType string, aiService *ai.AIService, strea
 	}
 
 	if aiService != nil {
-		log.Println("Using Gemini for AI enhancement...")
-		result.AIProvider = "Gemini"
+		log.Println("Using AI for enhancement...")
+		result.AIProvider = aiService.GetActiveProvider().GetModelInfo().ProviderName
 		updateStatus("🤖 Generating summary...")
 
-		// 1. Get the summary (streaming)
-		summaryPrompt := fmt.Sprintf("Summarize the following text in %s. If the text contains any questions, answer them as part of the summary. Text:\n\n%s",
-			language,
-			text,
-		)
+		// Determine model to use based on whether image data is present
+		modelToUse := aiService.GetActiveProvider().GetModelInfo().ModelName
+		// If image data is present and the active provider is Gemini, we might want to use a vision-capable model
+		// This logic needs to be refined based on actual model capabilities and configuration
+		// For now, we'll just use the default configured model.
 
-		model := ai.ModelProComplex
+		// 1. Get the summary (streaming)
+		var summaryPrompt string
 		if len(fileData) > 0 {
-			model = ai.ModelImageGen
+			summaryPrompt = fmt.Sprintf("Analyze the attached image and summarize its content in %s. If there is text in the image, use it as context. If there are any questions, answer them as part of the summary. Extracted text (if any):\n\n%s",
+				language,
+				text,
+			)
+		} else {
+			summaryPrompt = fmt.Sprintf("Summarize the following text in %s. If the text contains any questions, answer them as part of the summary. Text:\n\n%s",
+				language,
+				text,
+			)
 		}
 
-		fullSummary, err := aiService.GenerateContent(context.Background(), summaryPrompt, fileData, model, streamCallback)
+		fullSummary, err := aiService.GenerateContent(context.Background(), summaryPrompt, fileData, modelToUse, streamCallback)
 		if err != nil {
 			log.Printf("Error from AI summary service: %v", err)
 			// Fallback to basic classification if summary fails
