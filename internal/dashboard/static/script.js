@@ -1,113 +1,187 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const servicesStatusContainer = document.getElementById('services-status');
-    const pauseBotButton = document.getElementById('pause-bot');
-    const resumeBotButton = document.getElementById('resume-bot');
-    const aiProviderSelect = document.getElementById('ai-provider-select');
-    const setProviderBtn = document.getElementById('set-provider-btn');
+// Fetch and update dashboard data
+async function fetchStatus() {
+    try {
+        const response = await fetch('/api/services/status');
+        const data = await response.json();
+        
+        // Assuming data is an array of service statuses
+        const botStatusData = data.find(s => s.name === 'Bot Core');
 
-    const fetchServiceStatus = async () => {
-        try {
-            const response = await fetch('/api/services/status');
-            if (!response.ok) {
-                throw new Error('Failed to fetch service status');
-            }
-            const statuses = await response.json();
-            renderServiceCards(statuses);
-        } catch (error) {
-            console.error('Error fetching service status:', error);
-            servicesStatusContainer.innerHTML = '<p class="error">Could not load service statuses.</p>';
+        // Update status indicator
+        const statusDot = document.getElementById('status-indicator');
+        const statusText = document.getElementById('status-text');
+        
+        if (botStatusData && botStatusData.status === 'up') {
+            statusDot.classList.remove('error');
+            statusText.textContent = 'Online';
+        } else {
+            statusDot.classList.add('error');
+            statusText.textContent = 'Offline';
         }
-    };
+        
+        // Update stats
+        document.getElementById('bot-status').textContent = botStatusData?.status || '--';
+        document.getElementById('uptime').textContent = formatUptime(botStatusData?.details.match(/Uptime: (.*?),/)?.[1]);
+        document.getElementById('last-activity').textContent = formatTime(botStatusData?.details.match(/Last Activity: (.*)/)?.[1]);
+        
+        // Update system info - these are not in the current /api/services/status response directly
+        // The Go backend needs to expose these via /api/services/status or a new endpoint
+        document.getElementById('os').textContent = botStatusData?.os || '--'; // Placeholder
+        document.getElementById('arch').textContent = botStatusData?.arch || '--'; // Placeholder
+        document.getElementById('go-version').textContent = botStatusData?.go_version || '--'; // Placeholder
+        document.getElementById('pid').textContent = botStatusData?.pid || '--'; // Placeholder
+        
+    } catch (error) {
+        console.error('Error fetching status:', error);
+        document.getElementById('status-text').textContent = 'Error';
+        document.getElementById('status-indicator').classList.add('error');
+    }
+}
 
-    const fetchAIProviders = async () => {
-        try {
-            const response = await fetch('/api/ai/providers');
-            if (!response.ok) {
-                throw new Error('Failed to fetch AI providers');
-            }
-            const providers = await response.json();
-            populateProviderSelect(providers.available, providers.active);
-        } catch (error) {
-            console.error('Error fetching AI providers:', error);
-        }
-    };
-
-    const populateProviderSelect = (available, active) => {
-        aiProviderSelect.innerHTML = '';
-        available.forEach(provider => {
-            const option = document.createElement('option');
-            option.value = provider;
-            option.textContent = provider;
-            if (provider === active) {
-                option.selected = true;
-            }
-            aiProviderSelect.appendChild(option);
-        });
-    };
-
-    const setAIProvider = async () => {
-        const selectedProvider = aiProviderSelect.value;
-        try {
-            const response = await fetch('/api/ai/provider/set', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ provider: selectedProvider }),
+// Fetch AI providers
+async function fetchProviders() {
+    try {
+        const response = await fetch('/api/ai/providers');
+        const data = await response.json();
+        
+        // Update current provider
+        document.getElementById('ai-provider').textContent = data.active || 'None';
+        
+        // Populate select dropdown
+        const select = document.getElementById('provider-select');
+        select.innerHTML = '';
+        
+        if (data.available && data.available.length > 0) {
+            data.available.forEach(provider => {
+                const option = document.createElement('option');
+                option.value = provider;
+                option.textContent = provider;
+                if (provider === data.active) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
             });
-            if (!response.ok) {
-                throw new Error('Failed to set AI provider');
-            }
-            fetchAIProviders(); // Refresh provider list
-            fetchServiceStatus(); // Refresh service statuses
-        } catch (error) {
-            console.error('Error setting AI provider:', error);
+        } else {
+            select.innerHTML = '<option>No providers available</option>';
         }
-    };
+        
+        // Render provider cards
+        renderProviders(data.available, data.active);
+        
+    } catch (error) {
+        console.error('Error fetching providers:', error);
+        document.getElementById('provider-select').innerHTML = '<option>Error loading</option>';
+    }
+}
 
+// Render provider cards
+function renderProviders(providers, active) {
+    const container = document.getElementById('providers-list');
+    
+    if (!providers || providers.length === 0) {
+        container.innerHTML = '<div class="loading">No providers configured</div>';
+        return;
+    }
+    
+    container.innerHTML = '';
+    
+    providers.forEach(provider => {
+        const card = document.createElement('div');
+        card.className = `provider-card ${provider === active ? 'active' : ''}`;
+        
+        card.innerHTML = `
+            <span class="provider-name">${provider}</span>
+            <span class="provider-badge ${provider === active ? 'active' : 'inactive'}">
+                ${provider === active ? 'Active' : 'Available'}
+            </span>
+        `;
+        
+        container.appendChild(card);
+    });
+}
 
-    const renderServiceCards = (statuses) => {
-        if (!statuses || statuses.length === 0) {
-            servicesStatusContainer.innerHTML = '<p>No services to display.</p>';
-            return;
-        }
-
-        servicesStatusContainer.innerHTML = ''; // Clear existing cards
-
-        statuses.forEach(service => {
-            const card = document.createElement('div');
-            card.className = 'service-card';
-            card.innerHTML = `
-                <div class="service-header">
-                    <div class="service-name">${service.name}</div>
-                    <div class="status ${service.status}">${service.status}</div>
-                </div>
-                <div class="details">${service.details || ''}</div>
-            `;
-            servicesStatusContainer.appendChild(card);
+// Set AI provider
+async function setProvider() {
+    const select = document.getElementById('provider-select');
+    const provider = select.value;
+    const statusDiv = document.getElementById('provider-status');
+    
+    if (!provider) {
+        showMessage(statusDiv, 'Please select a provider', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/ai/provider/set', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ provider })
         });
-    };
-
-    const controlBot = async (action) => {
-        try {
-            const response = await fetch(`/${action}`, { method: 'POST' });
-            if (!response.ok) {
-                throw new Error(`Failed to ${action} the bot`);
-            }
-            console.log(`Bot ${action} request sent successfully.`);
-            fetchServiceStatus(); // Refresh statuses after action
-        } catch (error) {
-            console.error(`Error sending ${action} request:`, error);
+        
+        if (response.ok) {
+            showMessage(statusDiv, `Provider set to ${provider}`, 'success');
+            // Refresh provider list
+            setTimeout(fetchProviders, 500);
+        } else {
+            const error = await response.text();
+            showMessage(statusDiv, `Error: ${error}`, 'error');
         }
-    };
+    } catch (error) {
+        console.error('Error setting provider:', error);
+        showMessage(statusDiv, 'Failed to set provider', 'error');
+    }
+}
 
-    pauseBotButton.addEventListener('click', () => controlBot('pause'));
-    resumeBotButton.addEventListener('click', () => controlBot('resume'));
-    setProviderBtn.addEventListener('click', setAIProvider);
+// Utility functions
+function formatUptime(uptime) {
+    if (!uptime) return '--';
+    
+    // Parse duration string like "2m45.843492578s"
+    const match = uptime.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?$/);
+    if (!match) return uptime;
+    
+    const hours = parseInt(match[1]) || 0;
+    const minutes = parseInt(match[2]) || 0;
+    const seconds = Math.floor(parseFloat(match[3]) || 0);
+    
+    const parts = [];
+    if (hours > 0) parts.push(`${hours}h`);
+    if (minutes > 0) parts.push(`${minutes}m`);
+    if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
+    
+    return parts.join(' ');
+}
 
-    // Initial fetches
-    fetchServiceStatus();
-    fetchAIProviders();
+function formatTime(timestamp) {
+    if (!timestamp) return '--';
+    
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = Math.floor((now - date) / 1000);
+    
+    if (diff < 60) return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    
+    return date.toLocaleString();
+}
 
-    // Set intervals for periodic fetching
-    setInterval(fetchServiceStatus, 30000);
-    setInterval(fetchAIProviders, 60000);
-});
+function showMessage(element, message, type) {
+    element.className = `info-message ${type}`;
+    element.textContent = message;
+    element.style.display = 'block';
+    
+    setTimeout(() => {
+        element.style.display = 'none';
+    }, 5000);
+}
+
+// Event listeners
+document.getElementById('set-provider-btn').addEventListener('click', setProvider);
+
+// Initial load and auto-refresh
+fetchStatus();
+fetchProviders();
+
+setInterval(fetchStatus, 10000); // Refresh every 10 seconds
+setInterval(fetchProviders, 30000); // Refresh providers every 30 seconds
