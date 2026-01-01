@@ -37,6 +37,17 @@ func NewAIService(ctx context.Context, initialProviders ...AIProvider) *AIServic
 		if groqProvider != nil {
 			providers[groqProvider.GetModelInfo().ProviderName] = groqProvider
 		}
+
+		// Initialize ONNX provider
+		if config.AppConfig.Providers.ONNX.ModelPath != "" {
+			onnxProvider, err := NewONNXProvider(config.AppConfig.Providers.ONNX.ModelPath)
+			if err != nil {
+				log.Printf("Warning: Failed to initialize ONNX provider: %v", err)
+			} else {
+				log.Println("ONNX provider initialized successfully.")
+				providers[onnxProvider.GetModelInfo().ProviderName] = onnxProvider
+			}
+		}
 	}
 
 	if len(providers) == 0 {

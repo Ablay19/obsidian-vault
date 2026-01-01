@@ -1,8 +1,28 @@
+# --- Python Model Converter Stage ---
+FROM python:3.9-slim as converter
+
+WORKDIR /convert
+
+# Copy requirements and install dependencies
+COPY scripts/requirements.txt /convert/scripts/
+RUN pip install --no-cache-dir -r /convert/scripts/requirements.txt
+
+# Copy converter script
+COPY scripts/convert_to_onnx.py /convert/scripts/
+
+# Run the conversion script, which will create the /convert/models directory
+RUN python /convert/scripts/convert_to_onnx.py --output /convert/models/distilbert-onnx
+
+
+# --- Go Builder Stage ---
 FROM golang:alpine AS builder
 
 RUN apk add --no-cache build-base tesseract-ocr-dev leptonica-dev
 
 WORKDIR /build
+
+# Copy the generated models from the converter stage
+COPY --from=converter /convert/models ./models
 
 # Copy only go mod files first (better cache)
 COPY go.mod go.sum ./
@@ -11,9 +31,12 @@ RUN go mod download
 # Copy the rest of the source
 COPY . .
 
-# Build
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
-    go build -o telegram-bot ./cmd/bot
+# Generate SQLC code
+RUN sqlc generate
+
+# Build the Go application
+RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o telegram-bot ./cmd/bot
+
 
 # =====================
 # Runtime stage
@@ -33,13 +56,17 @@ RUN addgroup -S appgroup && adduser -S -G appgroup -u 1000 appuser
 
 WORKDIR /app
 
+# Copy application files from the builder stage
 COPY --from=builder /build/telegram-bot .
+COPY --from=builder /build/models ./models
 COPY config.yml .
 COPY internal/database/schema.sql internal/database/schema.sql
 COPY internal/database/migrations/ internal/database/migrations/
 
+# Set correct ownership for all application files
 RUN chown -R appuser:appgroup /app
 
+# Switch to the non-root user
 USER appuser
 
 EXPOSE 8080
