@@ -7,7 +7,7 @@ This document provides a comprehensive technical overview of the AI-Powered Obsi
 The Obsidian Automation Bot is a Go-based Telegram bot designed to serve as a powerful, AI-enhanced assistant for note-taking and
 knowledge management with Obsidian. The bot can process images and PDFs, extract text, and use Google's Gemini AI to summarize
 content, answer questions, and generate structured data. It offers an interactive, conversational experience directly within
-Telegram, including real-time streaming of AI responses.
+Telegram, including real-time streaming of AI responses. It also features a web dashboard for monitoring and management.
 
 The project is designed to be robust and resilient, featuring automatic API key rotation for the Gemini service and a flexible
 configuration system. It is fully containerized with Docker for easy deployment and management.
@@ -16,8 +16,8 @@ configuration system. It is fully containerized with Docker for easy deployment 
 
 ### AI & Content Processing
 
--   **AI-Powered Analysis**: Leverages Google's Gemini models (`gemini-flash` and `gemini-pro`) and **Groq** for content summarization, question answering, and categorization.
--   **Multi-Provider AI Support**: Seamlessly switch between Google Gemini and Groq AI providers, offering flexibility and optimized performance.
+-   **AI-Powered Analysis**: Leverages Google's Gemini models (configurable via `config.yml`) and **Groq** for content summarization, question answering, and categorization.
+-   **Multi-Provider AI Support**: Seamlessly switch between Google Gemini and Groq AI providers, offering flexibility and optimized performance. The active provider can be changed via bot command or the web dashboard.
 -   **Streaming Responses**: AI-generated responses are streamed in real-time to the user for an interactive, "live-typing" experience.
 -   **Multi-Language Support**: AI responses can be configured to default to any language on-the-fly via
     the `/lang` command. This flexibility is enabled by the underlying AI models' multilingual capabilities.
@@ -31,8 +31,18 @@ configuration system. It is fully containerized with Docker for easy deployment 
 
 ### Bot & User Interaction
 
+-   **Web Dashboard**: A web-based interface for monitoring bot status, managing AI providers, and viewing system information (accessible on `DASHBOARD_PORT`, default 8080).
 -   **Chatbot Mode**: Functions as a general-purpose chatbot, treating any non-command text message as a prompt for the AI.
--   **Interactive Commands**: A rich set of slash commands for managing the bot and accessing features, including `/setprovider` to switch AI models, `/last` to show the last note created, `/reprocess` to reprocess the last sent file, and `/pid` to get the process ID of the bot.
+-   **Interactive Commands**: A rich set of slash commands for managing the bot and accessing features, including:
+    *   `/setprovider`: To switch AI models.
+    *   `/last`: To show the last note created.
+    *   `/reprocess`: To reprocess the last sent file.
+    *   `/pid`: To get the process ID of the bot.
+    *   `/modelinfo`: To display information about the configured AI models.
+    *   `/lang`: To set the AI response language.
+    *   `/stats`: To view bot usage statistics.
+    *   `/service_status`: To check the status of core bot services.
+    *   `/pause_bot` and `/resume_bot`: To control bot processing.
 -   **Command Autocompletion**: Registers its command list with Telegram, providing users with an easy-to-use command menu.
 -   **"Typing" Indicator**: Provides real-time user feedback by displaying the "typing..." status while processing requests.
 
@@ -41,21 +51,20 @@ configuration system. It is fully containerized with Docker for easy deployment 
 -   **Multi-API Key Support**: Manages a list of Gemini API keys from a single environment variable (`GEMINI_API_KEYS`).
 -   **Automatic Key Rotation**: Automatically detects `429` quota errors from the Gemini API and switches to the next available
     key, ensuring high availability.
--   **Manual Key Switching**: Allows manual rotation of API keys via the `/switchkey` command.
+-   **Manual Key Switching**: Allows manual rotation of API keys via the `/switchkey` command (Note: This command might be deprecated in favor of `/setprovider`).
 -   **Resilient Initialization**: The AI service can be disabled without crashing the bot if no API keys are provided.
+-   **Database-Driven State**: Bot instance and chat history are managed in a Turso database, replacing previous file-based PID locks.
+-   **Type-Safe Database Layer**: Uses `sqlc` to generate Go code from SQL queries, ensuring type safety and reducing runtime errors.
 
 ## 3. Architecture
 
-The bot's architecture is centered around a main Go application running inside a Docker container.
+The bot's architecture is centered around a main Go application running inside a Docker container, backed by a Turso database.
 
 ```mermaid
 graph TD
     subgraph "User"
         A[User on Telegram]
-    end
-
-    subgraph "Telegram"
-        B[Telegram Bot API]
+        UDB[User on Web Browser (Dashboard)]
     end
 
     subgraph "Go Application (Docker)"
@@ -63,8 +72,10 @@ graph TD
         D[internal/bot: Core Bot Logic]
         E[internal/ai: AI Service]
         F[internal/converter: File Conversion]
-        G[internal/database: Database]
+        G[internal/database: Database (Turso client)]
         H[internal/health: Health & Control]
+        Dash[internal/dashboard: Web UI & API]
+        Stat[internal/status: Shared Bot Status]
     end
 
     subgraph "AI Providers"
@@ -72,37 +83,98 @@ graph TD
         J[Groq API]
     end
 
-    A -- "Text, Images, PDFs, Commands" --> B
+    subgraph "Database"
+        K[Turso Database]
+    end
+
+    A -- "Text, Images, PDFs, Commands" --> B(Telegram Bot API)
     B -- "Streamed AI Responses, Messages" --> A
     B -- "Webhook/Long-polling Updates" --> C
-    C -- "Starts Bot" --> D
+    C -- "Starts Bot & Dashboard" --> D
+    C -- "Starts Bot & Dashboard" --> Dash
     D -- "Uses" --> E
     D -- "Uses" --> F
     D -- "Uses" --> G
-    D -- "Uses" --> H
+    D -- "Updates" --> Stat
+    Dash -- "Serves HTML/CSS/JS" --> UDB
+    UDB -- "API Requests" --> Dash
+    Dash -- "Uses" --> E
+    Dash -- "Reads" --> Stat
     E -- "API Requests" --> I
     E -- "API Requests" --> J
+    G -- "SQL Queries" --> K
+    D -- "SQL Queries" --> K
+    Stat -- "Bot Status/Activity" --> H(Health Endpoint)
+    H -- "Reads" --> Stat
 ```
 
 _Note: This Mermaid diagram replaces the previous text-based version for better clarity and maintainability._
 
 ## 4. Configuration
 
-The application is configured via a `.env` file in the project root.
+The application is configured via a `.env` file in the project root and a `config.yml` file.
 
+**`.env` file variables:**
 -   `TELEGRAM_BOT_TOKEN` (Required): Your token from Telegram's BotFather.
 -   `GEMINI_API_KEYS` (Required): A **comma-separated list** of your Gemini API keys. Do not include spaces between the keys.
     The bot will use these keys and rotate them automatically upon hitting quota limits.
 -   `GROQ_API_KEY` (Required for Groq provider): Your Groq API key.
--   `OLLAMA_HOST` (Optional): The host for a local Ollama instance. *Note: The fallback to Ollama is not yet implemented.*
+-   `DASHBOARD_PORT` (Optional): The port for the web dashboard. Defaults to `8080`.
 
 **Example `.env` file:**
 ```dotenv
 TELEGRAM_BOT_TOKEN=12345:your-long-telegram-token
 GEMINI_API_KEYS=key-one,key-two,key-three
 GROQ_API_KEY=your-groq-api-key
-OLLAMA_HOST=http://localhost:11434
 DASHBOARD_PORT=8080
+```
+
+**`config.yml` file:**
+This file (located in the project root) defines the AI models to use for each provider, as well as classification patterns and language detection settings.
+
+**Example `config.yml` structure:**
+```yaml
+providers:
+  gemini:
+    model: gemini-1.5-pro-latest # Or gemini-pro, gemini-flash, etc.
+  groq:
+    model: llama-3.1-8b-instant # Or llama3-70b-8192, mixtral-8x7b-32768, etc.
+
+classification:
+  patterns:
+    physics:
+      - force
+      - energy
+      - mass
+      - velocity
+      - acceleration
+    math:
+      - equation
+      - function
+      - derivative
+      - integral
+      - matrix
+    chemistry:
+      - molecule
+      - atom
+      - reaction
+      - chemical
+    admin:
+      - invoice
+      - contract
+      - form
+      - certificate
+    general: # Default fallback category
+      - general
+      - miscellaneous
+
+language_detection:
+  french_words: # Used for basic French language detection
+    - le
+    - la
+    - de
+    - et
+    - un
 ```
 
 ## 5. Development Guide
@@ -126,41 +198,57 @@ into the project's CI/CD pipeline to ensure adherence to standards.
 
 ### `cmd/bot/main.go`
 
--   **`main()`**: The main entrypoint of the application. It initializes the PID lock, handles signals for graceful shutdown, and starts the bot.
+-   **`main()`**: The main entrypoint of the application. It initializes the database, applies schema and migrations, starts the AI service, sets up the dashboard, and handles graceful shutdown signals. The PID lock mechanism is currently disabled but was previously located here.
 
 ### `internal/bot`
 
 -   This package contains the core bot logic.
--   **`main.go`**: Contains the main `Run` function that initializes the bot, sets up command handlers, and enters the main update loop.
--   **`handler.go`**: (Assuming this file exists) Contains the `handleCommand`, `handlePhoto`, and `handleDocument` functions.
--   **`processor.go`**: Contains the `processFileWithAI` function, which orchestrates text extraction, AI processing, and note creation.
+-   **`main.go`**: Contains the main `Run` function that initializes the Telegram bot, sets up command handlers, and enters the main update loop.
+-   **`handler.go`**: (This file might not exist or its role might be merged into `main.go` in recent refactors. **Verify if this file exists and its current role.**) Originally intended to contain `handleCommand`, `handlePhoto`, and `handleDocument` functions.
+-   **`processor.go`**: Contains the `processFileWithAI` function, which orchestrates text extraction, AI processing, and note creation. Also includes content classification and language detection logic, now configurable via `config.yml`.
 -   **`dedup.go`**: Contains the `IsDuplicate` function for checking for duplicate files.
--   **`stats.go`**: Contains the logic for tracking usage statistics.
+-   **`stats.go`**: (This file might be deprecated or its logic moved to `internal/status`. **Verify if this file exists and its current role.**) Originally contained logic for tracking usage statistics.
 
 ### `internal/ai`
 
--   **`ai_service.go`**: Contains the `AIService` struct, which manages multiple AI providers.
--   **`provider.go`**: Defines the `AIProvider` interface.
--   **`gemini_provider.go`**: Implements the `AIProvider` interface for the Google Gemini API.
--   **`groq_provider.go`**: Implements the `AIProvider` interface for the Groq API.
--   **`mock_provider.go`**: Implements mock providers for testing.
+-   **`ai_service.go`**: Contains the `AIService` struct, which manages multiple AI providers (Gemini, Groq) and handles switching between them.
+-   **`provider.go`**: Defines the `AIProvider` interface and `ModelInfo` struct.
+-   **`gemini_provider.go`**: Implements the `AIProvider` interface for the Google Gemini API, using models specified in `config.yml`.
+-   **`groq_provider.go`**: Implements the `AIProvider` interface for the Groq API, using models specified in `config.yml`.
+-   **`mock_provider.go`**: This file has been removed.
+
+### `internal/config`
+
+-   **`config.go`**: Contains the `Config` struct and `LoadConfig` function for loading application settings from `config.yml` and environment variables.
 
 ### `internal/converter`
 
 -   **`converter.go`**: Contains the `ConvertMarkdownToPDF` function for converting Markdown to PDF using pandoc and tectonic.
 
+### `internal/dashboard`
+
+-   **`dashboard.go`**: Contains the `Dashboard` struct and `RegisterRoutes` function for serving the web UI and handling API requests related to bot status and AI provider management.
+-   **`static/`**: Contains the `index.html`, `style.css`, and `script.js` for the web dashboard UI.
+
 ### `internal/database`
 
--   **`db.go`**: Contains the database initialization logic.
--   **`schema.go`**: Contains the database schema.
+-   **`db.go`**: Contains the database connection logic (for Turso) and the `ApplySchemaAndMigrations` function for in-app database initialization and migration.
+-   **`schema.sql`**: Defines the database schema, including `processed_files` and `instances` tables.
+-   **`migrations/`**: Contains SQL migration files, such as `001_create_chat_history.sql`, which are applied on startup.
+-   **`instance.go`**: Contains logic for managing bot instance PIDs in the database (currently disabled in `main.go`).
+-   **`sqlc/`**: (This directory exists, but is not explicitly mentioned in the old documentation. **Add a description for its role if needed.**) Contains generated Go code for type-safe database interactions.
 
 ### `internal/health`
 
--   **`health.go`**: Contains the health and control endpoints: `/status`, `/pause`, and `/resume`.
+-   **`health.go`**: Contains the `StartHealthServer` function (now integrated into the main router) which provides health check functionality.
 
 ### `internal/pid`
 
--   **`pid.go`**: Contains the PID lock mechanism to ensure only one instance of the bot is running.
+-   **`pid.go`**: This package and its file-based PID lock mechanism have been deprecated/removed in favor of a database-driven approach (which is currently disabled for multi-instance compatibility).
+
+### `internal/status`
+
+-   **`get.go`**: Contains logic for tracking and reporting the bot's runtime status (e.g., paused state, uptime, last activity) and basic statistics, used by both the bot and the dashboard.
 
 ## 7. Future Improvements
 
@@ -176,25 +264,38 @@ Key areas for future development include:
 
 ## 8. Bot Instance Management
 
-### PID File Lock
-The bot implements a PID (Process ID) file lock mechanism to prevent multiple instances from running simultaneously, which would cause Telegram API conflicts.
+### Database-Driven Instance Lock (Currently Disabled for Multi-Instance Docker)
+The bot previously implemented a database-driven instance lock to prevent multiple instances from processing Telegram updates simultaneously, which causes "Conflict: terminated by other getUpdates request" errors from the Telegram API.
 
-**How it works:**
-1. On startup, the bot creates a `bot.pid` file containing its process ID
-2. If the file already exists, the bot checks if that process is still running
-3. If another instance is active, the new instance exits gracefully
-4. On shutdown, the PID file is automatically removed
+**How it worked (when enabled):**
+1.  On startup, the bot would attempt to record its process ID (PID) in a dedicated `instances` table in the database.
+2.  If an entry already existed and the associated process was still running, the new instance would exit, preventing conflicts.
+3.  On graceful shutdown, the PID entry was removed.
+
+**Current Status and Multi-Instance Deployment:**
+*   For compatibility with Docker environments where each container runs as PID 1 and to allow for potentially scaled deployments, the explicit `CheckExistingInstance` and `AddInstance` logic has been **disabled** in `cmd/bot/main.go`.
+*   This means the bot no longer self-regulates against multiple instances via the database.
+*   **Important:** Running multiple bot instances that *all use Telegram's long-polling `getUpdates` method concurrently will still result in Telegram API conflicts ("Conflict: terminated by other getUpdates request").**
+*   **To run multiple bot instances effectively**, you must implement an external strategy to manage Telegram updates, such as:
+    *   **Webhooks:** Configure Telegram to send updates to a single webhook URL, which then distributes them to your bot instances behind a load balancer. This is the recommended approach for scaling.
+    *   **Single Active Instance:** Ensure only one Docker container/bot instance is actively running and polling the Telegram API at any given time.
 
 **Files:**
-- PID file location: `./bot.pid` (project root)
-- Signal handling: SIGINT, SIGTERM for graceful shutdown
-
-This prevents the "Conflict: terminated by other getUpdates request" error during deployments or when accidentally starting multiple instances.
+-   `internal/database/instance.go`: Contains the database interaction logic for managing instance PIDs.
+-   `cmd/bot/main.go`: Where the instance management logic was previously called (now disabled).
 
 ### Observability
 
-The bot provides several endpoints for monitoring and control:
+The bot provides a web dashboard and API endpoints for monitoring and control:
 
--   `/status`: Returns a JSON object with the current status of the bot, including PID, uptime, Go version, OS, architecture, and last activity time. The same information is also available in the response headers.
--   `/pause`: Pauses the bot's listening activity. The bot will stop processing new updates from Telegram.
--   `/resume`: Resumes the bot's listening activity.
+-   **Web Dashboard**: Accessible on `http://localhost:8080` (or configured `DASHBOARD_PORT`). Provides a UI for:
+    *   Viewing bot status (online/offline, uptime, last activity).
+    *   Viewing system information (OS, Architecture, Go Version, PID).
+    *   Managing AI providers (view available, set active).
+    *   Viewing status of core bot services.
+-   `/api/services/status`: Returns JSON data with the current status of bot core and other services.
+-   `/api/ai/providers`: Returns JSON data with available and active AI providers.
+-   `/api/ai/provider/set` (POST): Allows setting the active AI provider.
+-   `/health`: (Note: This specific endpoint might be superseded by the `/api/services/status` providing more granular detail).
+
+The `internal/dashboard` package handles the web UI and API endpoints, while the `internal/status` package tracks the bot's runtime state.

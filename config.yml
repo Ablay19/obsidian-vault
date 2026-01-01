@@ -3,6 +3,8 @@ providers:
     model: gemini-3-pro-image-preview
   groq:
     model: llama-3.1-8b-instant
+  onnx:
+    model_path: "./models/distilbert-onnx"
 
 classification:
   patterns:
