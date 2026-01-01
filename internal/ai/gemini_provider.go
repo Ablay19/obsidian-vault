@@ -3,7 +3,9 @@ package ai
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
+	"obsidian-automation/internal/config"
 	"os"
 	"strings"
 	"sync"
@@ -18,6 +20,7 @@ import (
 type GeminiProvider struct {
 	clients         []*genai.Client
 	currentKeyIndex int
+	modelName       string
 	mu              sync.Mutex
 }
 
@@ -49,7 +52,10 @@ func NewGeminiProvider(ctx context.Context) *GeminiProvider {
 		return nil
 	}
 
-	return &GeminiProvider{clients: clients}
+	return &GeminiProvider{
+		clients:   clients,
+		modelName: config.AppConfig.Providers.Gemini.Model,
+	}
 }
 
 func (p *GeminiProvider) getClient() *genai.Client {
@@ -142,7 +148,7 @@ Text to analyze:
 
 	for i := 0; i < len(p.clients); i++ {
 		client := p.getClient()
-		model := client.GenerativeModel(ModelProComplex)
+		model := client.GenerativeModel(p.modelName) // Use p.modelName here
 
 		var resp *genai.GenerateContentResponse
 		resp, err = model.GenerateContent(ctx, genai.Text(prompt))
@@ -172,7 +178,44 @@ Text to analyze:
 	return "", fmt.Errorf("all Gemini API keys failed for JSON data: %w", err)
 }
 
-// ProviderName returns the name of the provider.
-func (p *GeminiProvider) ProviderName() string {
-	return "Gemini"
+// GetModelInfo returns information about the model.
+func (p *GeminiProvider) GetModelInfo() ModelInfo {
+	return ModelInfo{
+		ProviderName: "Gemini",
+		ModelName:    p.modelName,
+	}
 }
+
+// Process sends a request to the AI service and returns a stream of responses.
+func (p *GeminiProvider) Process(ctx context.Context, w io.Writer, system, prompt string, images []string) error {
+	client := p.getClient()
+	model := client.GenerativeModel(p.modelName)
+	var parts []genai.Part
+	if system != "" {
+		parts = append(parts, genai.Text(system))
+	}
+	parts = append(parts, genai.Text(prompt))
+
+	iter := model.GenerateContentStream(ctx, parts...)
+	for {
+		resp, streamErr := iter.Next()
+		if streamErr == iterator.Done {
+			return nil
+		}
+		if streamErr != nil {
+			return streamErr
+		}
+		if len(resp.Candidates) > 0 {
+			candidate := resp.Candidates[0]
+			if candidate.Content != nil {
+				for _, part := range candidate.Content.Parts {
+					if txt, ok := part.(genai.Text); ok {
+						fmt.Fprint(w, txt)
+					}
+				}
+			}
+		}
+	}
+}
+
+

@@ -10,7 +10,7 @@ COPY . .
 # Now run go mod tidy to ensure all dependencies are correct and downloaded
 RUN go mod tidy
 
-RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o telegram-bot ./cmd/bot
+RUN CGO_ENABLED=1 GOOS=linux go build -installsuffix cgo -o telegram-bot ./cmd/bot
 
 FROM alpine:latest
 
@@ -27,6 +27,7 @@ RUN addgroup -S appgroup && adduser -S -G appgroup -u 1000 appuser
 WORKDIR /app
 
 COPY --from=builder /build/telegram-bot .
+COPY config.yml .
 
 RUN chown -R appuser:appgroup /app
 
