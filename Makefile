@@ -72,7 +72,7 @@ test-external-apis:
 .PHONY: test-endpoint
 test-endpoint:
 	 @echo "Testing local endpoint..."
-	curl -X POST http://localhost:8081/test-process \
+	curl -X POST http://localhost:8080/test-process \
 		-H "Content-Type: application/json" \
 		-d '{"text":"Test message","language":"English"}'
 

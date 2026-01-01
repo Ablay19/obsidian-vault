@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Obsidian Bot Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">Obsidian Bot</div>
+                <div class="user-profile">
+                    <span>user@example.com</span>
+                </div>
+            </div>
+        </header>
+
+        <aside class="sidebar">
+            <nav class="sidebar-nav">
+                <ul>
+                    <li class="active"><a href="#">Dashboard</a></li>
+                    <li><a href="#">Events</a></li>
+                    <li><a href="#">Services</a></li>
+                    <li><a href="#">Settings</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <div class="main-header">
+                <h1>Dashboard</h1>
+                <div class="actions">
+                    <button id="pause-bot">Pause Bot</button>
+                    <button id="resume-bot">Resume Bot</button>
+                </div>
+            </div>
+
+            <div class="management-section">
+                <h2>AI Provider Management</h2>
+                <div class="provider-controls">
+                    <select id="ai-provider-select"></select>
+                    <button id="set-provider-btn">Set Provider</button>
+                </div>
+            </div>
+
+            <div id="services-status" class="services-grid">
+                <!-- Service status cards will be injected here by JavaScript -->
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

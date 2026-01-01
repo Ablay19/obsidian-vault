@@ -1,6 +1,7 @@
 FROM golang:alpine AS builder
 
 RUN apk add --no-cache git build-base tesseract-ocr-dev leptonica-dev
+RUN go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
 
 WORKDIR /build
 

@@ -22,6 +22,9 @@ type Config struct {
 	LanguageDetection struct {
 		FrenchWords []string `mapstructure:"french_words"`
 	} `mapstructure:"language_detection"`
+	Dashboard struct {
+		Port int `mapstructure:"port"`
+	} `mapstructure:"dashboard"`
 }
 
 // AppConfig is the loaded configuration.
@@ -44,6 +47,7 @@ func LoadConfig() {
 		"admin":     {"invoice", "contract", "form", "certificate"},
 	})
 	viper.SetDefault("language_detection.french_words", []string{"le", "la", "de", "et", "un"})
+	viper.SetDefault("dashboard.port", 8080) // New default for dashboard port
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {

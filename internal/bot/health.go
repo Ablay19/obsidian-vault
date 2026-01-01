@@ -4,58 +4,45 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"obsidian-automation/internal/status" // Import the new status package
 	"os"
 	"runtime"
-	"sync/atomic"
 	"time"
 )
 
-var isPaused atomic.Value
-var lastActivity atomic.Value
-var startTime time.Time
-
-func init() {
-	isPaused.Store(false)
-	startTime = time.Now()
-	lastActivity.Store(startTime)
-}
-
-func UpdateActivity() {
-	lastActivity.Store(time.Now())
-}
-
-func StartHealthServer() {
-	http.HandleFunc("/pause", func(w http.ResponseWriter, r *http.Request) {
-		isPaused.Store(true)
+// StartHealthServer registers the health and control endpoints on the provided router.
+func StartHealthServer(router *http.ServeMux) {
+	router.HandleFunc("/pause", func(w http.ResponseWriter, r *http.Request) {
+		status.SetPaused(true)
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Bot is paused."))
 	})
 
-	http.HandleFunc("/resume", func(w http.ResponseWriter, r *http.Request) {
-		isPaused.Store(false)
+	router.HandleFunc("/resume", func(w http.ResponseWriter, r *http.Request) {
+		status.SetPaused(false)
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Bot is resumed."))
 	})
 
-	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
-		status := "running"
-		if isPaused.Load().(bool) {
-			status = "paused"
+	router.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+		botStatus := "running"
+		if status.IsPaused() {
+			botStatus = "paused"
 		}
 
-		uptime := time.Since(startTime)
+		uptime := time.Since(status.GetStartTime())
 		pid := os.Getpid()
 		goVersion := runtime.Version()
 
 		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-Bot-Status", status)
+		w.Header().Set("X-Bot-Status", botStatus)
 		w.Header().Set("X-Bot-PID", fmt.Sprintf("%d", pid))
 		w.Header().Set("X-Bot-Go-Version", goVersion)
 		w.Header().Set("X-Bot-Uptime", uptime.String())
 
 		data := map[string]interface{}{
-			"status":        status,
-			"last_activity": lastActivity.Load(),
+			"status":        botStatus,
+			"last_activity": status.GetLastActivity(),
 			"pid":           pid,
 			"go_version":    goVersion,
 			"os":            runtime.GOOS,
@@ -65,7 +52,7 @@ func StartHealthServer() {
 		json.NewEncoder(w).Encode(data)
 	})
 
-	http.HandleFunc("/info", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/info", func(w http.ResponseWriter, r *http.Request) {
 		if aiService == nil {
 			http.Error(w, "AI service not available", http.StatusInternalServerError)
 			return
@@ -75,6 +62,4 @@ func StartHealthServer() {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(infos)
 	})
-
-	go http.ListenAndServe(":8080", nil)
 }

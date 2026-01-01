@@ -7,6 +7,7 @@ require (
 	github.com/google/generative-ai-go v0.20.1
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/magicx-ai/groq-go v0.1.2
+	github.com/spf13/viper v1.21.0
 	github.com/tursodatabase/libsql-client-go v0.0.0-20251219100830-236aa1ff8acc
 	google.golang.org/api v0.258.0
 )
@@ -36,7 +37,6 @@ require (
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
-	github.com/spf13/viper v1.21.0 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/tmaxmax/go-sse v0.8.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect

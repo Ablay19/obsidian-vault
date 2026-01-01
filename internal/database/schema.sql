@@ -5,3 +5,9 @@ CREATE TABLE processed_files (
     timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     extracted_text TEXT
 );
+
+CREATE TABLE instances (
+    id INTEGER PRIMARY KEY CHECK (id = 1), -- Ensures only one row can exist
+    pid INTEGER NOT NULL,
+    started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
