@@ -23,15 +23,6 @@ func main() {
 
 	database.ApplySchemaAndMigrations(db)
 
-	if _, err := database.CheckExistingInstance(db); err != nil {
-		log.Fatalf("Failed to check for existing instance: %v", err)
-	}
-
-	if err := database.AddInstance(db); err != nil {
-		log.Fatalf("Failed to add instance to database: %v", err)
-	}
-	defer database.RemoveInstance(db)
-
 	ctx := context.Background()
 	aiService := ai.NewAIService(ctx)
 
@@ -53,7 +44,7 @@ func main() {
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
-		database.RemoveInstance(db)
+		// database.RemoveInstance(db) // Removed as PID lock is no longer used
 		os.Exit(0)
 	}()
 

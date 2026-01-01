@@ -7,48 +7,128 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="dashboard-container">
+    <div class="container">
+        <!-- Header -->
         <header class="header">
             <div class="header-content">
-                <div class="logo">Obsidian Bot</div>
-                <div class="user-profile">
-                    <span>user@example.com</span>
+                <h1 class="logo">
+                    <span class="logo-icon">🤖</span>
+                    Obsidian Bot
+                </h1>
+                <div class="header-status">
+                    <span class="status-dot" id="status-indicator"></span>
+                    <span id="status-text">Loading...</span>
                 </div>
             </div>
         </header>
 
-        <aside class="sidebar">
-            <nav class="sidebar-nav">
-                <ul>
-                    <li class="active"><a href="#">Dashboard</a></li>
-                    <li><a href="#">Events</a></li>
-                    <li><a href="#">Services</a></li>
-                    <li><a href="#">Settings</a></li>
-                </ul>
-            </nav>
-        </aside>
-
-        <main class="main-content">
-            <div class="main-header">
-                <h1>Dashboard</h1>
-                <div class="actions">
-                    <button id="pause-bot">Pause Bot</button>
-                    <button id="resume-bot">Resume Bot</button>
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Stats Grid -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">⚡</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Status</div>
+                        <div class="stat-value" id="bot-status">--</div>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">⏱️</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Uptime</div>
+                        <div class="stat-value" id="uptime">--</div>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">🔧</div>
+                    <div class="stat-content">
+                        <div class="stat-label">AI Provider</div>
+                        <div class="stat-value" id="ai-provider">--</div>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">📊</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Last Activity</div>
+                        <div class="stat-value" id="last-activity">--</div>
+                    </div>
                 </div>
             </div>
 
-            <div class="management-section">
-                <h2>AI Provider Management</h2>
-                <div class="provider-controls">
-                    <select id="ai-provider-select"></select>
-                    <button id="set-provider-btn">Set Provider</button>
+            <!-- Provider Management -->
+            <div class="section">
+                <div class="section-header">
+                    <h2>AI Provider Management</h2>
+                </div>
+                <div class="section-content">
+                    <div class="control-group">
+                        <label for="provider-select">Select Provider:</label>
+                        <div class="control-row">
+                            <select id="provider-select" class="select">
+                                <option value="">Loading...</option>
+                            </select>
+                            <button id="set-provider-btn" class="btn btn-primary">
+                                Set Provider
+                            </button>
+                        </div>
+                    </div>
+                    <div id="provider-status" class="info-message"></div>
                 </div>
             </div>
 
-            <div id="services-status" class="services-grid">
-                <!-- Service status cards will be injected here by JavaScript -->
+            <!-- System Info -->
+            <div class="section">
+                <div class="section-header">
+                    <h2>System Information</h2>
+                </div>
+                <div class="section-content">
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">OS:</span>
+                            <span class="info-value" id="os">--</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Architecture:</span>
+                            <span class="info-value" id="arch">--</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Go Version:</span>
+                            <span class="info-value" id="go-version">--</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">PID:</span>
+                            <span class="info-value" id="pid">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Available Providers -->
+            <div class="section">
+                <div class="section-header">
+                    <h2>Available AI Providers</h2>
+                </div>
+                <div class="section-content">
+                    <div id="providers-list" class="providers-grid">
+                        <div class="loading">Loading providers...</div>
+                    </div>
+                </div>
             </div>
         </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Obsidian Bot Dashboard &copy; 2026</p>
+            <p class="footer-links">
+                <a href="/status" target="_blank">API Status</a>
+                <span>•</span>
+                <a href="https://github.com/yourusername/obsidian-bot" target="_blank">GitHub</a>
+            </p>
+        </footer>
     </div>
 
     <script src="script.js"></script>

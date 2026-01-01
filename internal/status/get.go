@@ -45,6 +45,28 @@ type ServiceStatus struct {
 	Details string `json:"details,omitempty"`
 }
 
+// Stats holds various statistics about the bot's operations.
+type Stats struct {
+	TotalFiles   int
+	ImageFiles   int
+	PDFFiles     int
+	AICalls      int
+	LastActivity time.Time
+}
+
+// GetStats returns the current statistics of the bot.
+// This is a placeholder implementation and needs to be expanded
+// to fetch actual data (e.g., from the database for file counts).
+func GetStats() Stats {
+	return Stats{
+		TotalFiles:   0, // Placeholder
+		ImageFiles:   0, // Placeholder
+		PDFFiles:     0, // Placeholder
+		AICalls:      0, // Placeholder
+		LastActivity: GetLastActivity(),
+	}
+}
+
 // GetServicesStatus gathers and returns the status of all monitored services.
 func GetServicesStatus(aiService *ai.AIService, db *sql.DB) []ServiceStatus {
 	var statuses []ServiceStatus
