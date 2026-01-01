@@ -42,7 +42,7 @@ func getUserState(userID int64) *UserState {
 
 	// Create new state with defaults
 	state := &UserState{
-		Language: "French",
+		Language: "English",
 	}
 	userStates[userID] = state
 	return state
@@ -221,7 +221,7 @@ func handleCommand(bot Bot, message *tgbotapi.Message, aiService *AIService) {
 		}
 
 		dummyMessage := &tgbotapi.Message{Caption: "Reprocessed", From: message.From}
-		createObsidianNote(state.LastProcessedFile, fileType, dummyMessage, aiService, bot, message.Chat.ID, 0, "")
+		createObsidianNote(state.LastProcessedFile, fileType, dummyMessage, aiService, bot, message.Chat.ID, 0)
 
 	case "lang":
 		lang := message.CommandArguments()
@@ -291,7 +291,7 @@ func handlePhoto(bot Bot, message *tgbotapi.Message, aiService *AIService, token
 	}
 
 	state.LastProcessedFile = filename
-	createObsidianNote(filename, "image", message, aiService, bot, message.Chat.ID, 0, token)
+	createObsidianNote(filename, "image", message, aiService, bot, message.Chat.ID, 0)
 }
 
 func handleDocument(bot Bot, message *tgbotapi.Message, aiService *AIService, token string) {
@@ -324,7 +324,7 @@ func handleDocument(bot Bot, message *tgbotapi.Message, aiService *AIService, to
 	}
 
 	state.LastProcessedFile = filename
-	createObsidianNote(filename, "pdf", message, aiService, bot, message.Chat.ID, 0, token)
+	createObsidianNote(filename, "pdf", message, aiService, bot, message.Chat.ID, 0)
 }
 
 func downloadFile(bot Bot, fileID, ext, token string) string {
@@ -367,7 +367,7 @@ func downloadFile(bot Bot, fileID, ext, token string) string {
 	return fullPath
 }
 
-func createObsidianNote(filePath, fileType string, message *tgbotapi.Message, aiService *AIService, bot Bot, chatID int64, messageID int, token string) {
+func createObsidianNote(filePath, fileType string, message *tgbotapi.Message, aiService *AIService, bot Bot, chatID int64, messageID int) {
 	state := getUserState(message.From.ID)
 	var responseText string
 	var mu sync.Mutex
