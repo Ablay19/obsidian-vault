@@ -1,6 +1,8 @@
 # TODO - Obsidian Automation Bot
+ # I want a way to manage bot instaces like when i run one and i am deploying they get confused 
 
 This document outlines future improvements and tasks for the Obsidian Automation Bot, as identified during technical documentation review.
+
 
 ## Future Improvements
 
@@ -33,3 +35,5 @@ This document outlines future improvements and tasks for the Obsidian Automation
     *   **Priority**: Low
     *   **Assigned To**: [Team/Developer Name]
     *   **Notes**: May require external libraries or tools for parsing new file formats.
+
+

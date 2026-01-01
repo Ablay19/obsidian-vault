@@ -170,3 +170,4 @@ obsidian-automation/
 └── mock_provider.go            # Mock AI providers for testing
 ```
 
+
