@@ -1,4 +1,4 @@
-CREATE TABLE processed_files (
+CREATE TABLE IF NOT EXISTS processed_files (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     hash TEXT NOT NULL UNIQUE,
     category TEXT NOT NULL,
@@ -6,7 +6,7 @@ CREATE TABLE processed_files (
     extracted_text TEXT
 );
 
-CREATE TABLE instances (
+CREATE TABLE IF NOT EXISTS instances (
     id INTEGER PRIMARY KEY CHECK (id = 1), -- Ensures only one row can exist
     pid INTEGER NOT NULL,
     started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP

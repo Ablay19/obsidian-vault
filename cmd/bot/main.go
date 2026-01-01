@@ -21,6 +21,8 @@ func main() {
 	db := database.OpenDB()
 	defer db.Close()
 
+	database.ApplySchemaAndMigrations(db)
+
 	if _, err := database.CheckExistingInstance(db); err != nil {
 		log.Fatalf("Failed to check for existing instance: %v", err)
 	}
