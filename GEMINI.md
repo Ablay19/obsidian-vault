@@ -102,6 +102,7 @@ TELEGRAM_BOT_TOKEN=12345:your-long-telegram-token
 GEMINI_API_KEYS=key-one,key-two,key-three
 GROQ_API_KEY=your-groq-api-key
 OLLAMA_HOST=http://localhost:11434
+DASHBOARD_PORT=8080
 ```
 
 ## 5. Development Guide

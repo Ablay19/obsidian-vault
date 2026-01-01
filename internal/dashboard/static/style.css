@@ -1,0 +1,204 @@
+/* General Body Styles */
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #111827;
+    color: #F9FAFB;
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.dashboard-container {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+        "header header"
+        "sidebar main";
+    width: 100%;
+    height: 100vh;
+}
+
+/* Header */
+.header {
+    grid-area: header;
+    background-color: #1F2937;
+    border-bottom: 1px solid #374151;
+    padding: 0 20px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.header .logo {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.user-profile {
+    font-size: 0.9rem;
+}
+
+/* Sidebar */
+.sidebar {
+    grid-area: sidebar;
+    background-color: #1F2937;
+    border-right: 1px solid #374151;
+    padding: 20px 0;
+}
+
+.sidebar-nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.sidebar-nav li a {
+    display: block;
+    padding: 12px 20px;
+    text-decoration: none;
+    color: #D1D5DB;
+    transition: background-color 0.2s;
+}
+
+.sidebar-nav li.active a,
+.sidebar-nav li a:hover {
+    background-color: #374151;
+    color: #F9FAFB;
+}
+
+/* Main Content */
+.main-content {
+    grid-area: main;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.main-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.main-header h1 {
+    margin: 0;
+}
+
+.actions button {
+    background-color: #3B82F6;
+    color: #FFFFFF;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background-color 0.2s;
+}
+
+.actions button:hover {
+    background-color: #2563EB;
+}
+
+/* AI Provider Management Section */
+.management-section {
+    background-color: #1F2937;
+    border: 1px solid #374151;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.management-section h2 {
+    margin-top: 0;
+}
+
+.provider-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#ai-provider-select {
+    padding: 10px;
+    border-radius: 5px;
+    background-color: #374151;
+    color: #F9FAFB;
+    border: 1px solid #4B5563;
+}
+
+#set-provider-btn {
+    background-color: #10B981;
+    color: #FFFFFF;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background-color 0.2s;
+}
+
+#set-provider-btn:hover {
+    background-color: #059669;
+}
+
+
+/* Services Grid */
+.services-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.service-card {
+    background-color: #1F2937;
+    border: 1px solid #374151;
+    border-radius: 8px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+.service-card .service-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.service-card .service-name {
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.service-card .status {
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.service-card .status.up {
+    background-color: #10B981;
+    color: #FFFFFF;
+}
+
+.service-card .status.down {
+    background-color: #EF4444;
+    color: #FFFFFF;
+}
+
+.service-card .status.paused {
+    background-color: #F59E0B;
+    color: #FFFFFF;
+}
+
+.service-card .details {
+    font-size: 0.9rem;
+    color: #9CA3AF;
+    word-break: break-all;
+}
