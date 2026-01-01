@@ -31,10 +31,6 @@ RUN go mod download
 # Copy the rest of the source
 COPY . .
 
-# Generate SQLC code
-RUN sqlc generate
-
-# Build the Go application
 RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o telegram-bot ./cmd/bot
 
 
