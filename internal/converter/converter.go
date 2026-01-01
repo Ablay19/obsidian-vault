@@ -1,4 +1,4 @@
-package main
+package converter
 
 import (
 	"fmt"
@@ -8,8 +8,8 @@ import (
 	"os/exec"
 )
 
-// convertMarkdownToPDF converts a Markdown string to a PDF byte slice using pandoc and tectonic.
-func convertMarkdownToPDF(markdownContent string) ([]byte, error) {
+// ConvertMarkdownToPDF converts a Markdown string to a PDF byte slice using pandoc and tectonic.
+func ConvertMarkdownToPDF(markdownContent string) ([]byte, error) {
 	// Create a temporary file for the Markdown content
 	tmpMarkdownFile, err := ioutil.TempFile("", "markdowntopdf.*.md")
 	if err != nil {

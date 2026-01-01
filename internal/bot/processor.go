@@ -1,4 +1,4 @@
-package main
+package bot
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"obsidian-automation/internal/ai"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -155,13 +156,14 @@ func processFile(filePath, fileType string) ProcessedContent {
 	return classifyContent(text)
 }
 
-func processFileWithAI(filePath, fileType string, aiService *AIService, streamCallback func(string), language string) ProcessedContent {
+func processFileWithAI(filePath, fileType string, aiService *ai.AIService, streamCallback func(string), language string, updateStatus func(string)) ProcessedContent {
 	// Do basic OCR/extraction first
 	var text string
 	var err error
 	var fileData []byte
 
 	log.Printf("Processing %s: %s", fileType, filePath)
+	updateStatus("🔍 Extracting text...")
 
 	if fileType == "image" {
 		text, err = extractTextFromImage(filePath)
@@ -186,12 +188,14 @@ func processFileWithAI(filePath, fileType string, aiService *AIService, streamCa
 		log.Printf("Text extraction issue: %v", err)
 		result.Category = "unprocessed"
 		result.Tags = []string{"error"}
+		updateStatus("⚠️ Text extraction failed.")
 		return result
 	}
 
 	if aiService != nil {
 		log.Println("Using Gemini for AI enhancement...")
 		result.AIProvider = "Gemini"
+		updateStatus("🤖 Generating summary...")
 
 		// 1. Get the summary (streaming)
 		summaryPrompt := fmt.Sprintf("Summarize the following text in %s. If the text contains any questions, answer them as part of the summary. Text:\n\n%s",
@@ -199,24 +203,27 @@ func processFileWithAI(filePath, fileType string, aiService *AIService, streamCa
 			text,
 		)
 
-		model := ModelProComplex
+		model := ai.ModelProComplex
 		if len(fileData) > 0 {
-			model = ModelImageGen
+			model = ai.ModelImageGen
 		}
 
 		fullSummary, err := aiService.GenerateContent(context.Background(), summaryPrompt, fileData, model, streamCallback)
 		if err != nil {
 			log.Printf("Error from AI summary service: %v", err)
 			// Fallback to basic classification if summary fails
+			updateStatus("⚠️ AI summary failed. Falling back to basic classification.")
 			return classifyContent(text)
 		}
 		result.Summary = fullSummary
 
+		updateStatus("📊 Generating topics and questions...")
 		// 2. Get the JSON data (non-streaming)
 		jsonStr, err := aiService.GenerateJSONData(context.Background(), text, language)
 		if err != nil {
 			log.Printf("Error from AI JSON service: %v", err)
 			// Proceed without JSON data, just use basic classification
+			updateStatus("⚠️ AI analysis failed. Using basic classification.")
 			basicResult := classifyContent(text)
 			result.Category = basicResult.Category
 			result.Tags = basicResult.Tags
@@ -231,6 +238,7 @@ func processFileWithAI(filePath, fileType string, aiService *AIService, streamCa
 
 		if err := json.Unmarshal([]byte(jsonStr), &aiResult); err != nil {
 			log.Printf("Error parsing AI response JSON: %v", err)
+			updateStatus("⚠️ AI response parsing failed. Using basic classification.")
 			// Proceed without JSON data
 			basicResult := classifyContent(text)
 			result.Category = basicResult.Category
@@ -245,6 +253,7 @@ func processFileWithAI(filePath, fileType string, aiService *AIService, streamCa
 
 	} else {
 		log.Println("AI service unavailable, using basic classification")
+		updateStatus("⚠️ AI service unavailable. Using basic classification.")
 		result = classifyContent(text)
 	}
 

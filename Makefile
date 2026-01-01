@@ -58,3 +58,17 @@ help:
 	@echo ""
 	@echo "Available targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+.PHONY: test-endpoint
+test-endpoint:
+	 @echo "Testing local endpoint..."
+	curl -X POST http://localhost:8081/test-process \
+		-H "Content-Type: application/json" \
+		-d '{"text":"Test message","language":"English"}'
+
+.PHONY: test-file
+test-file:
+	 @echo "Testing file processing..."
+	curl -X POST http://localhost:8081/test-process \
+		-H "Content-Type: application/json" \
+		-d '{"file_path":"./test.pdf","language":"French"}'

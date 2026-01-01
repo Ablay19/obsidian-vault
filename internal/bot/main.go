@@ -1,12 +1,15 @@
-package main
+package bot
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"obsidian-automation/database"
+	"obsidian-automation/internal/ai"
+	"obsidian-automation/internal/converter"
+	"obsidian-automation/internal/database"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,21 +74,22 @@ func (t *TelegramBot) GetFile(config tgbotapi.FileConfig) (tgbotapi.File, error)
 	return t.BotAPI.GetFile(config)
 }
 
-func main() {
-	startHealthServer()
-	stats.load()
-	db := database.Open()
+func Run() error {
+	SetupTestEndpoint()
+	StartHealthServer()
+	stats.Load()
+	db := database.OpenDB()
 
 	if err := database.InitSchema(db); err != nil {
-		log.Fatal(err)
+		return err
 	}
 	token := os.Getenv("TELEGRAM_BOT_TOKEN")
 	if token == "" {
-		log.Fatal("TELEGRAM_BOT_TOKEN not set")
+		return fmt.Errorf("TELEGRAM_BOT_TOKEN not set")
 	}
 
 	ctx := context.Background()
-	aiService := NewAIService(ctx)
+	aiService := ai.NewAIService(ctx)
 
 	os.MkdirAll(attachmentsDir, 0755)
 	os.MkdirAll(filepath.Join(vaultDir, "Inbox"), 0755)
@@ -93,7 +97,7 @@ func main() {
 
 	botAPI, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	bot := &TelegramBot{botAPI}
@@ -107,6 +111,7 @@ func main() {
 		{Command: "reprocess", Description: "Reprocess last sent file"},
 		{Command: "switchkey", Description: "Switch to next Gemini API key"},
 		{Command: "setprovider", Description: "Set AI provider (e.g. /setprovider Groq)"},
+		{Command: "pid", Description: "Show the process ID of the bot instance"},
 	}
 	config := tgbotapi.NewSetMyCommands(commands...)
 	_, err = bot.Request(config)
@@ -124,6 +129,11 @@ func main() {
 	log.Println("Bot is running. Send images or PDFs...")
 
 	for update := range updates {
+		if isPaused.Load().(bool) {
+			time.Sleep(1 * time.Second)
+			continue
+		}
+
 		if update.Message == nil {
 			continue
 		}
@@ -140,9 +150,10 @@ func main() {
 			go handleCommand(bot, update.Message, aiService)
 		}
 	}
+	return nil
 }
 
-func handleCommand(bot Bot, message *tgbotapi.Message, aiService *AIService) {
+func handleCommand(bot Bot, message *tgbotapi.Message, aiService *ai.AIService) {
 	state := getUserState(message.From.ID)
 
 	if !message.IsCommand() {
@@ -168,7 +179,7 @@ func handleCommand(bot Bot, message *tgbotapi.Message, aiService *AIService) {
 		}
 
 		prompt := fmt.Sprintf("Respond in %s. Output your response as valid HTML, with proper headings, paragraphs, and LaTeX formulas using MathJax syntax. User message: %s", state.Language, message.Text)
-		fullResponse, err := aiService.GenerateContent(context.Background(), prompt, nil, ModelFlashSearch, streamCallback)
+		fullResponse, err := aiService.GenerateContent(context.Background(), prompt, nil, ai.ModelFlashSearch, streamCallback)
 		if err != nil {
 			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Sorry, I had trouble thinking: "+err.Error()))
 			return
@@ -181,7 +192,12 @@ func handleCommand(bot Bot, message *tgbotapi.Message, aiService *AIService) {
 	switch message.Command() {
 	case "start", "help":
 		msg := tgbotapi.NewMessage(message.Chat.ID,
-			"🤖 Bot active! Send images/PDFs for processing.\n\nCommands:\n/stats - Statistics\n/last - Show last created note\n/reprocess - Reprocess last file\n/lang - Set AI language (e.g. /lang English)\n/switchkey - Switch to next API key (Gemini only)\n/setprovider - Set AI provider (e.g. /setprovider Groq)\n/help - This message")
+			"🤖 Bot active! Send images/PDFs for processing.\n\nCommands:\n/stats - Statistics\n/last - Show last created note\n/reprocess - Reprocess last file\n/lang - Set AI language (e.g. /lang English)\n/switchkey - Switch to next API key (Gemini only)\n/setprovider - Set AI provider (e.g. /setprovider Groq)"+"\n/help - This message")
+		bot.Send(msg)
+
+	case "pid":
+		pid := os.Getpid()
+		msg := tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("Current bot instance PID: %d", pid))
 		bot.Send(msg)
 
 	case "stats":
@@ -204,7 +220,7 @@ func handleCommand(bot Bot, message *tgbotapi.Message, aiService *AIService) {
 		}
 		msg := tgbotapi.NewMessage(message.Chat.ID, text)
 		bot.Send(msg)
-
+	
 	case "reprocess":
 		if state.LastProcessedFile == "" {
 			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "No file has been processed yet."))
@@ -234,7 +250,7 @@ func handleCommand(bot Bot, message *tgbotapi.Message, aiService *AIService) {
 
 	case "switchkey":
 		if aiService != nil {
-			if geminiProvider, ok := aiService.activeProvider.(*GeminiProvider); ok {
+			if geminiProvider, ok := aiService.GetActiveProvider().(*ai.GeminiProvider); ok {
 				nextKeyIndex := geminiProvider.SwitchKey()
 				bot.Send(tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("Switched to API Key #%d", nextKeyIndex+1)))
 			} else {
@@ -267,10 +283,11 @@ func handleCommand(bot Bot, message *tgbotapi.Message, aiService *AIService) {
 	}
 }
 
-func handlePhoto(bot Bot, message *tgbotapi.Message, aiService *AIService, token string) {
+func handlePhoto(bot Bot, message *tgbotapi.Message, aiService *ai.AIService, token string) {
 	state := getUserState(message.From.ID)
-	updateActivity()
-	bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Processing image..."))
+	UpdateActivity()
+	statusMsg, _ := bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Processing image..."))
+	messageID := statusMsg.MessageID
 
 	photos := message.Photo
 	if len(photos) == 0 {
@@ -284,19 +301,19 @@ func handlePhoto(bot Bot, message *tgbotapi.Message, aiService *AIService, token
 		return
 	}
 
-	if isDuplicate(filename) {
+	if IsDuplicate(filename) {
 		os.Remove(filename)
 		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "⚠️ Duplicate file detected."))
 		return
 	}
 
 	state.LastProcessedFile = filename
-	createObsidianNote(filename, "image", message, aiService, bot, message.Chat.ID, 0)
+	createObsidianNote(filename, "image", message, aiService, bot, message.Chat.ID, messageID)
 }
 
-func handleDocument(bot Bot, message *tgbotapi.Message, aiService *AIService, token string) {
+func handleDocument(bot Bot, message *tgbotapi.Message, aiService *ai.AIService, token string) {
 	state := getUserState(message.From.ID)
-	updateActivity()
+	UpdateActivity()
 
 	doc := message.Document
 	if doc == nil {
@@ -309,7 +326,8 @@ func handleDocument(bot Bot, message *tgbotapi.Message, aiService *AIService, to
 		return
 	}
 
-	bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Processing PDF..."))
+	statusMsg, _ := bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Processing PDF..."))
+	messageID := statusMsg.MessageID
 
 	filename := downloadFile(bot, doc.FileID, "pdf", token)
 	if filename == "" {
@@ -317,14 +335,14 @@ func handleDocument(bot Bot, message *tgbotapi.Message, aiService *AIService, to
 		return
 	}
 
-	if isDuplicate(filename) {
+	if IsDuplicate(filename) {
 		os.Remove(filename)
 		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "⚠️ Duplicate file detected."))
 		return
 	}
 
 	state.LastProcessedFile = filename
-	createObsidianNote(filename, "pdf", message, aiService, bot, message.Chat.ID, 0)
+	createObsidianNote(filename, "pdf", message, aiService, bot, message.Chat.ID, messageID)
 }
 
 func downloadFile(bot Bot, fileID, ext, token string) string {
@@ -367,8 +385,17 @@ func downloadFile(bot Bot, fileID, ext, token string) string {
 	return fullPath
 }
 
-func createObsidianNote(filePath, fileType string, message *tgbotapi.Message, aiService *AIService, bot Bot, chatID int64, messageID int) {
+func createObsidianNote(filePath, fileType string, message *tgbotapi.Message, aiService *ai.AIService, bot Bot, chatID int64, messageID int) {
 	state := getUserState(message.From.ID)
+
+	updateStatus := func(status string) {
+		if messageID != 0 {
+			edit := tgbotapi.NewEditMessageText(chatID, messageID, status)
+			bot.Send(edit)
+		}
+	}
+
+	updateStatus("🤖 Analyzing with AI...")
 	var responseText string
 	var mu sync.Mutex
 	var lastEdit time.Time
@@ -383,14 +410,15 @@ func createObsidianNote(filePath, fileType string, message *tgbotapi.Message, ai
 		}
 	}
 
-	processed := processFileWithAI(filePath, fileType, aiService, streamCallback, state.Language)
+	processed := processFileWithAI(filePath, fileType, aiService, streamCallback, state.Language, updateStatus)
 	stats.recordFile(fileType, processed.Category)
+
+	updateStatus("📝 Creating note...")
 
 	finalText := processed.Summary
 	if finalText == "" {
 		finalText = "Processing complete."
 	}
-	bot.Send(tgbotapi.NewMessage(chatID, finalText+"\n\n✅ Note created."))
 
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 	baseName := filepath.Base(filePath)
@@ -418,9 +446,9 @@ ai_provider: %s
 
 # %s - %s
 
-**Received:** %s  
-**Caption:** %s  
-**Classification:** %s (%.0f%%)  
+**Received:** %s
+**Caption:** %s
+**Classification:** %s (%.0f%%)
 **Language:** %s
 
 ## File
@@ -478,13 +506,15 @@ ai_provider: %s
 	os.WriteFile(notePath, []byte(content), 0644)
 	log.Printf("Created note: %s", notePath)
 
+	updateStatus("📄 Converting to PDF...")
 	// Convert Markdown to PDF
-	pdfData, err := convertMarkdownToPDF(content)
+	pdfData, err := converter.ConvertMarkdownToPDF(content)
 	if err != nil {
 		log.Printf("Error converting to PDF: %v", err)
 		// Send the markdown file as a fallback
 		doc := tgbotapi.NewDocument(message.Chat.ID, tgbotapi.FilePath(notePath))
 		bot.Send(doc)
+		updateStatus("✅ Complete! Note sent as Markdown.")
 		return
 	}
 
@@ -495,6 +525,8 @@ ai_provider: %s
 	}
 	doc := tgbotapi.NewDocument(message.Chat.ID, pdfFile)
 	bot.Send(doc)
+
+	updateStatus("✅ Complete! Note created.")
 
 	state.LastCreatedNote = notePath
 }
@@ -518,4 +550,48 @@ func formatQuestions(questions []string) string {
 		result += fmt.Sprintf("%d. %s\n", i+1, q)
 	}
 	return result
+}
+
+func SetupTestEndpoint() {
+	http.HandleFunc("/test-process", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Method not allowed", 405)
+			return
+		}
+
+		var req struct {
+			Text     string `json:"text"`
+			FilePath string `json:"file_path"`
+			Language string `json:"language"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+
+		// Process the request
+		result := ProcessTestRequest(req.Text, req.FilePath, req.Language)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(result)
+	})
+
+	go func() {
+		if err := http.ListenAndServe(":8081", nil); err != nil {
+			log.Printf("Error starting test endpoint: %v", err)
+		}
+	}()
+}
+
+func ProcessTestRequest(text, filePath, language string) map[string]interface{} {
+	// This is a dummy implementation.
+	// In a real scenario, you would process the file or text.
+	log.Printf("Received test request: text='%s', filePath='%s', language='%s'", text, filePath, language)
+	return map[string]interface{}{
+		"status":   "received",
+		"text":     text,
+		"filePath": filePath,
+		"language": language,
+	}
 }

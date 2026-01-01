@@ -1,4 +1,4 @@
-package main
+package bot
 
 import (
 "encoding/json"
@@ -34,7 +34,7 @@ data, _ := json.MarshalIndent(s, "", "  ")
 os.WriteFile("stats.json", data, 0644)
 }
 
-func (s *Stats) load() {
+func (s *Stats) Load() {
 data, err := os.ReadFile("stats.json")
 if err != nil {
 return

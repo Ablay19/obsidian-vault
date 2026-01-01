@@ -1,4 +1,4 @@
-package main
+package ai
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"google.golang.org/api/option"
 )
 
-// GeminiProvider implements the AIProvider interface for Google Gemini.
+// GeminiProvider implements the ai.AIProvider interface for Google Gemini.
 type GeminiProvider struct {
 	clients         []*genai.Client
 	currentKeyIndex int

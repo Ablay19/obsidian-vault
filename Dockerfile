@@ -4,11 +4,13 @@ RUN apk add --no-cache git build-base tesseract-ocr-dev leptonica-dev
 
 WORKDIR /build
 
-COPY go.mod go.sum ./
-RUN go mod download
+# Copy all source files first
 COPY . .
 
-RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o telegram-bot .
+# Now run go mod tidy to ensure all dependencies are correct and downloaded
+RUN go mod tidy
+
+RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o telegram-bot ./cmd/bot
 
 FROM alpine:latest
 

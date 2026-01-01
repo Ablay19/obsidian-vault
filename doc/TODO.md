@@ -1,5 +1,4 @@
 # TODO - Obsidian Automation Bot
- # I want a way to manage bot instaces like when i run one and i am deploying they get confused 
 
 This document outlines future improvements and tasks for the Obsidian Automation Bot, as identified during technical documentation review.
 
@@ -24,7 +23,7 @@ This document outlines future improvements and tasks for the Obsidian Automation
     *   **Assigned To**: [Team/Developer Name]
     *   **Notes**: Requires extending the bot's command handling and potentially interacting with the Obsidian vault structure.
 
-4.  **Web Dashboard**: Create a simple web dashboard (perhaps using the `health.go` server as a base) to view stats and bot status graphically.
+4.  **Web Dashboard**: Create a simple web dashboard to view stats and bot status graphically. The `/status` endpoint already provides the raw data.
     *   **Status**: Pending
     *   **Priority**: Low
     *   **Assigned To**: [Team/Developer Name]
@@ -35,5 +34,3 @@ This document outlines future improvements and tasks for the Obsidian Automation
     *   **Priority**: Low
     *   **Assigned To**: [Team/Developer Name]
     *   **Notes**: May require external libraries or tools for parsing new file formats.
-
-
