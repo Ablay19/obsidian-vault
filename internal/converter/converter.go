@@ -2,48 +2,66 @@ package converter
 
 import (
 	"fmt"
-	"io/ioutil"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 )
 
-// ConvertMarkdownToPDF converts a Markdown string to a PDF byte slice using pandoc and tectonic.
-func ConvertMarkdownToPDF(markdownContent string) ([]byte, error) {
-	// Create a temporary file for the Markdown content
-	tmpMarkdownFile, err := ioutil.TempFile("", "markdowntopdf.*.md")
+// PdfToText converts a PDF file to text using pdftotext command.
+func PdfToText(pdfPath string) (string, error) {
+	cmd := exec.Command("pdftotext", pdfPath, "-")
+	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create temp markdown file: %w", err)
+		return "", fmt.Errorf("pdftotext failed: %w", err)
 	}
-	defer os.Remove(tmpMarkdownFile.Name())
+	return string(output), nil
+}
 
-	if _, err := tmpMarkdownFile.Write([]byte(markdownContent)); err != nil {
-		tmpMarkdownFile.Close()
-		return nil, fmt.Errorf("failed to write to temp markdown file: %w", err)
-	}
-	if err := tmpMarkdownFile.Close(); err != nil {
-		return nil, fmt.Errorf("failed to close temp markdown file: %w", err)
-	}
-
-	// Create a temporary file for the PDF output
-	tmpPDFFile, err := ioutil.TempFile("", "output.*.pdf")
+// ConvertMarkdownToPDF converts a Markdown file to PDF using pandoc and tectonic.
+// This function requires pandoc and tectonic to be installed and in the system's PATH.
+func ConvertMarkdownToPDF(markdownContent, outputPath string) error {
+	// Step 1: Create a temporary Markdown file
+	tmpFile, err := os.CreateTemp("", "note-*.md")
 	if err != nil {
-		return nil, fmt.Errorf("failed to create temp pdf file: %w", err)
+		return fmt.Errorf("failed to create temporary markdown file: %w", err)
 	}
-	tmpPDFFile.Close() // Close it immediately, pandoc will write to it.
-	defer os.Remove(tmpPDFFile.Name())
+	defer os.Remove(tmpFile.Name())
 
-	cmd := exec.Command("pandoc", tmpMarkdownFile.Name(), "-o", tmpPDFFile.Name(), "--pdf-engine=tectonic")
+	if _, err := tmpFile.Write([]byte(markdownContent)); err != nil {
+		return fmt.Errorf("failed to write to temporary markdown file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temporary markdown file: %w", err)
+	}
+
+	// Step 2: Run pandoc to convert Markdown to PDF
+	// Using --pdf-engine=tectonic requires pandoc to be configured to find tectonic.
+	// Make sure tectonic is in the PATH.
+	cmd := exec.Command("pandoc", tmpFile.Name(), "-o", outputPath, "--pdf-engine=tectonic")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("pandoc failed: %w\n%s", err, string(output))
+		return fmt.Errorf("pandoc conversion failed: %w\nOutput: %s", err, string(output))
 	}
 
-	pdfBuffer, err := ioutil.ReadFile(tmpPDFFile.Name())
+	slog.Info("Successfully converted Markdown to PDF using pandoc", "output_path", outputPath)
+	return nil
+}
+
+// ensureDir ensures a directory exists, creating it if necessary.
+func ensureDir(dirName string) error {
+	err := os.MkdirAll(dirName, os.ModePerm)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read temp pdf file: %w", err)
+		return fmt.Errorf("failed to create directory: %w", err)
 	}
+	return nil
+}
 
-	log.Println("Successfully converted Markdown to PDF using pandoc")
-	return pdfBuffer, nil
+// GetPDFPath generates a standardized path for a PDF file.
+func GetPDFPath(noteTitle string) (string, error) {
+	dir := "pdfs" // Or some other configurable directory
+	if err := ensureDir(dir); err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, fmt.Sprintf("%s.pdf", noteTitle)), nil
 }

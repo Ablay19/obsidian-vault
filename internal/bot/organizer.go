@@ -2,32 +2,34 @@ package bot
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
+// organizeNote moves a note to the correct sub-directory based on its category.
 func organizeNote(notePath string, category string) error {
-	if category == "general" || category == "" {
-		return nil // No need to organize general notes
+	if category == "" || category == "general" {
+		// No need to move, it stays in the Inbox
+		return nil
 	}
 
-	// Sanitize category name to be filesystem-friendly
-	safeCategory := strings.ReplaceAll(strings.Title(category), " ", "")
+	// Sanitize category to create a valid directory name
+	dirName := strings.Title(strings.ToLower(category))
+	destDir := filepath.Join("vault", dirName)
 
 	// Create the destination directory if it doesn't exist
-	destDir := filepath.Join(vaultDir, safeCategory)
 	if err := os.MkdirAll(destDir, 0755); err != nil {
-		return fmt.Errorf("could not create directory %s: %w", destDir, err)
+		return fmt.Errorf("failed to create directory %s: %w", destDir, err)
 	}
 
-	// Move the note
+	// Move the file
 	destPath := filepath.Join(destDir, filepath.Base(notePath))
 	if err := os.Rename(notePath, destPath); err != nil {
-		return fmt.Errorf("could not move note from %s to %s: %w", notePath, destPath, err)
+		return fmt.Errorf("failed to move note from %s to %s: %w", notePath, destPath, err)
 	}
 
-	log.Printf("Organized note: %s -> %s", notePath, destPath)
+	slog.Info("Organized note", "from", notePath, "to", destPath)
 	return nil
 }

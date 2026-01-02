@@ -3,8 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
-	"io/ioutil"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -22,14 +21,16 @@ func OpenDB() *sql.DB {
 	token := os.Getenv("TURSO_AUTH_TOKEN")
 
 	if url == "" || token == "" {
-		log.Fatal("TURSO_DATABASE_URL or TURSO_AUTH_TOKEN is missing")
+		slog.Error("TURSO_DATABASE_URL or TURSO_AUTH_TOKEN is missing")
+		os.Exit(1)
 	}
 
 	dsn := url + "?authToken=" + token
 
 	db, err := sql.Open("libsql", dsn)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("Failed to open database", "error", err)
+		os.Exit(1)
 	}
 	DB = db
 	return db
@@ -37,7 +38,7 @@ func OpenDB() *sql.DB {
 
 // RunMigrations applies database migrations using a custom runner.
 func RunMigrations(db *sql.DB) {
-	log.Println("Applying database migrations...")
+	slog.Info("Applying database migrations...")
 
 	// Create schema_migrations table if it doesn't exist
 	createMigrationsTableSQL := `
@@ -47,14 +48,16 @@ func RunMigrations(db *sql.DB) {
 		applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);`
 	if _, err := db.Exec(createMigrationsTableSQL); err != nil {
-		log.Fatalf("Failed to create schema_migrations table: %v", err)
+		slog.Error("Failed to create schema_migrations table", "error", err)
+		os.Exit(1)
 	}
 
 	// Get all migration files from the migrations directory
 	var migrationPaths []string
-	files, err := ioutil.ReadDir("./internal/database/migrations")
+	files, err := os.ReadDir("./internal/database/migrations")
 	if err != nil {
-		log.Fatalf("Failed to read migration directory: %v", err)
+		slog.Error("Failed to read migration directory", "error", err)
+		os.Exit(1)
 	}
 
 	for _, fileInfo := range files {
@@ -73,31 +76,35 @@ func RunMigrations(db *sql.DB) {
 		var count int
 		err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE name = ?", migrationName).Scan(&count)
 		if err != nil {
-			log.Fatalf("Failed to check migration status for %s: %v", migrationName, err)
+			slog.Error("Failed to check migration status", "migration", migrationName, "error", err)
+			os.Exit(1)
 		}
 		if count > 0 {
-			log.Printf("Migration %s already applied, skipping.", migrationName)
+			slog.Info("Migration already applied, skipping.", "migration", migrationName)
 			continue
 		}
 
 		// Apply migration
-		sqlContent, err := ioutil.ReadFile(path)
+		sqlContent, err := os.ReadFile(path)
 		if err != nil {
-			log.Fatalf("Failed to read migration file %s: %v", migrationName, err)
+			slog.Error("Failed to read migration file", "migration", migrationName, "error", err)
+			os.Exit(1)
 		}
 
 		if err := executeSQL(db, string(sqlContent)); err != nil {
-			log.Fatalf("Failed to apply migration %s: %v", migrationName, err)
+			slog.Error("Failed to apply migration", "migration", migrationName, "error", err)
+			os.Exit(1)
 		}
 
 		// Record migration as applied
 		if _, err := db.Exec("INSERT INTO schema_migrations (name) VALUES (?)", migrationName); err != nil {
-			log.Fatalf("Failed to record migration %s: %v", migrationName, err)
+			slog.Error("Failed to record migration", "migration", migrationName, "error", err)
+			os.Exit(1)
 		}
-		log.Printf("Migration %s applied successfully.", migrationName)
+		slog.Info("Migration applied successfully.", "migration", migrationName)
 	}
 
-	log.Println("Database migrations applied successfully.")
+	slog.Info("Database migrations applied successfully.")
 }
 
 // columnExists checks if a column exists in a given table.
@@ -131,7 +138,8 @@ func columnExists(db *sql.DB, tableName, columnName string) (bool, error) {
 func executeSQL(db *sql.DB, sqlContent string) error {
 	alterColumnRegex := regexp.MustCompile(`(?i)ALTER\s+TABLE\s+(\S+)\s+ADD\s+COLUMN\s+(\S+)\s+.*`)
 
-	statements := strings.Split(sqlContent, ";")
+	newVar := strings.Split
+	statements := newVar(sqlContent, ";")
 	for _, stmt := range statements {
 		trimmedStmt := strings.TrimSpace(stmt)
 		if trimmedStmt == "" {
@@ -147,7 +155,7 @@ func executeSQL(db *sql.DB, sqlContent string) error {
 				return fmt.Errorf("failed to check column existence for %s.%s: %w", tableName, columnName, err)
 			}
 			if exists {
-				log.Printf("Column '%s' already exists in table '%s', skipping ALTER TABLE ADD COLUMN statement.", columnName, tableName)
+				slog.Info("Column already exists in table, skipping ALTER TABLE ADD COLUMN statement.", "column", columnName, "table", tableName)
 				continue
 			}
 		}

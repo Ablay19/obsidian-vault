@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -38,11 +38,11 @@ func NewRuntimeConfigManager(db *sql.DB) (*RuntimeConfigManager, error) {
 
 	// Load initial state from DB
 	if err := rcm.LoadStateFromDB(); err != nil {
-		log.Printf("Warning: Could not load state from DB, initializing with defaults: %v", err)
+		slog.Warn("Could not load state from DB, initializing with defaults", "error", err)
 		// If DB load fails, initialize from .env (bootstrap)
 		rcm.initializeFromEnv()
 	} else {
-		log.Println("State loaded from DB successfully.")
+		slog.Info("State loaded from DB successfully.")
 	}
 
 	// Persist the current state after initialization (either from DB or env)
@@ -218,7 +218,7 @@ func (rcm *RuntimeConfigManager) RotateAPIKey(providerName string) error {
 		if nextKs.Provider == providerName && nextKs.ID != currentKeyID && nextKs.Enabled && !nextKs.Blocked {
 			// Found a new key, mark it active (no need to change anything if it's already enabled and not blocked)
 			// For now, simply finding the next available is enough. The AI service will pick it up.
-			log.Printf("Rotated API key for %s. New active key: %s", providerName, nextKs.ID)
+			slog.Info("Rotated API key for provider.", "provider", providerName, "new_key_id", nextKs.ID)
 			return rcm.PersistStateToDB()
 		}
 	}

@@ -4,16 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
 
 	st "obsidian-automation/internal/state" // Import the state package
 )
-
-
-
-
 
 // AIService manages multiple AI providers and selects the active one.
 type AIService struct {
@@ -42,12 +38,11 @@ func NewAIService(ctx context.Context, sm *st.RuntimeConfigManager) *AIService {
 	}
 
 	if !hasInitializedProviders {
-		log.Println("No AI providers could be initialized from RuntimeConfigManager. AI features will be unavailable.")
+		slog.Warn("No AI providers could be initialized from RuntimeConfigManager. AI features will be unavailable.")
 		return nil
 	}
 
-	// This log line needs adjustment as ActiveProvider is no longer a direct field
-	log.Printf("AI Service initialized. Available providers: %v", s.GetAvailableProviders())
+	slog.Info("AI Service initialized.", "available_providers", s.GetAvailableProviders())
 
 	return s
 }
@@ -70,7 +65,7 @@ func (s *AIService) initializeProviders(ctx context.Context) {
 		for keyID, keyState := range currentConfig.APIKeys {
 			if keyState.Provider == providerName && keyState.Enabled && !keyState.Blocked {
 				if keyState.Value == "" {
-					log.Printf("Skipping %s provider for key %s (ID: %s) due to empty API key.", providerName, truncateString(keyState.Value, 5), truncateString(keyID, 8))
+					slog.Warn("Skipping provider key due to empty API key.", "provider", providerName, "key_id_partial", truncateString(keyID, 8))
 					continue
 				}
 
@@ -86,31 +81,31 @@ func (s *AIService) initializeProviders(ctx context.Context) {
 				case "Gemini":
 					tempGeminiProvider = NewGeminiProvider(ctx, keyState.Value, modelName)
 					if tempGeminiProvider == nil { // Check concrete type directly
-						log.Printf("Failed to initialize Gemini provider for key %s (ID: %s). Skipping.", truncateString(keyState.Value, 5), truncateString(keyID, 8))
+						slog.Error("Failed to initialize Gemini provider, skipping.", "key_id_partial", truncateString(keyID, 8))
 						continue
 					}
 					provider = tempGeminiProvider
 				case "Groq":
 					tempGroqProvider = NewGroqProvider(keyState.Value, modelName)
 					if tempGroqProvider == nil { // Check concrete type directly
-						log.Printf("Failed to initialize Groq provider for key %s (ID: %s). Skipping.", truncateString(keyState.Value, 5), truncateString(keyID, 8))
+						slog.Error("Failed to initialize Groq provider, skipping.", "key_id_partial", truncateString(keyID, 8))
 						continue
 					}
 					provider = tempGroqProvider
 				case "Hugging Face":
 					tempHuggingFaceProvider = NewHuggingFaceProvider(keyState.Value, modelName)
 					if tempHuggingFaceProvider == nil { // Check concrete type directly
-						log.Printf("Failed to initialize Hugging Face provider for key %s (ID: %s). Skipping.", truncateString(keyState.Value, 5), truncateString(keyID, 8))
+						slog.Error("Failed to initialize Hugging Face provider, skipping.", "key_id_partial", truncateString(keyID, 8))
 						continue
 					}
 					provider = tempHuggingFaceProvider
 				default:
-					log.Printf("Unknown provider type %s for key %s. Skipping.", providerName, keyID)
+					slog.Warn("Unknown provider type, skipping.", "provider_type", providerName, "key_id", keyID)
 					continue
 				}
 
 				s.providers[providerName][keyID] = provider // Now 'provider' should genuinely be non-nil if reached here
-				log.Printf("Initialized %s provider with key %s (ID: %s)", providerName, truncateString(keyState.Value, 5), truncateString(keyID, 8))
+				slog.Info("Initialized provider.", "provider", providerName, "key_id_partial", truncateString(keyID, 8))
 			}
 		}
 	}
@@ -141,7 +136,7 @@ func (s *AIService) SetProvider(providerName string) error {
 	// Update the RuntimeConfigManager's active provider preference
 	// TODO: Implement a method in RuntimeConfigManager to set the active provider preference.
 	// For now, we'll just log and assume the client picking the provider will check SM.
-	log.Printf("Requested to switch AI provider preference to %s", providerName)
+	slog.Info("Requested to switch AI provider preference.", "provider", providerName)
 	return nil
 }
 
@@ -153,9 +148,9 @@ func (s *AIService) GetActiveProviderName() string {
 	// TODO: Implement storing active provider preference in RuntimeConfig. For now, use first enabled.
 	for name, ps := range currentConfig.Providers {
 		if ps.Enabled { // Arbitrarily pick first enabled
-				return name
-			}
+			return name
 		}
+	}
 	return "None"
 }
 
@@ -383,3 +378,4 @@ func getMapKeys(m map[string]AIProvider) []string {
 	}
 	return keys
 }
+

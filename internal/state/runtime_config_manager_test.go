@@ -2,7 +2,6 @@ package state
 
 import (
 	"database/sql"
-	"os"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3" // Import for side-effects to use in-memory SQLite

@@ -4,15 +4,16 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/database"
-	"obsidian-automation/internal/status"
 	"obsidian-automation/internal/state" // Import the new state package
+	"obsidian-automation/internal/status"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -25,6 +26,7 @@ var (
 	rcm        *state.RuntimeConfigManager // Add package-level RCM
 	userStates = make(map[int64]*UserState)
 	stateMutex sync.RWMutex
+	isBusy     atomic.Bool
 )
 
 type UserState struct {
@@ -94,32 +96,39 @@ func Run(database *sql.DB, ais *ai.AIService, runtimeConfigManager *state.Runtim
 		{Command: "resume_bot", Description: "Resume the bot"},
 	}
 	if _, err := bot.Request(tgbotapi.NewSetMyCommands(commands...)); err != nil {
-		log.Printf("Error setting bot commands: %v", err)
+		slog.Error("Error setting bot commands", "error", err)
 	}
 
-	log.Printf("Authorized on account %s", bot.Self.UserName)
+	slog.Info("Authorized on account", "username", bot.Self.UserName)
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 	updates := bot.GetUpdatesChan(u)
-	log.Println("Bot is running...")
+	slog.Info("Bot is running...")
 
 	for update := range updates {
-		if status.IsPaused() {
+		if status.IsPaused() || isBusy.Load() {
 			time.Sleep(1 * time.Second)
 			continue
 		}
 		if update.Message == nil {
 			continue
 		}
-		if update.Message.Photo != nil {
-			go handlePhoto(bot, update.Message, token)
-		} else if update.Message.Document != nil {
-			go handleDocument(bot, update.Message, token)
-		} else if update.Message.IsCommand() || update.Message.Text != "" {
-			go handleCommand(bot, update.Message)
-		}
+		go handleUpdate(bot, &update, token)
 	}
 	return nil
+}
+
+func handleUpdate(bot Bot, update *tgbotapi.Update, token string) {
+	isBusy.Store(true)
+	defer isBusy.Store(false)
+
+	if update.Message.Photo != nil {
+		handlePhoto(bot, update.Message, token)
+	} else if update.Message.Document != nil {
+		handleDocument(bot, update.Message, token)
+	} else if update.Message.IsCommand() || update.Message.Text != "" {
+		handleCommand(bot, update.Message)
+	}
 }
 
 // handleCommand processes text messages and commands.
@@ -210,6 +219,10 @@ func handleCommand(bot Bot, message *tgbotapi.Message) {
 			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Unsupported language. Please use English or French."))
 		}
 	case "setprovider":
+		if aiService == nil || len(aiService.GetAvailableProviders()) == 0 {
+			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "AI service is not available or no providers are configured."))
+			return
+		}
 		providerName := message.CommandArguments()
 		if providerName == "" {
 			var currentProviderName string
@@ -333,7 +346,7 @@ func createObsidianNote(filePath, fileType string, message *tgbotapi.Message, bo
 	notePath := filepath.Join("vault", "Inbox", noteFilename)
 	err := os.WriteFile(notePath, []byte(builder.String()), 0644)
 	if err != nil {
-		log.Printf("Error writing note file: %v", err)
+		slog.Error("Error writing note file", "error", err)
 		bot.Send(tgbotapi.NewMessage(chatID, "Error saving the note."))
 		return
 	}
@@ -341,11 +354,11 @@ func createObsidianNote(filePath, fileType string, message *tgbotapi.Message, bo
 	// Save to database
 	hash, err := getFileHash(filePath)
 	if err != nil {
-		log.Printf("Error getting file hash: %v", err)
+		slog.Error("Error getting file hash", "error", err)
 	} else {
 		err := SaveProcessed(hash, content.Category, content.Text, content.Summary, content.Topics, content.Questions, content.AIProvider, message.From.ID)
 		if err != nil {
-			log.Printf("Error saving processed file to DB: %v", err)
+			slog.Error("Error saving processed file to DB", "error", err)
 		}
 	}
 

@@ -1,0 +1,72 @@
+
+package dashboard
+
+import "obsidian-automation/internal/state"
+
+templ APIKeysPanel(keys []state.APIKeyState) {
+	<div class="bg-gray-800 p-4 rounded-lg shadow-lg">
+		<h2 class="text-xl font-bold mb-4">API Key Management</h2>
+		<div class="overflow-x-auto">
+			<table class="min-w-full divide-y divide-gray-700">
+				<thead class="bg-gray-700">
+					<tr>
+						<th scope="col" class="py-3 px-6 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Provider</th>
+						<th scope="col" class="py-3 px-6 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Key (Partial)</th>
+						<th scope="col" class="py-3 px-6 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
+						<th scope="col" class="py-3 px-6 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
+					</tr>
+				</thead>
+				<tbody class="bg-gray-800 divide-y divide-gray-700">
+					if len(keys) == 0 {
+						<tr>
+							<td colspan="4" class="text-center py-4">No API keys found.</td>
+						</tr>
+					}
+					for _, key := range keys {
+						<tr>
+							<td class="py-4 px-6 whitespace-nowrap">{ key.Provider }</td>
+							<td class="py-4 px-6 whitespace-nowrap">{ partialKey(key.Value) }</td>
+							<td class="py-4 px-6 whitespace-nowrap">
+								if key.Enabled {
+									<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-500 text-green-900">Enabled</span>
+								} else {
+									<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-500 text-red-900">Disabled</span>
+								}
+							</td>
+							<td class="py-4 px-6 whitespace-nowrap">
+								<button
+									hx-post="/api/ai/key/remove"
+									hx-vals={ `{"keyID": "` + key.ID + `"}` }
+									hx-confirm="Are you sure you want to remove this key?"
+									hx-target="#api-keys-content"
+									class="text-red-500 hover:text-red-700"
+								>
+									Remove
+								</button>
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+		<div class="mt-4">
+			<h3 class="text-lg font-bold mb-2">Add New Key</h3>
+			<form
+				hx-post="/api/ai/key/add"
+				hx-target="#api-keys-content"
+				class="flex items-center space-x-2"
+			>
+				<input type="text" name="providerName" placeholder="Provider (e.g., gemini)" class="bg-gray-700 text-white rounded-md px-3 py-2 w-1/3 focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+				<input type="text" name="keyValue" placeholder="API Key" class="bg-gray-700 text-white rounded-md px-3 py-2 w-2/3 focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+				<button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Add Key</button>
+			</form>
+		</div>
+	</div>
+}
+
+func partialKey(key string) string {
+	if len(key) > 8 {
+		return key[:4] + "..." + key[len(key)-4:]
+	}
+	return "..."
+}
