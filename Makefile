@@ -1,6 +1,6 @@
 # Makefile for Obsidian Automation Bot
 
-.PHONY: all build up down logs status restart help
+.PHONY: all build up down logs status restart help lint
 
 # Variables
 IMAGE_NAME      ?= obsidian-bot
@@ -60,6 +60,14 @@ sqlc-generate: ## Generate SQLC code from queries.
 	@echo "Generating SQLC code..."
 	@sqlc generate
 	@echo "✅ SQLC code generated successfully."
+
+lint: ## Run golangci-lint.
+	@echo "Running golangci-lint..."
+	@docker run --rm \
+	  -v "$(PWD):/app" \
+	  -w /app \
+	  $(IMAGE_NAME) golangci-lint run ./...
+	@echo "✅ golangci-lint finished."
 
 # Show this help message.
 help: ## Show this help message.
