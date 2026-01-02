@@ -1,15 +1,12 @@
 package dashboard
 
-import "time"
+import (
+	"fmt" // New import
+)
 
-type User struct {
-	ID           int64
-	Username     string
-	FirstName    string
-	LastName     string
-	LanguageCode string
-	CreatedAt    time.Time
-}
+templ UsersPanel(users []User) {
+
+
 
 templ UsersPanel(users []User) {
 	<div class="bg-gray-800 p-4 rounded-lg shadow-lg">

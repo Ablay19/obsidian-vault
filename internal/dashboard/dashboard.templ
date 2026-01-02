@@ -1,483 +1,72 @@
 package dashboard
 
 templ App() {
-	<!DOCTYPE html>
-	<html lang="en" class="dark">
-		<head>
-			<meta charset="UTF-8" />
-			<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-			<title>Obsidian Bot Dashboard</title>
-			<script src="https://cdn.tailwindcss.com"></script>
-			<script src="//unpkg.com/alpinejs" defer></script>
-			<script src="https://unpkg.com/htmx.org@1.9.10"></script>
-		</head>
-		<body class="bg-gray-900 text-gray-100">
-			<div class="container mx-auto p-4">
-				<header class="flex justify-between items-center mb-4">
-					<h1 class="text-2xl font-bold">🤖 Obsidian Bot</h1>
-					<div id="status-indicator">
-						// This will be updated with the rest of the content
-					</div>
-				</header>
-				<main>
-					<div id="dashboard-content" hx-get="/dashboard/panels/overview" hx-trigger="load, every 5s">
-						// This div will be replaced by the dashboard content
-					</div>
-				</main>
-				<footer class="text-center text-sm text-gray-500 mt-8">
-					<p>Obsidian Bot Dashboard &copy; 2026</p>
-					<p>
-				.center {
-					text-align: center;
-				}
-				.hidden {
-					display: none;
-				}
-				.flex {
-					display: flex;
-					align-items: center;
-					justify-content: center;
-					gap: var(--spacing4);
-					flex-wrap: wrap;
-				}
-				.flex > * {
-					flex: 1;
-					min-width: 400px;
-				}
-				.reverse {
-					flex-direction: row-reverse;
-				}
-				.padding1 {
-					padding: var(--spacing1) 0;
-				}
-				.padding2 {
-					padding: var(--spacing2) 0;
-				}
-				.padding3 {
-					padding: var(--spacing3) 0;
-				}
-				.padding4 {
-					padding: var(--spacing4) 0;
-				}
-				.padding5 {
-					padding: var(--spacing5) 0;
-				}
-				.padding6 {
-					padding: var(--spacing6) 0;
-				}
-				.padding7 {
-					padding: var(--spacing7) 0;
-				}
-				.margin1 {
-					margin: var(--spacing1) auto;
-				}
-				.margin2 {
-					margin: var(--spacing2) auto;
-				}
-				.margin3 {
-					margin: var(--spacing3) auto;
-				}
-				.margin4 {
-					margin: var(--spacing4) auto;
-				}
-				.margin5 {
-					margin: var(--spacing5) auto;
-				}
-				.margin6 {
-					margin: var(--spacing6) auto;
-				}
-				.margin7 {
-					margin: var(--spacing7) auto;
-				}
-				/* header */
-				header {
-					width: 90%;
-					max-width: 1080px;
-					margin: 0 auto;
-					display: flex;
-					align-items: center;
-					justify-content: space-between;
-					position: relative;
-					padding: var(--spacing4) 0;
-				}
-				nav {
-					display: flex;
-					align-items: center;
-					gap: var(--spacing5);
-				}
-				.ham {
-					display: none;
-					width: 20px;
-				}
-				@media (max-width: 800px) {
-					.ham {
-						display: block;
-					}
-					nav {
-						display: none;
-					}
-					nav.show {
-						display: flex;
-						flex-direction: column;
-						position: fixed;
-						top: var(--spacing6);
-						right: 0px;
-						background: var(--accent);
-						padding: var(--spacing4);
-						gap: var(--spacing4);
-						border-radius: var(--spacing2);
-					}
-				}
-				.logo {
-					width: 100px;
-				}
-				/* main section */
-				.main-section {
-					margin: var(--spacing7) auto var(--spacing6) auto;
-					text-align: center;
-					padding: var(--spacing6) 0;
-					background: var(--accent);
-				}
-				.main-section h2 {
-					font: var(--h1);
-				}
-				/* footer */
-				footer {
-					background: var(--accent);
-					padding: var(--spacing5) 0 var(--spacing6) 0;
-				}
-				.footer {
-					width: 90%;
-					max-width: 1080px;
-					margin: 0 auto;
-					display: flex;
-					justify-content: space-between;
-				}
-				@media (max-width: 600px) {
-					.footer {
-						flex-direction: column;
-						gap: var(--spacing4);
-					}
-				}
-				.footer-right,
-				.footer-left {
-					display: flex;
-					flex-direction: column;
-				}
-				.social-media-icons {
-					display: flex;
-					gap: var(--spacing4);
-				}
-				.social-media {
-					width: 32px;
-				}
-				/* Setup */
-				:root {
-					--colorp2: #191919;
-					--colorprimary: #000000;
-					--colorsecondary: #ffffff;
-					--coloraccent: #05f903;
-					--colorlinks: #0abefb;
-					--ff: "Open Sans", sans-serif;
-					--h1: bold 54px/70px var(--ff);
-					--h2: bold 36px/36px var(--ff);
-					--h3: bold 24px/30px var(--ff);
-					--links: bold 18px/18px var(--ff);
-					--p2: 30px/36px var(--ff);
-					--p: 18px/30px var(--ff);
-					--transition: 0.3s ease-in-out;
-				}
-				h1,
-				h2,
-				h3,
-				p,
-				.links,
-				.p2 {
-					margin: 0px;
-				}
-				h1 {
-					font: var(--h1);
-				}
-				h2 {
-					font: var(--h2);
-				}
-				h3 {
-					font: var(--h3);
-				}
-				.links {
-					font: var(--links);
-				}
-				.p2 {
-					font: var(--p2);
-				}
-				p {
-					font: var(--p);
-				}
-				html {
-					scroll-behavior: smooth;
-				}
-				body {
-					font-family: var(--ff);
-					padding: 0px;
-					margin: auto;
-					background-color: var(--colorprimary);
-					color: var(--colorsecondary);
-				}
-				section {
-					width: 90vw;
-					max-width: 1080px;
-					margin: auto;
-				}
-				/* Header */
-				.header {
-					width: 90vw;
-					max-width: 1080px;
-					margin: auto;
-				}
-				header {
-					margin-top: 20px;
-					display: flex;
-					justify-content: space-between;
-					align-items: center;
-					height: 80px;
-				}
-				.logo {
-					width: 50px;
-				}
-				a {
-					text-decoration: none;
-					color: var(--colorlinks);
-					font: var(--links);
-				}
-				a:hover {
-					color: var(--coloraccent);
-					transition: var(--transition);
-				}
-				header a {
-					color: var(--colorsecondary);
-					font-weight: normal;
-				}
-				.nav-menu {
-					display: flex;
-					align-items: center;
-					gap: 60px;
-				}
-				.nav-menu li {
-					list-style: none;
-				}
-				.hamburger {
-					display: none;
-					cursor: pointer;
-				}
-				.bar {
-					display: block;
-					width: 25px;
-					height: 3px;
-					margin: 5px auto;
-					transition: var(--transition);
-					background-color: var(--colorsecondary);
-				}
-				/* media query for hamburger */
-				@media (max-width: 800px) {
-					.hamburger {
-						display: block;
-					}
-					.hamburger.active .bar:nth-child(2) {
-						opacity: 0;
-					}
-					.hamburger.active .bar:nth-child(1) {
-						transform: translateY(8px) rotate(45deg);
-					}
-					.hamburger.active .bar:nth-child(3) {
-						transform: translateY(-8px) rotate(-45deg);
-					}
-					.nav-menu {
-						padding-top: 40px;
-						background-color: var(--colorprimary);
-						position: fixed;
-						right: -100%;
-						top: 80px;
-						align-items: flex-end;
-						flex-direction: column;
-						height: 100%;
-						transition: var(--transition);
-						margin: 0px;
-					}
-					.nav-item a {
-						padding: 0px 5vw;
-					}
-					.nav-menu.active {
-						right: 0;
-						transition: var(--transition);
-					}
-					.hero {
-						flex-direction: column-reverse;
-						padding-bottom: 40px;
-					}
-				}
-				/* Hero */
-				.column {
-					display: flex;
-					align-items: center;
-					gap: 20px;
-					flex-wrap: wrap;
-				}
-				.hero div {
-					flex: 1;
-				}
-				img {
-					width: 100%;
-				}
-				.button {
-					font: var(--links);
-					display: flex;
-					align-items: center;
-					justify-content: center;
-					padding: 0px 20px;
-					height: 60px;
-					border: solid 2px var(--colorlinks);
-					border-radius: 10px;
-				}
-				.button:hover {
-					border: solid 2px var(--coloraccent);
-					transition: var(--transition);
-				}
-				#primary-links {
-					margin-top: 40px;
-					display: flex;
-					flex-wrap: wrap;
-					align-items: center;
-					gap: 20px;
-				}
-				/* Podcasts */
-				#podcasts {
-					text-align: center;
-					background-image: url("/lex/img/podcast\ bg.webp");
-					padding: 100px 0px;
-				}
-				#podcasts .p2 {
-					margin-top: 8px;
-					color: var(--coloraccent);
-				}
-				.podcasts {
-					margin-top: 60px;
-					display: flex;
-					flex-wrap: wrap;
-					gap: 20px;
-				}
-				.podcasts img {
-					flex: 1;
-					min-width: 250px;
-					border-radius: 5px;
-					cursor: pointer;
-					transition: var(--transition);
-				}
-				.podcasts img:hover {
-					scale: 1.02;
-					transition: var(--transition);
-				}
-				/* Research */
-				#research {
-					margin-top: 100px;
-					text-align: center;
-				}
-				.research {
-					margin-top: 40px;
-					display: flex;
-					gap: 40px;
-					flex-wrap: wrap;
-				}
-				.research div a {
-					margin-right: 20px;
-				}
-				.research div {
-					padding: 20px 20px 40px 20px;
-					background-color: var(--colorp2);
-					border-radius: 10px;
-					flex: 1;
-					min-width: 280px;
-				}
-				.research img {
-					border-radius: 5px;
-				}
-				/* Footer */
-				.footer {
-					margin: 200px auto;
-					text-align: center;
-				}
-				.footer-section {
-					width: 90vw;
-					max-width: 1080px;
-					margin: auto;
-				}
-				.footer-links {
-					margin-top: 40px;
-					display: flex;
-					flex-wrap: wrap;
-					justify-content: center;
-					gap: 20px;
-				}
-				.button2 {
-					font: var(--links);
-					display: flex;
-					align-items: center;
-					justify-content: center;
-					width: 300px;
-					height: 60px;
-					border: solid 2px var(--colorlinks);
-					border-radius: 10px;
-				}
-				.button2:hover {
-					border: solid 2px var(--coloraccent);
-					transition: var(--transition);
-				}
-				.social-icons {
-					margin-top: 20px;
-					display: flex;
-					gap: 40px;
-					justify-content: center;
-				}
-				.social-icons img {
-					width: 20px;
-					cursor: pointer;
-				}
-				.sajid {
-					text-align: center;
-					padding: 100px 0px;
-				}
-			</style>
-		</head>
-		<body class="bg-gray-900 text-gray-100">
-			<div class="container mx-auto p-4">
-				<header class="flex justify-between items-center mb-4">
-					<h1 class="text-2xl font-bold">🤖 Obsidian Bot</h1>
-					<div id="status-indicator">
-						// This will be updated with the rest of the content
-					</div>
-				</header>
-				<main>
-					<div id="dashboard-content" hx-get="/dashboard/panels/overview" hx-trigger="load, every 5s">
-						// This div will be replaced by the dashboard content
-					</div>
-					<div id="file-processing-content" hx-get="/dashboard/panels/file_processing" hx-trigger="load, every 10s" class="mt-4">
-						// This div will be replaced by the file processing content
-					</div>
-					<div id="users-content" hx-get="/dashboard/panels/users" hx-trigger="load, every 10s" class="mt-4">
-						// This div will be replaced by the users content
-					</div>
-					<div id="db-config-content" hx-get="/dashboard/panels/db_config" hx-trigger="load, every 10s" class="mt-4">
-						// This div will be replaced by the database configuration content
-					</div>
-				</main>
-				<footer class="sajid text-center text-sm text-gray-500 mt-8">
-					<p>Obsidian Bot Dashboard &copy; 2026</p>
-					<p>
-						<a href="/api/services/status" target="_blank" class="hover:underline">API Status</a>
-						&bull;
-						<a href="https://github.com/yourusername/obsidian-bot" target="_blank" class="hover:underline">GitHub</a>
-					</p>
-				</footer>
-			</div>
-		</body>
-	</html>
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Obsidian Bot Dashboard</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="//unpkg.com/alpinejs" defer></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body class="bg-gray-900 text-gray-100">
+<div class="container mx-auto p-4">
+
+    <header class="flex justify-between items-center mb-4">
+        <h1 class="text-2xl font-bold">🤖 Obsidian Bot</h1>
+        <div id="status-indicator">
+            <!-- dynamically updated -->
+        </div>
+    </header>
+
+    <main>
+        <div
+            id="dashboard-content"
+            hx-get="/dashboard/panels/overview"
+            hx-trigger="load, every 5s">
+            <!-- dashboard overview -->
+        </div>
+
+        <div
+            id="file-processing-content"
+            hx-get="/dashboard/panels/file_processing"
+            hx-trigger="load, every 10s"
+            class="mt-4">
+            <!-- file processing -->
+        </div>
+
+        <div
+            id="users-content"
+            hx-get="/dashboard/panels/users"
+            hx-trigger="load, every 10s"
+            class="mt-4">
+            <!-- users -->
+        </div>
+
+        <div
+            id="db-config-content"
+            hx-get="/dashboard/panels/db_config"
+            hx-trigger="load, every 10s"
+            class="mt-4">
+            <!-- database config -->
+        </div>
+    </main>
+
+    <footer class="sajid text-sm text-gray-500 mt-8">
+        <p>Obsidian Bot Dashboard © 2026</p>
+        <p>
+            <a href="/api/services/status" target="_blank">API Status</a>
+            &bull;
+            <a href="https://github.com/yourusername/obsidian-bot" target="_blank">GitHub</a>
+        </p>
+    </footer>
+
+</div>
+</body>
+</html>
 }
