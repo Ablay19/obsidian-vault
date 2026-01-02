@@ -10,7 +10,7 @@ This phase focuses on building the core data structures and management layer for
 
 - [x] Task: Build `RuntimeConfigManager` struct to manage state in-memory with database persistence. [c57257c]
 - [x] Task: Define `ProviderState` and `APIKeyState` structs to model the state of AI providers and their keys. [a7de958]
-- [ ] Task: Refactor the AI Service to read its configuration exclusively from the `RuntimeConfigManager`.
+- [x] Task: Refactor the AI Service to read its configuration exclusively from the `RuntimeConfigManager`. [1a71235]
 - [ ] Task: Conductor - User Manual Verification 'Foundation and State Management' (Protocol in workflow.md)
 
 ---
