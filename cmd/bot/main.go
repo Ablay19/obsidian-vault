@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 func main() {
@@ -24,13 +25,23 @@ func main() {
 
 	database.RunMigrations(db)
 
-	if pid, err := database.CheckExistingInstance(db); err != nil {
-		log.Fatalf("Error checking for existing instance: %v. PID: %d", err, pid)
+	if err := database.CheckExistingInstance(db); err != nil {
+		log.Fatalf("Error checking for existing instance: %v", err)
 	}
 
 	if err := database.AddInstance(db); err != nil {
 		log.Fatalf("Error adding instance: %v", err)
 	}
+
+	// Start a goroutine to periodically update the instance heartbeat
+	heartbeatTicker := time.NewTicker(database.HEARTBEAT_THRESHOLD / 2) // Update every half of the threshold
+	go func() {
+		for range heartbeatTicker.C {
+			if err := database.UpdateInstanceHeartbeat(db); err != nil {
+				log.Printf("Error updating instance heartbeat: %v", err)
+			}
+		}
+	}()
 
 	runtimeConfigManager, err := state.NewRuntimeConfigManager(db)
 	if err != nil {
@@ -64,6 +75,7 @@ func main() {
 	go func() {
 		<-c
 		log.Println("Gracefully shutting down...")
+		heartbeatTicker.Stop() // Stop the heartbeat ticker
 		database.RemoveInstance(db)
 		os.Exit(0)
 	}()

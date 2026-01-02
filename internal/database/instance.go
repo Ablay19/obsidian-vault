@@ -3,45 +3,41 @@ package database
 import (
 	"database/sql"
 	"fmt"
-	"os"
-	"syscall"
 	"time"
 )
 
+const HEARTBEAT_THRESHOLD = 30 * time.Second // Time in seconds before an instance is considered stale
+
 // CheckExistingInstance checks if another instance of the bot is already running.
-func CheckExistingInstance(db *sql.DB) (int, error) {
-	var pid int
-	err := db.QueryRow("SELECT pid FROM instances WHERE id = 1").Scan(&pid)
+func CheckExistingInstance(db *sql.DB) error {
+	var lastHeartbeat time.Time
+	err := db.QueryRow("SELECT last_heartbeat FROM instances WHERE id = 1").Scan(&lastHeartbeat)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return 0, nil // No instance running
+			return nil // No instance recorded, safe to proceed
 		}
-		return 0, err
+		return fmt.Errorf("error querying last heartbeat: %v", err)
 	}
 
-	// Check if the process with the stored PID is still running
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		// On Unix-like systems, FindProcess always succeeds.
-		// So, an error here is unexpected.
-		return pid, fmt.Errorf("error finding process: %v", err)
+	if time.Since(lastHeartbeat) < HEARTBEAT_THRESHOLD {
+		return fmt.Errorf("another instance appears to be running (last heartbeat %s ago)", time.Since(lastHeartbeat).Round(time.Second))
 	}
 
-	// Sending signal 0 to a process checks if it exists.
-	err = process.Signal(syscall.Signal(0))
-	if err == nil {
-		return pid, fmt.Errorf("another instance is already running with PID: %d", pid)
-	}
-
-	// If the process does not exist, remove the stale PID from the database
-	_, err = db.Exec("DELETE FROM instances WHERE id = 1")
-	return 0, err
+	// If heartbeat is stale, we can assume the previous instance died.
+	// We'll proceed to add/update this instance's heartbeat.
+	return nil
 }
 
-// AddInstance records the current process's PID in the database.
+// AddInstance records the current process's presence in the database with a heartbeat.
 func AddInstance(db *sql.DB) error {
-	pid := os.Getpid()
-	_, err := db.Exec("INSERT INTO instances (id, pid, started_at) VALUES (1, ?, ?)", pid, time.Now())
+	// Using INSERT OR REPLACE to handle both initial insert and update if a stale record exists
+	_, err := db.Exec("INSERT OR REPLACE INTO instances (id, last_heartbeat) VALUES (1, ?)", time.Now())
+	return err
+}
+
+// UpdateInstanceHeartbeat updates the last_heartbeat timestamp for the current instance.
+func UpdateInstanceHeartbeat(db *sql.DB) error {
+	_, err := db.Exec("UPDATE instances SET last_heartbeat = ? WHERE id = 1", time.Now())
 	return err
 }
 
