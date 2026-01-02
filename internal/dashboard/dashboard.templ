@@ -1,4 +1,5 @@
 package dashboard
+import _"fmt"
 
 templ App() {
 <!DOCTYPE html>
@@ -54,6 +55,14 @@ templ App() {
             hx-trigger="load, every 10s"
             class="mt-4">
             <!-- database config -->
+        </div>
+
+		<div
+            id="api-keys-content"
+            hx-get="/dashboard/panels/api_keys"
+            hx-trigger="load, every 10s"
+            class="mt-4">
+            <!-- API Keys management -->
         </div>
     </main>
 

@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"io"
-	"log"
+	"log/slog"
 	"obsidian-automation/internal/database"
 	"os"
 	"strings"
@@ -57,7 +57,7 @@ func IsDuplicate(filePath string) bool {
 	if err != nil {
 		// Log the error but proceed as if not a duplicate to avoid blocking
 		// if the DB check fails for some reason.
-		log.Printf("Error checking if hash is processed: %v", err)
+		slog.Error("Error checking if hash is processed", "error", err)
 		return false
 	}
 	if isDup {

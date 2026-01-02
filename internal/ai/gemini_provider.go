@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
 
@@ -25,13 +25,13 @@ type GeminiProvider struct {
 // NewGeminiProvider creates a new Gemini provider for a single API key.
 func NewGeminiProvider(ctx context.Context, apiKey string, modelName string) *GeminiProvider {
 	if apiKey == "" {
-		log.Println("Gemini API key is empty. Gemini AI will be unavailable for this provider instance.")
+		slog.Info("Gemini API key is empty. Gemini AI will be unavailable for this provider instance.")
 		return nil
 	}
 
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
-		log.Printf("Error creating Gemini client with key %s: %v", apiKey, err)
+		slog.Error("Error creating Gemini client", "error", err, "api_key_partial", TruncateKeyForID(apiKey))
 		return nil
 	}
 

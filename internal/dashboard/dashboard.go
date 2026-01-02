@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"obsidian-automation/internal/ai"
-	"obsidian-automation/internal/status"
-	"obsidian-automation/internal/state" // Import the state package
-	"time"
-	"os" // New import
 	"net/url" // New import
+	"obsidian-automation/internal/ai"
+	"obsidian-automation/internal/state" // Import the state package
+	"obsidian-automation/internal/status"
+	"os" // New import
+	"time"
 )
 
 type ProcessedFile struct {
@@ -47,21 +47,21 @@ func (d *Dashboard) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("/api/services/status", d.handleServicesStatus)
 
 	// New routes for provider management
-	router.HandleFunc("/api/ai/providers", d.handleGetAIProviders)              // GET all provider info
-	router.HandleFunc("/api/ai/provider/config", d.handleGetProviderConfig)     // GET specific provider config
-	router.HandleFunc("/api/ai/provider/set", d.handleSetAIProvider)            // POST set active provider (may be redundant with new config)
-	router.HandleFunc("/api/ai/provider/toggle", d.handleToggleProviderStatus)  // POST enable/disable/pause provider
+	router.HandleFunc("/api/ai/providers", d.handleGetAIProviders)             // GET all provider info
+	router.HandleFunc("/api/ai/provider/config", d.handleGetProviderConfig)    // GET specific provider config
+	router.HandleFunc("/api/ai/provider/set", d.handleSetAIProvider)           // POST set active provider (may be redundant with new config)
+	router.HandleFunc("/api/ai/provider/toggle", d.handleToggleProviderStatus) // POST enable/disable/pause provider
 
 	// New routes for API key management
-	router.HandleFunc("/api/ai/keys", d.handleGetAPIKeys)                       // GET all API keys for a provider
-	router.HandleFunc("/api/ai/key/add", d.handleAddAPIKey)                     // POST add new API key
-	router.HandleFunc("/api/ai/key/remove", d.handleRemoveAPIKey)               // POST remove API key
-	router.HandleFunc("/api/ai/key/toggle", d.handleToggleAPIKeyStatus)         // POST enable/disable/block API key
-	router.HandleFunc("/api/ai/key/rotate", d.handleRotateAPIKey)               // POST rotate API key
+	router.HandleFunc("/api/ai/keys", d.handleGetAPIKeys)               // GET all API keys for a provider
+	router.HandleFunc("/api/ai/key/add", d.handleAddAPIKey)             // POST add new API key
+	router.HandleFunc("/api/ai/key/remove", d.handleRemoveAPIKey)       // POST remove API key
+	router.HandleFunc("/api/ai/key/toggle", d.handleToggleAPIKeyStatus) // POST enable/disable/block API key
+	router.HandleFunc("/api/ai/key/rotate", d.handleRotateAPIKey)       // POST rotate API key
 
 	// New routes for environment control
-	router.HandleFunc("/api/env", d.handleGetEnvironmentState)                  // GET current environment state
-	router.HandleFunc("/api/env/set", d.handleSetEnvironmentState)              // POST set environment state
+	router.HandleFunc("/api/env", d.handleGetEnvironmentState)     // GET current environment state
+	router.HandleFunc("/api/env/set", d.handleSetEnvironmentState) // POST set environment state
 
 	// Serve static files (CSS, JS)
 	router.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("internal/dashboard/static"))))
@@ -71,9 +71,18 @@ func (d *Dashboard) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("/dashboard/panels/file_processing", d.handleFileProcessingPanel)
 	router.HandleFunc("/dashboard/panels/users", d.handleUsersPanel)
 	router.HandleFunc("/dashboard/panels/db_config", d.handleDbConfigPanel)
+	router.HandleFunc("/dashboard/panels/api_keys", d.handleAPIKeysPanel) // New route for API Keys panel
 }
 
-
+// handleAPIKeysPanel serves the APIKeysPanel HTML fragment.
+func (d *Dashboard) handleAPIKeysPanel(w http.ResponseWriter, r *http.Request) {
+	config := d.rcm.GetConfig()
+	var apiKeysSlice []state.APIKeyState
+	for _, key := range config.APIKeys {
+		apiKeysSlice = append(apiKeysSlice, key)
+	}
+	APIKeysPanel(apiKeysSlice).Render(r.Context(), w)
+}
 
 // handleDashboard serves the main dashboard HTML page.
 func (d *Dashboard) handleDashboard(w http.ResponseWriter, r *http.Request) {
@@ -167,8 +176,18 @@ func (d *Dashboard) getAIProviders() struct {
 	Available []string `json:"available"`
 	Active    string   `json:"active"`
 } {
+	if d.aiService == nil {
+		return struct {
+			Available []string `json:"available"`
+			Active    string   `json:"active"`
+		}{
+			Available: []string{},
+			Active:    "",
+		}
+	}
+
 	config := d.rcm.GetConfig() // Get current runtime config
-	
+
 	var availableProviders []string
 	for name, ps := range config.Providers {
 		if ps.Enabled { // Only consider enabled providers
@@ -233,7 +252,7 @@ func (d *Dashboard) handleGetProviderConfig(w http.ResponseWriter, r *http.Reque
 
 	config := d.rcm.GetConfig()
 	providerState, providerExists := config.Providers[providerName]
-	
+
 	if !providerExists {
 		http.Error(w, fmt.Sprintf("Provider '%s' not found", providerName), http.StatusNotFound)
 		return
@@ -299,7 +318,7 @@ func (d *Dashboard) handleGetAPIKeys(w http.ResponseWriter, r *http.Request) {
 
 	providerName := r.URL.Query().Get("provider")
 	config := d.rcm.GetConfig()
-	
+
 	var apiKeys []state.APIKeyState
 	for _, keyState := range config.APIKeys {
 		if providerName == "" || keyState.Provider == providerName {
@@ -462,4 +481,3 @@ func (d *Dashboard) handleSetEnvironmentState(w http.ResponseWriter, r *http.Req
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"status":"success", "message":"Environment state updated to mode '%s'."}`, req.Mode)
 }
-

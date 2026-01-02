@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"log"
+	"log/slog"
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/config"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -132,7 +132,7 @@ func processFile(filePath, fileType string) ProcessedContent {
 	var text string
 	var err error
 
-	log.Printf("Processing %s: %s", fileType, filePath)
+	slog.Info("Processing file", "type", fileType, "path", filePath)
 
 	if fileType == "image" {
 		text, err = extractTextFromImage(filePath)
@@ -141,7 +141,7 @@ func processFile(filePath, fileType string) ProcessedContent {
 	}
 
 	if err != nil {
-		log.Printf("Error: %v", err)
+		slog.Error("Error processing file", "error", err)
 		return ProcessedContent{Category: "unprocessed", Tags: []string{"error"}}
 	}
 
@@ -158,18 +158,18 @@ func processFileWithAI(filePath, fileType string, aiService *ai.AIService, strea
 	var err error
 	var fileData []byte
 
-	log.Printf("Processing %s: %s", fileType, filePath)
+	slog.Info("Processing file with AI", "type", fileType, "path", filePath)
 	updateStatus("🔍 Extracting text...")
 
 	if fileType == "image" {
 		text, err = extractTextFromImage(filePath)
 		if err != nil {
-			log.Printf("Error extracting text from image: %v", err)
+			slog.Error("Error extracting text from image", "error", err)
 			// Continue with image data only if text extraction fails
 		}
-		fileData, err = ioutil.ReadFile(filePath)
+		fileData, err = os.ReadFile(filePath)
 		if err != nil {
-			log.Printf("Error reading image file: %v", err)
+			slog.Error("Error reading image file", "error", err)
 			updateStatus("⚠️ Could not read image file.")
 			return ProcessedContent{Category: "unprocessed", Tags: []string{"error", "read-error"}}
 		}
@@ -185,7 +185,7 @@ func processFileWithAI(filePath, fileType string, aiService *ai.AIService, strea
 	}
 
 	if err != nil || len(text) < 10 {
-		log.Printf("Text extraction issue: %v", err)
+		slog.Warn("Text extraction issue", "error", err)
 		result.Category = "unprocessed"
 		result.Tags = []string{"error"}
 		updateStatus("⚠️ Text extraction failed.")
@@ -193,10 +193,10 @@ func processFileWithAI(filePath, fileType string, aiService *ai.AIService, strea
 	}
 
 	if aiService != nil {
-		log.Println("Using AI for enhancement...")
+		slog.Info("Using AI for enhancement...")
 		provider, _, err := aiService.GetActiveProvider(context.Background())
 		if err != nil {
-			log.Printf("Error getting active AI provider: %v", err)
+			slog.Error("Error getting active AI provider", "error", err)
 			result.AIProvider = "None" // Fallback
 		} else {
 			result.AIProvider = provider.GetModelInfo().ProviderName
@@ -206,7 +206,7 @@ func processFileWithAI(filePath, fileType string, aiService *ai.AIService, strea
 		// Determine model to use based on whether image data is present
 		modelProvider, _, err := aiService.GetActiveProvider(context.Background())
 		if err != nil {
-			log.Printf("Error getting active AI provider for model selection: %v", err)
+			slog.Error("Error getting active AI provider for model selection", "error", err)
 			return result // Or handle error appropriately
 		}
 		modelToUse := modelProvider.GetModelInfo().ModelName
@@ -230,7 +230,7 @@ func processFileWithAI(filePath, fileType string, aiService *ai.AIService, strea
 
 		fullSummary, err := aiService.GenerateContent(context.Background(), summaryPrompt, fileData, modelToUse, streamCallback)
 		if err != nil {
-			log.Printf("Error from AI summary service: %v", err)
+			slog.Error("Error from AI summary service", "error", err)
 			// Fallback to basic classification if summary fails
 			updateStatus("⚠️ AI summary failed. Falling back to basic classification.")
 			return classifyContent(text)
@@ -241,7 +241,7 @@ func processFileWithAI(filePath, fileType string, aiService *ai.AIService, strea
 		// 2. Get the JSON data (non-streaming)
 		jsonStr, err := aiService.GenerateJSONData(context.Background(), text, language)
 		if err != nil {
-			log.Printf("Error from AI JSON service: %v", err)
+			slog.Error("Error from AI JSON service", "error", err)
 			// Proceed without JSON data, just use basic classification
 			updateStatus("⚠️ AI analysis failed. Using basic classification.")
 			basicResult := classifyContent(text)
@@ -257,7 +257,7 @@ func processFileWithAI(filePath, fileType string, aiService *ai.AIService, strea
 		}
 
 		if err := json.Unmarshal([]byte(jsonStr), &aiResult); err != nil {
-			log.Printf("Error parsing AI response JSON: %v", err)
+			slog.Error("Error parsing AI response JSON", "error", err)
 			updateStatus("⚠️ AI response parsing failed. Using basic classification.")
 			// Proceed without JSON data
 			basicResult := classifyContent(text)
@@ -272,7 +272,7 @@ func processFileWithAI(filePath, fileType string, aiService *ai.AIService, strea
 		}
 
 	} else {
-		log.Println("AI service unavailable, using basic classification")
+		slog.Info("AI service unavailable, using basic classification")
 		updateStatus("⚠️ AI service unavailable. Using basic classification.")
 		result = classifyContent(text)
 	}

@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/bot"
@@ -18,6 +18,9 @@ import (
 )
 
 func main() {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
 	config.LoadConfig() // Still load config for initial setup of things like dashboard port etc.
 
 	db := database.OpenDB()
@@ -25,12 +28,18 @@ func main() {
 
 	database.RunMigrations(db)
 
-	if err := database.CheckExistingInstance(db); err != nil {
-		log.Fatalf("Error checking for existing instance: %v", err)
+	for {
+		if err := database.CheckExistingInstance(db); err != nil {
+			slog.Info("Another instance is running, retrying in 15 seconds...", "error", err)
+			time.Sleep(15 * time.Second)
+		} else {
+			break // No other instance found, proceed with startup
+		}
 	}
 
 	if err := database.AddInstance(db); err != nil {
-		log.Fatalf("Error adding instance: %v", err)
+		slog.Error("Error adding instance", "error", err)
+		os.Exit(1)
 	}
 
 	// Start a goroutine to periodically update the instance heartbeat
@@ -38,21 +47,22 @@ func main() {
 	go func() {
 		for range heartbeatTicker.C {
 			if err := database.UpdateInstanceHeartbeat(db); err != nil {
-				log.Printf("Error updating instance heartbeat: %v", err)
+				slog.Error("Error updating instance heartbeat", "error", err)
 			}
 		}
 	}()
 
 	runtimeConfigManager, err := state.NewRuntimeConfigManager(db)
 	if err != nil {
-		log.Fatalf("Failed to initialize state manager: %v", err)
+		slog.Error("Failed to initialize state manager", "error", err)
+		os.Exit(1)
 	}
 
 	ctx := context.Background()
 	// Pass runtimeConfigManager instead of appConfig
 	aiService := ai.NewAIService(ctx, runtimeConfigManager)
 	if aiService == nil {
-		log.Println("AI Service failed to initialize. No AI providers available or configured. Proceeding without AI features.")
+		slog.Info("AI Service failed to initialize. No AI providers available or configured. Proceeding without AI features.")
 	}
 
 	router := http.NewServeMux()
@@ -64,9 +74,10 @@ func main() {
 	dashboardPort := config.AppConfig.Dashboard.Port // Dashboard port still comes from AppConfig
 	go func() {
 		addr := fmt.Sprintf(":%d", dashboardPort)
-		log.Printf("Starting HTTP server on %s for health and dashboard...", addr)
+		slog.Info("Starting HTTP server for health and dashboard...", "addr", addr)
 		if err := http.ListenAndServe(addr, router); err != nil {
-			log.Fatalf("HTTP server failed to start: %v", err)
+			slog.Error("HTTP server failed to start", "error", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -74,7 +85,7 @@ func main() {
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
-		log.Println("Gracefully shutting down...")
+		slog.Info("Gracefully shutting down...")
 		heartbeatTicker.Stop() // Stop the heartbeat ticker
 		database.RemoveInstance(db)
 		os.Exit(0)
@@ -82,6 +93,7 @@ func main() {
 
 	// bot.Run also needs runtimeConfigManager now
 	if err := bot.Run(db, aiService, runtimeConfigManager); err != nil {
-		log.Fatal(err)
+		slog.Error("Bot failed to run", "error", err)
+		os.Exit(1)
 	}
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -22,7 +22,7 @@ type GroqProvider struct {
 // NewGroqProvider creates a new Groq provider for a single API key.
 func NewGroqProvider(apiKey string, modelName string) *GroqProvider {
 	if apiKey == "" {
-		log.Println("Groq API key is empty. Groq AI will be unavailable for this provider instance.")
+		slog.Info("Groq API key is empty. Groq AI will be unavailable for this provider instance.")
 		return nil
 	}
 
