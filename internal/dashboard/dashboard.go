@@ -9,6 +9,8 @@ import (
 	"obsidian-automation/internal/status"
 	"obsidian-automation/internal/state" // Import the state package
 	"time"
+	"os" // New import
+	"net/url" // New import
 )
 
 type ProcessedFile struct {
@@ -68,6 +70,7 @@ func (d *Dashboard) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("/dashboard/panels/overview", d.handleOverviewPanel)
 	router.HandleFunc("/dashboard/panels/file_processing", d.handleFileProcessingPanel)
 	router.HandleFunc("/dashboard/panels/users", d.handleUsersPanel)
+	router.HandleFunc("/dashboard/panels/db_config", d.handleDbConfigPanel) // New route
 }
 
 type User struct {
@@ -133,6 +136,21 @@ func (d *Dashboard) handleUsersPanel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	UsersPanel(users).Render(r.Context(), w)
+}
+
+// handleDbConfigPanel serves the DbConfigPanel HTML fragment.
+func (d *Dashboard) handleDbConfigPanel(w http.ResponseWriter, r *http.Request) {
+	dbURL := os.Getenv("TURSO_DATABASE_URL")
+	u, err := url.Parse(dbURL)
+	if err != nil {
+		http.Error(w, "Failed to parse database URL", http.StatusInternalServerError)
+		return
+	}
+
+	dbType := u.Scheme
+	dbHost := u.Host
+
+	DbConfigPanel(dbType, dbHost).Render(r.Context(), w)
 }
 
 // handleServicesStatus provides the status of all monitored services.
