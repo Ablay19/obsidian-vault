@@ -35,7 +35,7 @@ This phase focuses on building the user-facing HTML interface for the dashboard 
 - [x] Task: Implement the base Templ layouts, configure static asset serving, and ensure HTMX fragment handling is correct. [f125867]
 - [x] Task: Build the "Bot Status & Runtime Monitoring" panel to display active processes and AI runtime info. [427a3af]
 - [x] Task: Build the "File Processing Panel" to show file status and summary previews. [1e8c21a]
-- [~] Task: connected Users management panel and db congfigs
+- [x] Task: connected Users management panel and db congfigs [bcd8c2e]
 - [ ] Task: Build the "Interactive Q&A Console" for real-time interaction with the AI.
 - [ ] Task: Build the "Settings & Config Management" UI to allow users to update keys and parameters.
 - [ ] Task: Conductor - User Manual Verification 'Frontend Layout and Rendering' (Protocol in workflow.md)
