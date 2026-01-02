@@ -44,6 +44,10 @@ func (d *Dashboard) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("/api/ai/key/remove", d.handleRemoveAPIKey)               // POST remove API key
 	router.HandleFunc("/api/ai/key/toggle", d.handleToggleAPIKeyStatus)         // POST enable/disable/block API key
 	router.HandleFunc("/api/ai/key/rotate", d.handleRotateAPIKey)               // POST rotate API key
+
+	// New routes for environment control
+	router.HandleFunc("/api/env", d.handleGetEnvironmentState)                  // GET current environment state
+	router.HandleFunc("/api/env/set", d.handleSetEnvironmentState)              // POST set environment state
 }
 
 // handleDashboard serves the main dashboard HTML page.
@@ -329,5 +333,49 @@ func (d *Dashboard) handleRotateAPIKey(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"status":"success", "message":"API key for provider '%s' rotated."}`, req.ProviderName)
+}
+
+// handleGetEnvironmentState handles GET requests to retrieve the current environment state.
+func (d *Dashboard) handleGetEnvironmentState(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Only GET method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	config := d.rcm.GetConfig()
+	envState := config.Environment
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(envState); err != nil {
+		http.Error(w, "Failed to encode environment state", http.StatusInternalServerError)
+		return
+	}
+}
+
+// handleSetEnvironmentState handles POST requests to update the bot's operational environment.
+func (d *Dashboard) handleSetEnvironmentState(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Mode             string `json:"mode"`
+		BackendHost      string `json:"backendHost"`
+		IsolationEnabled bool   `json:"isolationEnabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	err := d.rcm.SetEnvironmentState(req.Mode, req.BackendHost, req.IsolationEnabled)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintf(w, `{"status":"success", "message":"Environment state updated to mode '%s'."}`, req.Mode)
 }
 
