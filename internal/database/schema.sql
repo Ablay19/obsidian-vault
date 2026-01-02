@@ -3,7 +3,11 @@ CREATE TABLE IF NOT EXISTS processed_files (
     hash TEXT NOT NULL UNIQUE,
     category TEXT NOT NULL,
     timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    extracted_text TEXT
+    extracted_text TEXT,
+    summary TEXT,
+    topics TEXT,
+    questions TEXT,
+    ai_provider TEXT
 );
 
 CREATE TABLE IF NOT EXISTS instances (

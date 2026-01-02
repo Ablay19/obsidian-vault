@@ -269,9 +269,100 @@ func downloadFile(bot Bot, fileID, ext, token string) string {
 	return ""
 }
 
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"log"
+	"obsidian-automation/internal/ai"
+	"obsidian-automation/internal/status"
+	"obsidian-automation/internal/state" // Import the new state package
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+)
+
 // createObsidianNote orchestrates the whole process.
 func createObsidianNote(filePath, fileType string, message *tgbotapi.Message, bot Bot, chatID int64, messageID int) {
-	// ... note creation logic using package-level aiService
+	state := getUserState(message.From.ID)
+	updateStatus := func(status string) {
+		if messageID != 0 {
+			bot.Send(tgbotapi.NewEditMessageText(chatID, messageID, status))
+		}
+	}
+
+	streamCallback := func(chunk string) {
+		// This could be used to stream the response to the user in real-time
+	}
+
+	content := processFileWithAI(filePath, fileType, aiService, streamCallback, state.Language, updateStatus)
+
+	if content.Category == "unprocessed" || content.Category == "error" {
+		bot.Send(tgbotapi.NewMessage(chatID, "Could not process the file."))
+		return
+	}
+
+	// Create note content
+	var builder strings.Builder
+	builder.WriteString(fmt.Sprintf("# %s\n\n", time.Now().Format("2006-01-02_15-04-05")))
+	builder.WriteString(fmt.Sprintf("**Category:** %s\n", content.Category))
+	builder.WriteString(fmt.Sprintf("**AI Provider:** %s\n", content.AIProvider))
+	builder.WriteString(fmt.Sprintf("**Tags:** #%s\n\n", strings.Join(content.Tags, " #")))
+
+	if content.Summary != "" {
+		builder.WriteString("## Summary\n")
+		builder.WriteString(content.Summary + "\n\n")
+	}
+	if len(content.Topics) > 0 {
+		builder.WriteString("## Key Topics\n")
+		for _, topic := range content.Topics {
+			builder.WriteString(fmt.Sprintf("- %s\n", topic))
+		}
+		builder.WriteString("\n")
+	}
+	if len(content.Questions) > 0 {
+		builder.WriteString("## Review Questions\n")
+		for _, q := range content.Questions {
+			builder.WriteString(fmt.Sprintf("- %s\n", q))
+		}
+		builder.WriteString("\n")
+	}
+	builder.WriteString("## Extracted Text\n")
+	builder.WriteString("```\n")
+	builder.WriteString(content.Text)
+	builder.WriteString("\n```\n")
+
+	// Save the note
+	noteFilename := fmt.Sprintf("%s_%s.md", time.Now().Format("20060102_150405"), content.Category)
+	notePath := filepath.Join("vault", "Inbox", noteFilename)
+	err := os.WriteFile(notePath, []byte(builder.String()), 0644)
+	if err != nil {
+		log.Printf("Error writing note file: %v", err)
+		bot.Send(tgbotapi.NewMessage(chatID, "Error saving the note."))
+		return
+	}
+
+	// Save to database
+	hash, err := getFileHash(filePath)
+	if err != nil {
+		log.Printf("Error getting file hash: %v", err)
+	} else {
+		err := SaveProcessed(hash, content.Category, content.Text, content.Summary, content.Topics, content.Questions, content.AIProvider)
+		if err != nil {
+			log.Printf("Error saving processed file to DB: %v", err)
+		}
+	}
+
+	// Organize the note
+	organizeNote(notePath, content.Category)
+
+	bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("Note '%s' created successfully!", noteFilename)))
+	state.LastCreatedNote = noteFilename
+	state.LastProcessedFile = filePath
 }
 
 // formatTime formats a time.Time object into a human-readable string.

@@ -16,6 +16,9 @@ type HuggingFaceProvider struct {
 
 // NewHuggingFaceProvider creates a new HuggingFaceProvider.
 func NewHuggingFaceProvider(apiKey, model string) *HuggingFaceProvider {
+	if apiKey == "" {
+		return nil // Return nil if API key is empty
+	}
 	client := huggingface.NewInferenceClient(apiKey)
 	return &HuggingFaceProvider{
 		client: client,

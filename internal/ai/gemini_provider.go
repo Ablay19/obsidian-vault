@@ -141,9 +141,9 @@ func (p *GeminiProvider) Process(ctx context.Context, w io.Writer, system, promp
 		if streamErr != nil {
 			// Check for 429 specifically for higher-level handling (key rotation)
 			if gerr, ok := streamErr.(*googleapi.Error); ok && gerr.Code == 429 {
-				return "", fmt.Errorf("gemini_rate_limit_exceeded: %w", streamErr)
+				return fmt.Errorf("gemini_rate_limit_exceeded: %w", streamErr)
 			}
-			return "", streamErr
+			return streamErr
 		}
 		if len(resp.Candidates) > 0 {
 			candidate := resp.Candidates[0]

@@ -194,11 +194,22 @@ func processFileWithAI(filePath, fileType string, aiService *ai.AIService, strea
 
 	if aiService != nil {
 		log.Println("Using AI for enhancement...")
-		result.AIProvider = aiService.GetActiveProvider().GetModelInfo().ProviderName
+		provider, _, err := aiService.GetActiveProvider(context.Background())
+		if err != nil {
+			log.Printf("Error getting active AI provider: %v", err)
+			result.AIProvider = "None" // Fallback
+		} else {
+			result.AIProvider = provider.GetModelInfo().ProviderName
+		}
 		updateStatus("🤖 Generating summary...")
 
 		// Determine model to use based on whether image data is present
-		modelToUse := aiService.GetActiveProvider().GetModelInfo().ModelName
+		modelProvider, _, err := aiService.GetActiveProvider(context.Background())
+		if err != nil {
+			log.Printf("Error getting active AI provider for model selection: %v", err)
+			return result // Or handle error appropriately
+		}
+		modelToUse := modelProvider.GetModelInfo().ModelName
 		// If image data is present and the active provider is Gemini, we might want to use a vision-capable model
 		// This logic needs to be refined based on actual model capabilities and configuration
 		// For now, we'll just use the default configured model.
