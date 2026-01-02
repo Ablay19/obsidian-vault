@@ -1,7 +1,6 @@
 package state
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -324,4 +323,9 @@ func splitAPIKeys(keys string) []string {
 		}
 	}
 	return result
+}
+
+// GetDB returns the underlying database connection.
+func (rcm *RuntimeConfigManager) GetDB() *sql.DB {
+	return rcm.db
 }

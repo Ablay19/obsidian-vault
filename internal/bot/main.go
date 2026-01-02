@@ -7,6 +7,7 @@ import (
 	"log"
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/status"
+	"obsidian-automation/internal/state" // Import the new state package
 	"os"
 	"strings"
 	"sync"
@@ -19,6 +20,7 @@ import (
 var (
 	db         *sql.DB
 	aiService  *ai.AIService
+	rcm        *state.RuntimeConfigManager // Add package-level RCM
 	userStates = make(map[int64]*UserState)
 	stateMutex sync.RWMutex
 )
@@ -56,9 +58,10 @@ func (t *TelegramBot) Request(c tgbotapi.Chattable) (*tgbotapi.APIResponse, erro
 func (t *TelegramBot) GetFile(config tgbotapi.FileConfig) (tgbotapi.File, error) { return t.BotAPI.GetFile(config) }
 
 // Run initializes and starts the bot.
-func Run(database *sql.DB, ais *ai.AIService) error {
+func Run(database *sql.DB, ais *ai.AIService, runtimeConfigManager *state.RuntimeConfigManager) error {
 	db = database
 	aiService = ais
+	rcm = runtimeConfigManager // Assign to package-level variable
 
 	token := os.Getenv("TELEGRAM_BOT_TOKEN")
 	if token == "" {
@@ -148,7 +151,7 @@ func handleCommand(bot Bot, message *tgbotapi.Message) {
 		status.SetPaused(false)
 		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Bot is resumed."))
 	case "service_status":
-		statuses := status.GetServicesStatus(aiService, db)
+		statuses := status.GetServicesStatus(aiService, rcm)
 		var sb strings.Builder
 		sb.WriteString("📊 *Service Status*\n\n")
 		for _, s := range statuses {
@@ -203,7 +206,7 @@ func handleCommand(bot Bot, message *tgbotapi.Message) {
 		providerName := message.CommandArguments()
 		if providerName == "" {
 			var currentProviderName string
-			activeProvider := aiService.GetActiveProvider()
+			activeProvider, _, _ := aiService.GetActiveProvider(context.Background())
 			if activeProvider != nil {
 				currentProviderName = activeProvider.GetModelInfo().ProviderName
 			} else {
