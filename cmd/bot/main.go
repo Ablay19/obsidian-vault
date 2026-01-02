@@ -24,7 +24,7 @@ func main() {
 	database.ApplySchemaAndMigrations(db)
 
 	ctx := context.Background()
-	aiService := ai.NewAIService(ctx)
+	aiService := ai.NewAIService(ctx, &config.AppConfig)
 
 	router := http.NewServeMux()
 	bot.StartHealthServer(router)
