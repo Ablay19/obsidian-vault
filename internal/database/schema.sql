@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS processed_files (
     summary TEXT,
     topics TEXT,
     questions TEXT,
-    ai_provider TEXT
+    ai_provider TEXT,
+    user_id INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS instances (
@@ -20,4 +21,13 @@ CREATE TABLE IF NOT EXISTS runtime_config (
     id INTEGER PRIMARY KEY,
     config_data BLOB,
     updated_at DATETIME
+);
+
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY,
+    username TEXT,
+    first_name TEXT,
+    last_name TEXT,
+    language_code TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"log"
 	"obsidian-automation/internal/ai"
+	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/status"
 	"obsidian-automation/internal/state" // Import the new state package
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -54,8 +56,12 @@ type TelegramBot struct {
 }
 
 func (t *TelegramBot) Send(c tgbotapi.Chattable) (tgbotapi.Message, error) { return t.BotAPI.Send(c) }
-func (t *TelegramBot) Request(c tgbotapi.Chattable) (*tgbotapi.APIResponse, error) { return t.BotAPI.Request(c) }
-func (t *TelegramBot) GetFile(config tgbotapi.FileConfig) (tgbotapi.File, error) { return t.BotAPI.GetFile(config) }
+func (t *TelegramBot) Request(c tgbotapi.Chattable) (*tgbotapi.APIResponse, error) {
+	return t.BotAPI.Request(c)
+}
+func (t *TelegramBot) GetFile(config tgbotapi.FileConfig) (tgbotapi.File, error) {
+	return t.BotAPI.GetFile(config)
+}
 
 // Run initializes and starts the bot.
 func Run(database *sql.DB, ais *ai.AIService, runtimeConfigManager *state.RuntimeConfigManager) error {
@@ -118,6 +124,7 @@ func Run(database *sql.DB, ais *ai.AIService, runtimeConfigManager *state.Runtim
 
 // handleCommand processes text messages and commands.
 func handleCommand(bot Bot, message *tgbotapi.Message) {
+	database.UpsertUser(message.From)
 	state := getUserState(message.From.ID) // Get user state for language
 
 	if !message.IsCommand() {
@@ -248,6 +255,7 @@ func handleCommand(bot Bot, message *tgbotapi.Message) {
 
 // handlePhoto processes incoming photos.
 func handlePhoto(bot Bot, message *tgbotapi.Message, token string) {
+	database.UpsertUser(message.From)
 	status.UpdateActivity()
 	statusMsg, _ := bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Processing image..."))
 	photo := message.Photo[len(message.Photo)-1]
@@ -259,6 +267,7 @@ func handlePhoto(bot Bot, message *tgbotapi.Message, token string) {
 
 // handleDocument processes incoming documents.
 func handleDocument(bot Bot, message *tgbotapi.Message, token string) {
+	database.UpsertUser(message.From)
 	status.UpdateActivity()
 	// ... document handling logic
 }
@@ -268,23 +277,6 @@ func downloadFile(bot Bot, fileID, ext, token string) string {
 	// ... download logic
 	return ""
 }
-
-import (
-	"context"
-	"database/sql"
-	"fmt"
-	"log"
-	"obsidian-automation/internal/ai"
-	"obsidian-automation/internal/status"
-	"obsidian-automation/internal/state" // Import the new state package
-	"os"
-	"path/filepath"
-	"strings"
-	"sync"
-	"time"
-
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-)
 
 // createObsidianNote orchestrates the whole process.
 func createObsidianNote(filePath, fileType string, message *tgbotapi.Message, bot Bot, chatID int64, messageID int) {
@@ -351,7 +343,7 @@ func createObsidianNote(filePath, fileType string, message *tgbotapi.Message, bo
 	if err != nil {
 		log.Printf("Error getting file hash: %v", err)
 	} else {
-		err := SaveProcessed(hash, content.Category, content.Text, content.Summary, content.Topics, content.Questions, content.AIProvider)
+		err := SaveProcessed(hash, content.Category, content.Text, content.Summary, content.Topics, content.Questions, content.AIProvider, message.From.ID)
 		if err != nil {
 			log.Printf("Error saving processed file to DB: %v", err)
 		}
