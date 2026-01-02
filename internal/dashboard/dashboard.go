@@ -2,17 +2,12 @@ package dashboard
 
 import (
 	"database/sql"
-	"embed"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"obsidian-automation/internal/ai"
-	"obsidian-automation/internal/status" // Import the new status package
-	"path"
+	"obsidian-automation/internal/status"
 )
-
-//go:embed all:static
-var staticFiles embed.FS
 
 // Dashboard holds dependencies for the dashboard server.
 type Dashboard struct {
@@ -30,9 +25,8 @@ func NewDashboard(aiService *ai.AIService, db *sql.DB) *Dashboard {
 
 // RegisterRoutes registers the dashboard's HTTP handlers on the provided router.
 func (d *Dashboard) RegisterRoutes(router *http.ServeMux) {
-	fs := http.FileServer(http.FS(staticFiles))
 	router.HandleFunc("/", d.handleDashboard)
-	router.Handle("/static/", fs)
+	router.HandleFunc("/dashboard/content", d.handleDashboardContent)
 	router.HandleFunc("/api/services/status", d.handleServicesStatus)
 	router.HandleFunc("/api/ai/providers", d.handleGetAIProviders)
 	router.HandleFunc("/api/ai/provider/set", d.handleSetAIProvider)
@@ -40,17 +34,14 @@ func (d *Dashboard) RegisterRoutes(router *http.ServeMux) {
 
 // handleDashboard serves the main dashboard HTML page.
 func (d *Dashboard) handleDashboard(w http.ResponseWriter, r *http.Request) {
-    if r.URL.Path != "/" {
-        http.FileServer(http.FS(staticFiles)).ServeHTTP(w, r)
-        return
-    }
-    content, err := staticFiles.ReadFile(path.Join("static", "index.html"))
-    if err != nil {
-        http.Error(w, "Could not load dashboard page.", http.StatusInternalServerError)
-        return
-    }
-    w.Header().Set("Content-Type", "text/html")
-    w.Write(content)
+	App().Render(r.Context(), w)
+}
+
+// handleDashboardContent serves the main dashboard content.
+func (d *Dashboard) handleDashboardContent(w http.ResponseWriter, r *http.Request) {
+	services := status.GetServicesStatus(d.aiService, d.db)
+	providers := d.getAIProviders()
+	DashboardContent(services, providers).Render(r.Context(), w)
 }
 
 // handleServicesStatus provides the status of all monitored services.
@@ -65,19 +56,28 @@ func (d *Dashboard) handleServicesStatus(w http.ResponseWriter, r *http.Request)
 
 // handleGetAIProviders returns the available and active AI providers.
 func (d *Dashboard) handleGetAIProviders(w http.ResponseWriter, r *http.Request) {
+	providers := d.getAIProviders()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(providers)
+}
+
+func (d *Dashboard) getAIProviders() struct {
+	Available []string `json:"available"`
+	Active    string   `json:"active"`
+} {
 	if d.aiService == nil {
-		http.Error(w, "AI service not available", http.StatusInternalServerError)
-		return
+		return struct {
+			Available []string `json:"available"`
+			Active    string   `json:"active"`
+		}{}
 	}
-	providers := struct {
+	return struct {
 		Available []string `json:"available"`
 		Active    string   `json:"active"`
 	}{
 		Available: d.aiService.GetAvailableProviders(),
 		Active:    d.aiService.GetActiveProviderName(),
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(providers)
 }
 
 // handleSetAIProvider sets the active AI provider.
@@ -104,6 +104,6 @@ func (d *Dashboard) handleSetAIProvider(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"status":"success", "message":"AI provider set to %s"}`, req.Provider)
 }

@@ -8,7 +8,7 @@ This plan outlines the phases and tasks required to build the authoritative dash
 
 This phase focuses on building the core data structures and management layer for the bot's runtime configuration.
 
-- [ ] Task: Build `RuntimeConfigManager` struct to manage state in-memory with database persistence.
+- [~] Task: Build `RuntimeConfigManager` struct to manage state in-memory with database persistence.
 - [ ] Task: Define `ProviderState` and `APIKeyState` structs to model the state of AI providers and their keys.
 - [ ] Task: Refactor the AI Service to read its configuration exclusively from the `RuntimeConfigManager`.
 - [ ] Task: Conductor - User Manual Verification 'Foundation and State Management' (Protocol in workflow.md)

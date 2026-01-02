@@ -15,9 +15,11 @@ type Config struct {
 		Groq struct {
 			Model string `mapstructure:"model"`
 		} `mapstructure:"groq"`
-		ONNX struct {
-			ModelPath string `mapstructure:"model_path"`
-		} `mapstructure:"onnx"`
+
+		HuggingFace struct {
+			APIKey string `mapstructure:"api_key"`
+			Model  string `mapstructure:"model"`
+		} `mapstructure:"huggingface"`
 	} `mapstructure:"providers"`
 	Classification struct {
 		Patterns map[string][]string `mapstructure:"patterns"`

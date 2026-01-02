@@ -2,9 +2,12 @@ providers:
   gemini:
     model: gemini-3-pro-image-preview
   groq:
-    model: llama-3.1-8b-instant
+    model: llama-3.1-8b-instant # Or llama3-70b-8192, mixtral-8x7b-32768, etc.
+  huggingface:
+    model: "gpt2"
   onnx:
     model_path: "./models/model.onnx"
+    vocab_path: "./models/vocab.txt"
     enabled: true
 
 classification:

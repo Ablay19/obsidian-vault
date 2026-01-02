@@ -1,36 +1,35 @@
 # TODO - Obsidian Automation Bot
 
-This document outlines future improvements and tasks for the Obsidian Automation Bot, as identified during technical documentation review.
+This document outlines future improvements and tasks for the Obsidian Automation Bot.
 
+## Blockers
+*No active blockers.*
 
 ## Future Improvements
 
-1.  **Implement Ollama Fallback**: The groundwork is laid for an Ollama fallback, but the final implementation in `processor.go` is needed. This would provide an offline/local AI option if the Gemini service is completely unavailable.
-    *   **Status**: Pending
-    *   **Priority**: High
-    *   **Assigned To**: [Team/Developer Name]
-    *   **Notes**: Requires integration with `processor.go` to handle Ollama as an alternative AI service.
-
-2.  **Per-User Language Settings**: Store the language preference on a per-user or per-chat basis instead of a single global variable.
+1.  **Per-User Language Settings**: Store the language preference on a per-user or per-chat basis instead of a single global variable.
     *   **Status**: Pending
     *   **Priority**: Medium
-    *   **Assigned To**: [Team/Developer Name]
-    *   **Notes**: Involves modifying user data storage and language handling logic.
+    *   **Notes**: This would require a schema change to the `chats` table to add a `language` column and modifications to the `/lang` command handler.
 
-3.  **More Advanced Commands**: Implement a `/search` command to search within the Obsidian vault, or a `/config` command to change settings via the bot.
+2.  **Advanced Search Command**: Implement a `/search` command to search for notes within the Obsidian vault directly from Telegram.
     *   **Status**: Pending
     *   **Priority**: Medium
-    *   **Assigned To**: [Team/Developer Name]
-    *   **Notes**: Requires extending the bot's command handling and potentially interacting with the Obsidian vault structure.
+    *   **Notes**: This would involve adding a new command handler and logic to search Markdown files in the `vault` directory.
 
-4.  **Web Dashboard**: Create a simple web dashboard to view stats and bot status graphically. The `/status` endpoint already provides the raw data.
+3.  **Expanded File Type Support**: Add support for processing more document types, such as `.docx` or plain `.txt` files.
     *   **Status**: Pending
     *   **Priority**: Low
-    *   **Assigned To**: [Team/Developer Name]
-    *   **Notes**: Could leverage existing `health.go` for basic stats, but will need new UI components.
+    *   **Notes**: This would require integrating additional libraries or tools for text extraction from these formats (e.g., `pandoc` for `.docx`).
 
-5.  **Support for More File Types**: Add support for processing other document types like `.docx` or `.txt`.
-    *   **Status**: Pending
+4.  **Local AI Fallback (Ollama)**: Complete the integration with a local AI provider like Ollama as a fallback.
+    *   **Status**: Partially implemented
     *   **Priority**: Low
-    *   **Assigned To**: [Team/Developer Name]
-    *   **Notes**: May require external libraries or tools for parsing new file formats.
+    *   **Notes**: The `onnx_provider.go` exists but is not fully integrated. This would provide an offline-first option.
+
+## Completed
+
+-   **Web Dashboard**: A simple web dashboard to view stats and bot status graphically. The dashboard is now implemented using Templ, HTMX, and Alpine.js, providing a real-time view of the bot's status.
+-   **Refactor Dockerfile**: Simplified the `Dockerfile` to a single-stage build for a smaller image and faster builds. Removed the Python dependency and ONNX conversion steps.
+-   **Refactor Makefile**: Cleaned up the `Makefile`, improved help text, and simplified targets.
+-   **Database-driven PID Lock**: Replaced the file-based PID lock with a database-driven approach in `internal/database/instance.go` to better support containerized deployments.

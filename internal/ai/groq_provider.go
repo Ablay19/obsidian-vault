@@ -6,8 +6,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"obsidian-automation/internal/config"
-	"os"
 	"strings"
 	"time"
 
@@ -18,13 +16,13 @@ import (
 type GroqProvider struct {
 	client    groq.Client
 	modelName string
+	key       string // Store the key for identification/logging if needed
 }
 
-// NewGroqProvider creates a new Groq provider.
-func NewGroqProvider(ctx context.Context) *GroqProvider {
-	apiKey := os.Getenv("GROQ_API_KEY")
+// NewGroqProvider creates a new Groq provider for a single API key.
+func NewGroqProvider(apiKey string, modelName string) *GroqProvider {
 	if apiKey == "" {
-		log.Println("GROQ_API_KEY environment variable not set. Groq AI will be unavailable.")
+		log.Println("Groq API key is empty. Groq AI will be unavailable for this provider instance.")
 		return nil
 	}
 
@@ -32,7 +30,8 @@ func NewGroqProvider(ctx context.Context) *GroqProvider {
 
 	return &GroqProvider{
 		client:    client,
-		modelName: config.AppConfig.Providers.Groq.Model,
+		modelName: modelName,
+		key:       apiKey,
 	}
 }
 
@@ -48,7 +47,7 @@ func (p *GroqProvider) GenerateContent(ctx context.Context, prompt string, image
 		},
 	}
 
-	resp, err := p.client.CreateChatCompletion(req) // Removed ctx
+	resp, err := p.client.CreateChatCompletion(req)
 	if err != nil {
 		return "", fmt.Errorf("groq content generation failed: %w", err)
 	}
@@ -84,7 +83,7 @@ Text to analyze:
 		},
 	}
 
-	resp, err := p.client.CreateChatCompletion(req) // Removed ctx
+	resp, err := p.client.CreateChatCompletion(req)
 	if err != nil {
 		return "", fmt.Errorf("groq json generation failed: %w", err)
 	}
