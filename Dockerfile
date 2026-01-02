@@ -10,6 +10,9 @@ WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 
+# Install golangci-lint
+RUN go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
 # Copy the rest of the source code
 COPY . .
 
