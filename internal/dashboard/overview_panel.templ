@@ -1,0 +1,55 @@
+package dashboard
+
+import (
+	"obsidian-automation/internal/status"
+	"runtime"
+)
+
+templ OverviewPanel(services []status.ServiceStatus, aiProviders struct {
+	Available []string `json:"available"`
+	Active    string   `json:"active"`
+}) {
+	<div id="overview-panel">
+		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+			@StatsCard("⚡", "Status", getBotStatus(services))
+			@StatsCard("⏱️", "Uptime", getUptime(services))
+			@StatsCard("🔧", "AI Provider", aiProviders.Active)
+			@StatsCard("📊", "Last Activity", getLastActivity(services))
+		</div>
+
+		<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+			<div class="bg-gray-800 p-4 rounded-lg shadow">
+				<h2 class="text-xl font-bold mb-4">AI Provider Management</h2>
+				<div x-data={ "{ selectedProvider: '" + aiProviders.Active + "', message: '' }" }>
+					<div class="flex items-center space-x-2 mb-2">
+						<select x-model="selectedProvider" class="flex-grow p-2 border rounded-md bg-gray-700 border-gray-600 text-gray-100">
+							for _, provider := range aiProviders.Available {
+								<option value={ provider }>{ provider }</option>
+							}
+						</select>
+						<button @click="
+							fetch('/api/ai/provider/set', {
+								method: 'POST',
+								headers: { 'Content-Type': 'application/json' },
+								body: JSON.stringify({ provider: selectedProvider })
+							}).then(res => res.json()).then(data => {
+								message = data.message;
+								htmx.trigger('#dashboard-content', 'load');
+							})
+						" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Set Provider</button>
+					</div>
+					<p x-text="message" class="text-sm"></p>
+				</div>
+			</div>
+			<div class="bg-gray-800 p-4 rounded-lg shadow">
+				<h2 class="text-xl font-bold mb-4">System Information</h2>
+				<div class="grid grid-cols-2 gap-2 text-gray-300">
+					<div><span class="font-semibold">OS:</span> { runtime.GOOS }</div>
+					<div><span class="font-semibold">Architecture:</span> { runtime.GOARCH }</div>
+					<div><span class="font-semibold">Go Version:</span> { runtime.Version() }</div>
+					<div><span class="font-semibold">PID:</span> { getPID(services) }</div>
+				</div>
+			</div>
+		</div>
+	</div>
+}

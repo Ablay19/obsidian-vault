@@ -2,7 +2,6 @@ package dashboard
 
 import (
 	"obsidian-automation/internal/status"
-	"runtime"
 	"regexp"
 	"strings"
 )
@@ -27,7 +26,7 @@ templ App() {
 					</div>
 				</header>
 				<main>
-					<div id="dashboard-content" hx-get="/dashboard/content" hx-trigger="load, every 5s">
+					<div id="dashboard-content" hx-get="/dashboard/panels/overview" hx-trigger="load, every 5s">
 						// This div will be replaced by the dashboard content
 					</div>
 				</main>
@@ -42,153 +41,4 @@ templ App() {
 			</div>
 		</body>
 	</html>
-}
-
-templ DashboardContent(services []status.ServiceStatus, aiProviders struct {
-	Available []string `json:"available"`
-	Active    string   `json:"active"`
-}) {
-	<div class="flex">
-		// Sidebar for navigation
-		<aside class="w-64 bg-gray-800 p-4 min-h-screen">
-			<nav class="space-y-2">
-				<a href="#" class="block py-2 px-4 rounded hover:bg-gray-700" hx-get="/dashboard/panels/overview" hx-target="#main-content" hx-swap="outerHTML">Overview</a>
-				<a href="#" class="block py-2 px-4 rounded hover:bg-gray-700" hx-get="/dashboard/panels/ai-providers" hx-target="#main-content" hx-swap="outerHTML">AI Providers</a>
-				<a href="#" class="block py-2 px-4 rounded hover:bg-gray-700" hx-get="/dashboard/panels/api-keys" hx-target="#main-content" hx-swap="outerHTML">API Keys</a>
-				<a href="#" class="block py-2 px-4 rounded hover:bg-gray-700" hx-get="/dashboard/panels/environment" hx-target="#main-content" hx-swap="outerHTML">Environment</a>
-				// Add more navigation links here as needed
-			</nav>
-		</aside>
-
-		// Main content area
-		<section class="flex-grow p-4">
-			<div id="main-content" hx-trigger="load" hx-get="/dashboard/panels/overview">
-				// Default content (Overview Panel) will be loaded here
-			</div>
-		</section>
-	</div>
-}
-
-templ OverviewPanel(services []status.ServiceStatus, aiProviders struct {
-	Available []string `json:"available"`
-	Active    string   `json:"active"`
-}) {
-	<div id="overview-panel">
-		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-			@StatsCard("⚡", "Status", getBotStatus(services))
-			@StatsCard("⏱️", "Uptime", getUptime(services))
-			@StatsCard("🔧", "AI Provider", aiProviders.Active)
-			@StatsCard("📊", "Last Activity", getLastActivity(services))
-		</div>
-
-		<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-			<div class="bg-gray-800 p-4 rounded-lg shadow">
-				<h2 class="text-xl font-bold mb-4">AI Provider Management</h2>
-				<div x-data={ "{ selectedProvider: '" + aiProviders.Active + "', message: '' }" }>
-					<div class="flex items-center space-x-2 mb-2">
-						<select x-model="selectedProvider" class="flex-grow p-2 border rounded-md bg-gray-700 border-gray-600 text-gray-100">
-							for _, provider := range aiProviders.Available {
-								<option value={ provider }>{ provider }</option>
-							}
-						</select>
-						<button @click="
-							fetch('/api/ai/provider/set', {
-								method: 'POST',
-								headers: { 'Content-Type': 'application/json' },
-								body: JSON.stringify({ provider: selectedProvider })
-							}).then(res => res.json()).then(data => {
-								message = data.message;
-								htmx.trigger('#dashboard-content', 'load');
-							})
-						" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Set Provider</button>
-					</div>
-					<p x-text="message" class="text-sm"></p>
-				</div>
-			</div>
-			<div class="bg-gray-800 p-4 rounded-lg shadow">
-				<h2 class="text-xl font-bold mb-4">System Information</h2>
-				<div class="grid grid-cols-2 gap-2 text-gray-300">
-					<div><span class="font-semibold">OS:</span> { runtime.GOOS }</div>
-					<div><span class="font-semibold">Architecture:</span> { runtime.GOARCH }</div>
-					<div><span class="font-semibold">Go Version:</span> { runtime.Version() }</div>
-					<div><span class="font-semibold">PID:</span> { getPID(services) }</div>
-				</div>
-			</div>
-		</div>
-	</div>
-}
-
-
-templ StatsCard(icon, label, value string) {
-	<div class="bg-white p-4 rounded-lg shadow flex items-center">
-		<div class="text-3xl mr-4">{ icon }</div>
-		<div>
-			<div class="text-gray-500">{ label }</div>
-			<div class="text-2xl font-bold">{ value }</div>
-		</div>
-	</div>
-}
-
-
-func getBotStatus(services []status.ServiceStatus) string {
-	for _, s := range services {
-		if s.Name == "Bot Core" {
-			return s.Status
-		}
-	}
-	return "N/A"
-}
-
-func getUptime(services []status.ServiceStatus) string {
-	for _, s := range services {
-		if s.Name == "Bot Core" {
-			// Assuming details contains "Uptime: 1h2m3.456s,"
-			re := regexp.MustCompile(`Uptime: ([\w.-]+)`)
-			matches := re.FindStringSubmatch(s.Details)
-			if len(matches) > 1 {
-				return matches[1]
-			}
-		}
-	}
-	return "N/A"
-}
-
-func getLastActivity(services []status.ServiceStatus) string {
-	for _, s := range services {
-		if s.Name == "Bot Core" {
-			// Assuming details contains "Last Activity: 2024-01-01 12:00:00"
-			re := regexp.MustCompile(`Last Activity: (.*)`)
-			matches := re.FindStringSubmatch(s.Details)
-			if len(matches) > 1 {
-				return matches[1]
-			}
-		}
-	}
-	return "N/A"
-}
-
-func getPID(services []status.ServiceStatus) string {
-	for _, s := range services {
-		if s.Name == "Bot Core" {
-			// Assuming details contains "PID: 12345"
-			re := regexp.MustCompile(`PID: (\d+)`)
-			matches := re.FindStringSubmatch(s.Details)
-			if len(matches) > 1 {
-				return matches[1]
-			}
-		}
-	}
-	return "N/A"
-}
-
-// Helper to extract PID from a string.
-func ExtractPID(details string) string {
-    // Example format: "PID: 12345, Uptime: ..., Last Activity: ..."
-    parts := strings.Split(details, ", ")
-    for _, part := range parts {
-        if strings.HasPrefix(part, "PID: ") {
-            return strings.TrimSpace(strings.TrimPrefix(part, "PID: "))
-        }
-    }
-    return ""
 }
