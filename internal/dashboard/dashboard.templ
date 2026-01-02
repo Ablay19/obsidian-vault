@@ -459,10 +459,13 @@ templ App() {
 					<div id="dashboard-content" hx-get="/dashboard/panels/overview" hx-trigger="load, every 5s">
 						// This div will be replaced by the dashboard content
 					</div>
-				</main>
-				<div id="file-processing-content" hx-get="/dashboard/panels/file_processing" hx-trigger="load, every 10s" class="mt-4">
+					<div id="file-processing-content" hx-get="/dashboard/panels/file_processing" hx-trigger="load, every 10s" class="mt-4">
 						// This div will be replaced by the file processing content
 					</div>
+					<div id="users-content" hx-get="/dashboard/panels/users" hx-trigger="load, every 10s" class="mt-4">
+						// This div will be replaced by the users content
+					</div>
+				</main>
 				<footer class="sajid text-center text-sm text-gray-500 mt-8">
 					<p>Obsidian Bot Dashboard &copy; 2026</p>
 					<p>

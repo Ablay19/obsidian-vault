@@ -67,6 +67,16 @@ func (d *Dashboard) RegisterRoutes(router *http.ServeMux) {
 	// Panel rendering routes
 	router.HandleFunc("/dashboard/panels/overview", d.handleOverviewPanel)
 	router.HandleFunc("/dashboard/panels/file_processing", d.handleFileProcessingPanel)
+	router.HandleFunc("/dashboard/panels/users", d.handleUsersPanel)
+}
+
+type User struct {
+	ID           int64
+	Username     string
+	FirstName    string
+	LastName     string
+	LanguageCode string
+	CreatedAt    time.Time
 }
 
 // handleDashboard serves the main dashboard HTML page.
@@ -103,16 +113,26 @@ func (d *Dashboard) handleFileProcessingPanel(w http.ResponseWriter, r *http.Req
 	FileProcessingPanel(files).Render(r.Context(), w)
 }
 
-// handleDashboard serves the main dashboard HTML page.
-func (d *Dashboard) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	App().Render(r.Context(), w)
-}
+// handleUsersPanel serves the UsersPanel HTML fragment.
+func (d *Dashboard) handleUsersPanel(w http.ResponseWriter, r *http.Request) {
+	rows, err := d.db.Query("SELECT id, username, first_name, last_name, language_code, created_at FROM users ORDER BY created_at DESC")
+	if err != nil {
+		http.Error(w, "Failed to query database", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
 
-// handleOverviewPanel serves the OverviewPanel HTML fragment.
-func (d *Dashboard) handleOverviewPanel(w http.ResponseWriter, r *http.Request) {
-	services := status.GetServicesStatus(d.aiService, d.rcm)
-	providers := d.getAIProviders()
-	OverviewPanel(services, providers).Render(r.Context(), w)
+	var users []User
+	for rows.Next() {
+		var user User
+		if err := rows.Scan(&user.ID, &user.Username, &user.FirstName, &user.LastName, &user.LanguageCode, &user.CreatedAt); err != nil {
+			http.Error(w, "Failed to scan database rows", http.StatusInternalServerError)
+			return
+		}
+		users = append(users, user)
+	}
+
+	UsersPanel(users).Render(r.Context(), w)
 }
 
 // handleServicesStatus provides the status of all monitored services.
