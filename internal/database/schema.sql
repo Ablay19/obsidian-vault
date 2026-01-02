@@ -3,16 +3,11 @@ CREATE TABLE IF NOT EXISTS processed_files (
     hash TEXT NOT NULL UNIQUE,
     category TEXT NOT NULL,
     timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    extracted_text TEXT,
-    summary TEXT,
-    topics TEXT,
-    questions TEXT,
-    ai_provider TEXT,
-    user_id INTEGER
+    extracted_text TEXT
 );
 
 CREATE TABLE IF NOT EXISTS instances (
-    id INTEGER PRIMARY KEY CHECK (id = 1), -- Ensures only one row can exist
+    id INTEGER PRIMARY KEY CHECK (id = 1),
     pid INTEGER NOT NULL,
     started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -21,13 +16,4 @@ CREATE TABLE IF NOT EXISTS runtime_config (
     id INTEGER PRIMARY KEY,
     config_data BLOB,
     updated_at DATETIME
-);
-
-CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY,
-    username TEXT,
-    first_name TEXT,
-    last_name TEXT,
-    language_code TEXT,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
