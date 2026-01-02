@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"io"
+	"time"
 )
 
 // AIProvider defines the interface for AI services.
@@ -19,6 +20,11 @@ type AIProvider interface {
 
 // ModelInfo holds information about an AI model.
 type ModelInfo struct {
-	ProviderName string `json:"provider_name"`
-	ModelName    string `json:"model_name"`
+	ProviderName  string    `json:"provider_name"`
+	ModelName     string    `json:"model_name"`
+	KeyID         string    `json:"key_id,omitempty"`
+	Enabled       bool      `json:"enabled"`
+	Blocked       bool      `json:"blocked"`
+	BlockedReason string    `json:"blocked_reason,omitempty"`
+	LastUsedAt    time.Time `json:"last_used_at,omitempty"`
 }

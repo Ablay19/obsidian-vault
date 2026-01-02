@@ -32,6 +32,9 @@ func main() {
 	ctx := context.Background()
 	// Pass runtimeConfigManager instead of appConfig
 	aiService := ai.NewAIService(ctx, runtimeConfigManager)
+	if aiService == nil {
+		log.Println("AI Service failed to initialize. No AI providers available or configured. Proceeding without AI features.")
+	}
 
 	router := http.NewServeMux()
 	bot.StartHealthServer(router) // This needs to be updated to use runtimeConfigManager later

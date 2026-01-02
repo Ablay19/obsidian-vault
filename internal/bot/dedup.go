@@ -8,15 +8,16 @@ import (
 	"log"
 	"obsidian-automation/internal/database"
 	"os"
+	"strings"
 )
 
 var processedHashes = make(map[string]string)
 
-func SaveProcessed(hash, category, text string) error {
+func SaveProcessed(hash, category, text, summary string, topics []string, questions []string, ai_provider string) error {
 	_, err := database.DB.Exec(
-		`INSERT INTO processed_files (hash, category, extracted_text)
-		 VALUES (?, ?, ?)`,
-		hash, category, text,
+		`INSERT INTO processed_files (hash, category, extracted_text, summary, topics, questions, ai_provider)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		hash, category, text, summary, strings.Join(topics, ", "), strings.Join(questions, ", "), ai_provider,
 	)
 	return err
 }

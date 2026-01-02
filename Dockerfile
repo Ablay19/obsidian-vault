@@ -13,8 +13,12 @@ RUN go mod download
 # Copy the rest of the source code
 COPY . .
 
+# Generate Go code from Templ files
+RUN go install github.com/a-h/templ/cmd/templ@latest
+RUN templ generate ./...
+
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -o telegram-bot ./cmd/bot
+RUN CGO_ENABLED=1 GOOS=linux go build -o telegram-bot ./cmd/bot
 
 # =====================
 # Runtime Stage

@@ -1,0 +1,34 @@
+package dashboard
+
+templ FileProcessingPanel(files []ProcessedFile) {
+	<div class="bg-gray-800 p-4 rounded-lg shadow-lg">
+		<h2 class="text-xl font-bold mb-4">Recent Files</h2>
+		<div class="overflow-x-auto">
+			<table class="min-w-full bg-gray-800">
+				<thead>
+					<tr>
+						<th class="py-2 px-4 border-b border-gray-700 text-left">Category</th>
+						<th class="py-2 px-4 border-b border-gray-700 text-left">Summary</th>
+						<th class="py-2 px-4 border-b border-gray-700 text-left">AI Provider</th>
+						<th class="py-2 px-4 border-b border-gray-700 text-left">Timestamp</th>
+					</tr>
+				</thead>
+				<tbody>
+					if len(files) == 0 {
+						<tr>
+							<td colspan="4" class="py-4 px-4 text-center">No recent files</td>
+						</tr>
+					}
+					for _, file := range files {
+						<tr>
+							<td class="py-2 px-4 border-b border-gray-700">{ file.Category }</td>
+							<td class="py-2 px-4 border-b border-gray-700">{ file.Summary.String }</td>
+							<td class="py-2 px-4 border-b border-gray-700">{ file.AiProvider.String }</td>
+							<td class="py-2 px-4 border-b border-gray-700">{ file.Timestamp.Format("2006-01-02 15:04") }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}

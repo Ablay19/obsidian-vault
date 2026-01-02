@@ -1,0 +1,11 @@
+package dashboard
+
+templ StatsCard(icon, title, value string) {
+    <div class="bg-gray-800 p-4 rounded-lg shadow flex items-center space-x-4">
+        <div class="text-2xl">{ icon }</div>
+        <div>
+            <div class="text-gray-400 text-sm">{ title }</div>
+            <div class="text-white text-xl font-bold">{ value }</div>
+        </div>
+    </div>
+}

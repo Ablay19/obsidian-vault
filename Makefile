@@ -56,6 +56,11 @@ status: ## Show container status.
 # Restart the container.
 restart: down up ## Restart the container.
 
+sqlc-generate: ## Generate SQLC code from queries.
+	@echo "Generating SQLC code..."
+	@sqlc generate
+	@echo "✅ SQLC code generated successfully."
+
 # Show this help message.
 help: ## Show this help message.
 	@echo "Usage: make [target]"

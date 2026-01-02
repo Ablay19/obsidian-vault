@@ -8,7 +8,20 @@ import (
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/status"
 	"obsidian-automation/internal/state" // Import the state package
+	"time"
 )
+
+type ProcessedFile struct {
+	ID            int64
+	Hash          string
+	Category      string
+	Timestamp     time.Time
+	ExtractedText sql.NullString
+	Summary       sql.NullString
+	Topics        sql.NullString
+	Questions     sql.NullString
+	AiProvider    sql.NullString
+}
 
 // Dashboard holds dependencies for the dashboard server.
 type Dashboard struct {
@@ -53,6 +66,41 @@ func (d *Dashboard) RegisterRoutes(router *http.ServeMux) {
 
 	// Panel rendering routes
 	router.HandleFunc("/dashboard/panels/overview", d.handleOverviewPanel)
+	router.HandleFunc("/dashboard/panels/file_processing", d.handleFileProcessingPanel)
+}
+
+// handleDashboard serves the main dashboard HTML page.
+func (d *Dashboard) handleDashboard(w http.ResponseWriter, r *http.Request) {
+	App().Render(r.Context(), w)
+}
+
+// handleOverviewPanel serves the OverviewPanel HTML fragment.
+func (d *Dashboard) handleOverviewPanel(w http.ResponseWriter, r *http.Request) {
+	services := status.GetServicesStatus(d.aiService, d.rcm)
+	providers := d.getAIProviders()
+	OverviewPanel(services, providers).Render(r.Context(), w)
+}
+
+// handleFileProcessingPanel serves the FileProcessingPanel HTML fragment.
+func (d *Dashboard) handleFileProcessingPanel(w http.ResponseWriter, r *http.Request) {
+	rows, err := d.db.Query("SELECT id, hash, category, timestamp, extracted_text, summary, topics, questions, ai_provider FROM processed_files ORDER BY timestamp DESC LIMIT 10")
+	if err != nil {
+		http.Error(w, "Failed to query database", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var files []ProcessedFile
+	for rows.Next() {
+		var file ProcessedFile
+		if err := rows.Scan(&file.ID, &file.Hash, &file.Category, &file.Timestamp, &file.ExtractedText, &file.Summary, &file.Topics, &file.Questions, &file.AiProvider); err != nil {
+			http.Error(w, "Failed to scan database rows", http.StatusInternalServerError)
+			return
+		}
+		files = append(files, file)
+	}
+
+	FileProcessingPanel(files).Render(r.Context(), w)
 }
 
 // handleDashboard serves the main dashboard HTML page.

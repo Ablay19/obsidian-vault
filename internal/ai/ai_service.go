@@ -7,33 +7,13 @@ import (
 	"log"
 	"strings"
 	"sync"
-	"time" // Added for time.Time comparison
 
 	st "obsidian-automation/internal/state" // Import the state package
 )
 
-// ModelInfo extends existing ModelInfo to include key-specific details for dashboard display.
-type ModelInfo struct {
-	ProviderName string `json:"provider_name"`
-	ModelName    string `json:"model_name"`
-	KeyID        string `json:"key_id,omitempty"`
-	Enabled      bool   `json:"enabled"`
-	Blocked      bool   `json:"blocked"`
-	BlockedReason string `json:"blocked_reason,omitempty"`
-	LastUsedAt   time.Time `json:"last_used_at,omitempty"`
-}
 
-// AIProvider defines the interface for AI services.
-type AIProvider interface {
-	// Process sends a request to the AI service and returns a stream of responses.
-	Process(ctx context.Context, w io.Writer, system, prompt string, images []string) error
-	// GenerateContent streams a human-readable response from AI.
-	GenerateContent(ctx context.Context, prompt string, imageData []byte, modelType string, streamCallback func(string)) (string, error)
-	// GenerateJSONData gets structured data in JSON format from AI.
-	GenerateJSONData(ctx context.Context, text, language string) (string, error)
-	// GetModelInfo returns information about the model.
-	GetModelInfo() ModelInfo
-}
+
+
 
 // AIService manages multiple AI providers and selects the active one.
 type AIService struct {
@@ -52,7 +32,16 @@ func NewAIService(ctx context.Context, sm *st.RuntimeConfigManager) *AIService {
 
 	s.initializeProviders(ctx)
 
-	if len(s.providers) == 0 {
+	// Check if any actual providers were initialized
+	hasInitializedProviders := false
+	for _, keyProviders := range s.providers {
+		if len(keyProviders) > 0 {
+			hasInitializedProviders = true
+			break
+		}
+	}
+
+	if !hasInitializedProviders {
 		log.Println("No AI providers could be initialized from RuntimeConfigManager. AI features will be unavailable.")
 		return nil
 	}
@@ -80,29 +69,59 @@ func (s *AIService) initializeProviders(ctx context.Context) {
 		s.providers[providerName] = make(map[string]AIProvider)
 		for keyID, keyState := range currentConfig.APIKeys {
 			if keyState.Provider == providerName && keyState.Enabled && !keyState.Blocked {
-				var provider AIProvider
-				// Assuming ProviderState now has a ModelName field which is set during RuntimeConfigManager initialization
-				modelName := providerState.ModelName 
+				if keyState.Value == "" {
+					log.Printf("Skipping %s provider for key %s (ID: %s) due to empty API key.", providerName, truncateString(keyState.Value, 5), truncateString(keyID, 8))
+					continue
+				}
+
+				var provider AIProvider // This is the interface type
+				modelName := providerState.ModelName
+
+				// Use temporary concrete pointers to check for nil correctly
+				var tempGeminiProvider *GeminiProvider
+				var tempGroqProvider *GroqProvider
+				var tempHuggingFaceProvider *HuggingFaceProvider
 
 				switch providerName {
 				case "Gemini":
-					provider = NewGeminiProvider(ctx, keyState.Value, modelName)
+					tempGeminiProvider = NewGeminiProvider(ctx, keyState.Value, modelName)
+					if tempGeminiProvider == nil { // Check concrete type directly
+						log.Printf("Failed to initialize Gemini provider for key %s (ID: %s). Skipping.", truncateString(keyState.Value, 5), truncateString(keyID, 8))
+						continue
+					}
+					provider = tempGeminiProvider
 				case "Groq":
-					provider = NewGroqProvider(keyState.Value, modelName)
+					tempGroqProvider = NewGroqProvider(keyState.Value, modelName)
+					if tempGroqProvider == nil { // Check concrete type directly
+						log.Printf("Failed to initialize Groq provider for key %s (ID: %s). Skipping.", truncateString(keyState.Value, 5), truncateString(keyID, 8))
+						continue
+					}
+					provider = tempGroqProvider
 				case "Hugging Face":
-					provider = NewHuggingFaceProvider(keyState.Value, modelName)
+					tempHuggingFaceProvider = NewHuggingFaceProvider(keyState.Value, modelName)
+					if tempHuggingFaceProvider == nil { // Check concrete type directly
+						log.Printf("Failed to initialize Hugging Face provider for key %s (ID: %s). Skipping.", truncateString(keyState.Value, 5), truncateString(keyID, 8))
+						continue
+					}
+					provider = tempHuggingFaceProvider
 				default:
 					log.Printf("Unknown provider type %s for key %s. Skipping.", providerName, keyID)
 					continue
 				}
 
-				if provider != nil {
-					s.providers[providerName][keyID] = provider
-					log.Printf("Initialized %s provider with key %s (ID: %s)", providerName, keyState.Value[:5]+"...", keyID[:8]+"...")
-				}
+				s.providers[providerName][keyID] = provider // Now 'provider' should genuinely be non-nil if reached here
+				log.Printf("Initialized %s provider with key %s (ID: %s)", providerName, truncateString(keyState.Value, 5), truncateString(keyID, 8))
 			}
 		}
 	}
+}
+
+// truncateString safely truncates a string for logging purposes.
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
 
 // SetProvider changes the active AI provider. (This now conceptually means setting the preferred provider,
@@ -132,7 +151,6 @@ func (s *AIService) GetActiveProviderName() string {
 	defer s.mu.RUnlock()
 	currentConfig := s.sm.GetConfig()
 	// TODO: Implement storing active provider preference in RuntimeConfig. For now, use first enabled.
-	var preferredProviderName string
 	for name, ps := range currentConfig.Providers {
 		if ps.Enabled { // Arbitrarily pick first enabled
 				return name
@@ -183,7 +201,7 @@ func (s *AIService) GetProvidersInfo() []ModelInfo {
 	defer s.mu.RUnlock()
 
 	var infos []ModelInfo
-	for providerName, keyProviders := range s.providers {
+	for _, keyProviders := range s.providers {
 		for keyID, provider := range keyProviders {
 			info := provider.GetModelInfo()
 			// Add key-specific info
