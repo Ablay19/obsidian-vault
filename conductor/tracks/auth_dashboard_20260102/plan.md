@@ -19,7 +19,7 @@ This phase focuses on building the core data structures and management layer for
 
 This phase implements the backend HTTP handlers that will allow the dashboard to mutate the bot's state.
 
-- [ ] Task: Implement dashboard HTTP handlers for managing AI providers and API keys (enable, disable, rotate).
+- [x] Task: Implement dashboard HTTP handlers for managing AI providers and API keys (enable, disable, rotate). [550b00d]
 - [ ] Task: Implement dashboard HTTP handlers for controlling the runtime environment (switching between dev/prod).
 - [ ] Task: Enforce runtime configuration checks within the bot's logic before all AI provider calls.
 - [ ] Task: Implement the persistence logic to save critical state changes to the database.
