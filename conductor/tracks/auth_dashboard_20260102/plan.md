@@ -31,7 +31,7 @@ This phase implements the backend HTTP handlers that will allow the dashboard to
 
 This phase focuses on building the user-facing HTML interface for the dashboard using Templ and HTMX.
 
-- [ ] Task: Design and implement the main panels, menus, and navigation sections for the dashboard UI.
+- [x] Task: Design and implement the main panels, menus, and navigation sections for the dashboard UI. [56baa3f]
 - [ ] Task: Implement the base Templ layouts, configure static asset serving, and ensure HTMX fragment handling is correct.
 - [ ] Task: Build the "Bot Status & Runtime Monitoring" panel to display active processes and AI runtime info.
 - [ ] Task: Build the "File Processing Panel" to show file status and summary previews.
