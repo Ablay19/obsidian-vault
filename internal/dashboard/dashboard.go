@@ -29,7 +29,6 @@ func NewDashboard(aiService *ai.AIService, rcm *state.RuntimeConfigManager, db *
 // RegisterRoutes registers the dashboard's HTTP handlers on the provided router.
 func (d *Dashboard) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("/", d.handleDashboard)
-	router.HandleFunc("/dashboard/content", d.handleDashboardContent)
 	router.HandleFunc("/api/services/status", d.handleServicesStatus)
 
 	// New routes for provider management
@@ -48,6 +47,12 @@ func (d *Dashboard) RegisterRoutes(router *http.ServeMux) {
 	// New routes for environment control
 	router.HandleFunc("/api/env", d.handleGetEnvironmentState)                  // GET current environment state
 	router.HandleFunc("/api/env/set", d.handleSetEnvironmentState)              // POST set environment state
+
+	// Serve static files (CSS, JS)
+	router.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("internal/dashboard/static"))))
+
+	// Panel rendering routes
+	router.HandleFunc("/dashboard/panels/overview", d.handleOverviewPanel)
 }
 
 // handleDashboard serves the main dashboard HTML page.
@@ -55,11 +60,11 @@ func (d *Dashboard) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	App().Render(r.Context(), w)
 }
 
-// handleDashboardContent serves the main dashboard content.
-func (d *Dashboard) handleDashboardContent(w http.ResponseWriter, r *http.Request) {
+// handleOverviewPanel serves the OverviewPanel HTML fragment.
+func (d *Dashboard) handleOverviewPanel(w http.ResponseWriter, r *http.Request) {
 	services := status.GetServicesStatus(d.aiService, d.rcm)
 	providers := d.getAIProviders()
-	DashboardContent(services, providers).Render(r.Context(), w)
+	OverviewPanel(services, providers).Render(r.Context(), w)
 }
 
 // handleServicesStatus provides the status of all monitored services.
