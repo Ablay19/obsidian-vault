@@ -22,7 +22,15 @@ func main() {
 	db := database.OpenDB()
 	defer db.Close()
 
-	database.ApplySchemaAndMigrations(db)
+	database.RunMigrations(db)
+
+	if pid, err := database.CheckExistingInstance(db); err != nil {
+		log.Fatalf("Error checking for existing instance: %v. PID: %d", err, pid)
+	}
+
+	if err := database.AddInstance(db); err != nil {
+		log.Fatalf("Error adding instance: %v", err)
+	}
 
 	runtimeConfigManager, err := state.NewRuntimeConfigManager(db)
 	if err != nil {
@@ -55,6 +63,8 @@ func main() {
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
+		log.Println("Gracefully shutting down...")
+		database.RemoveInstance(db)
 		os.Exit(0)
 	}()
 
