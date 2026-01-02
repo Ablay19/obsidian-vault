@@ -1,0 +1,17 @@
+package dashboard
+
+templ DbConfigPanel(dbType string, dbHost string) {
+	<div class="bg-gray-800 p-4 rounded-lg shadow-lg">
+		<h2 class="text-xl font-bold mb-4">Database Configuration</h2>
+		<div class="grid grid-cols-2 gap-4">
+			<div>
+				<p class="text-gray-400">Database Type</p>
+				<p>{ dbType }</p>
+			</div>
+			<div>
+				<p class="text-gray-400">Database Host</p>
+				<p>{ dbHost }</p>
+			</div>
+		</div>
+	</div>
+}
