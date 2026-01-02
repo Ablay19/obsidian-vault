@@ -35,8 +35,8 @@ func main() {
 
 	router := http.NewServeMux()
 	bot.StartHealthServer(router) // This needs to be updated to use runtimeConfigManager later
-	// Pass runtimeConfigManager instead of aiService and db
-	dash := dashboard.NewDashboard(runtimeConfigManager)
+	// Pass aiService and db
+	dash := dashboard.NewDashboard(aiService, runtimeConfigManager, db)
 	dash.RegisterRoutes(router)
 
 	dashboardPort := config.AppConfig.Dashboard.Port // Dashboard port still comes from AppConfig

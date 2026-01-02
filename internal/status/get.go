@@ -1,9 +1,9 @@
 package status
 
 import (
-	"database/sql"
 	"fmt"
 	"obsidian-automation/internal/ai"
+	"obsidian-automation/internal/state" // Import the state package
 	"sync/atomic"
 	"time"
 )
@@ -68,7 +68,7 @@ func GetStats() Stats {
 }
 
 // GetServicesStatus gathers and returns the status of all monitored services.
-func GetServicesStatus(aiService *ai.AIService, db *sql.DB) []ServiceStatus {
+func GetServicesStatus(aiService *ai.AIService, rcm *state.RuntimeConfigManager) []ServiceStatus {
 	var statuses []ServiceStatus
 
 	// 1. Bot Status
@@ -80,6 +80,34 @@ func GetServicesStatus(aiService *ai.AIService, db *sql.DB) []ServiceStatus {
 	}
 	statuses = append(statuses, ServiceStatus{Name: "Bot Core", Status: botStatus, Details: botDetails})
 
-	// ... (rest of the function is the same)
+	// 2. AI Service Status
+	if aiService != nil {
+		activeProvider := aiService.GetActiveProviderName()
+		providerCount := len(aiService.GetAvailableProviders())
+		aiStatus := "up"
+		aiDetails := fmt.Sprintf("Active Provider: %s, Available Providers: %d", activeProvider, providerCount)
+
+		// Check RCM for global AI enabled status
+		rcmConfig := rcm.GetConfig()
+		if !rcmConfig.AIEnabled {
+			aiStatus = "disabled"
+			aiDetails = "AI globally disabled by dashboard. " + aiDetails
+		}
+
+		statuses = append(statuses, ServiceStatus{Name: "AI Service", Status: aiStatus, Details: aiDetails})
+	} else {
+		statuses = append(statuses, ServiceStatus{Name: "AI Service", Status: "down", Details: "Not initialized"})
+	}
+
+	// 3. Database Status (using rcm's db)
+	dbStatus := "up"
+	dbDetails := "Connection OK"
+	if err := rcm.GetDB().Ping(); err != nil { // Access db from rcm
+		dbStatus = "down"
+		dbDetails = fmt.Sprintf("Connection failed: %v", err)
+	}
+	statuses = append(statuses, ServiceStatus{Name: "Database", Status: dbStatus, Details: dbDetails})
+
+	// Add other services as needed
 	return statuses
 }
