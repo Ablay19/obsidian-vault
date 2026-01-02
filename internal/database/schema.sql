@@ -11,3 +11,9 @@ CREATE TABLE IF NOT EXISTS instances (
     pid INTEGER NOT NULL,
     started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS runtime_config (
+    id INTEGER PRIMARY KEY,
+    config_data BLOB,
+    updated_at DATETIME
+);
