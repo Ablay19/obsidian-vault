@@ -70,17 +70,11 @@ func (d *Dashboard) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("/dashboard/panels/overview", d.handleOverviewPanel)
 	router.HandleFunc("/dashboard/panels/file_processing", d.handleFileProcessingPanel)
 	router.HandleFunc("/dashboard/panels/users", d.handleUsersPanel)
+	router.HandleFunc("/dashboard/panels/db_config", d.handleDbConfigPanel)
 	router.HandleFunc("/dashboard/panels/db_config", d.handleDbConfigPanel) // New route
 }
 
-type User struct {
-	ID           int64
-	Username     string
-	FirstName    string
-	LastName     string
-	LanguageCode string
-	CreatedAt    time.Time
-}
+
 
 // handleDashboard serves the main dashboard HTML page.
 func (d *Dashboard) handleDashboard(w http.ResponseWriter, r *http.Request) {
