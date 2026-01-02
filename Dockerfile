@@ -1,60 +1,39 @@
-# --- Python Model Converter Stage ---
-FROM python:3.9-slim as converter
-
-WORKDIR /convert
-
-# Copy requirements and install dependencies
-COPY scripts/requirements.txt /convert/scripts/
-RUN pip install --no-cache-dir -r /convert/scripts/requirements.txt
-
-# Copy converter script
-COPY scripts/convert_to_onnx.py /convert/scripts/
-
-# Run the conversion script, which will create the /convert/models directory
-RUN python /convert/scripts/convert_to_onnx.py --output /convert/models/distilbert-onnx
-
-
 # --- Go Builder Stage ---
 FROM golang:alpine AS builder
 
-RUN apk add --no-cache build-base tesseract-ocr-dev leptonica-dev
+# Install build dependencies
+RUN apk add --no-cache build-base
 
 WORKDIR /build
 
-# Copy the generated models from the converter stage
-COPY --from=converter /convert/models ./models
-
-# Copy only go mod files first (better cache)
+# Copy only go mod files first for better caching
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy the rest of the source
+# Copy the rest of the source code
 COPY . .
 
-RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o telegram-bot ./cmd/bot
-
+# Build the application
+RUN CGO_ENABLED=0 GOOS=linux go build -a -o telegram-bot ./cmd/bot
 
 # =====================
-# Runtime stage
+# Runtime Stage
 # =====================
 FROM alpine:latest
 
-# Runtime dependencies only
-RUN apk add --no-cache tesseract-ocr tesseract-ocr-data-eng tesseract-ocr-data-fra tesseract-ocr-data-ara poppler-utils ca-certificates tzdata pandoc tar wget && \
-    wget -q https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.9.0/tectonic-0.9.0-x86_64-unknown-linux-musl.tar.gz \
-    && tar -xzf tectonic-0.9.0-x86_64-unknown-linux-musl.tar.gz \
-    && mv tectonic /usr/local/bin/ \
-    && rm tectonic-0.9.0-x86_64-unknown-linux-musl.tar.gz \
-    && apk del wget tar
+# Install runtime dependencies
+# Tesseract for OCR, Poppler for PDF handling, and standard tools
+RUN apk add --no-cache tesseract-ocr poppler-utils ca-certificates tzdata
 
-# Security: non-root user
+# Security: Create a non-root user
 RUN addgroup -S appgroup && adduser -S -G appgroup -u 1000 appuser
 
 WORKDIR /app
 
-# Copy application files from the builder stage
+# Copy application binary from the builder stage
 COPY --from=builder /build/telegram-bot .
-COPY --from=builder /build/models ./models
+
+# Copy configuration and database schema
 COPY config.yml .
 COPY internal/database/schema.sql internal/database/schema.sql
 COPY internal/database/migrations/ internal/database/migrations/
@@ -65,5 +44,8 @@ RUN chown -R appuser:appgroup /app
 # Switch to the non-root user
 USER appuser
 
+# Expose the dashboard port
 EXPOSE 8080
+
+# Run the application
 CMD ["./telegram-bot"]

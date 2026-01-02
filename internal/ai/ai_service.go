@@ -5,161 +5,356 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"sync"
+	"time" // Added for time.Time comparison
 
-	cfg "obsidian-automation/internal/config"
+	st "obsidian-automation/internal/state" // Import the state package
 )
+
+// ModelInfo extends existing ModelInfo to include key-specific details for dashboard display.
+type ModelInfo struct {
+	ProviderName string `json:"provider_name"`
+	ModelName    string `json:"model_name"`
+	KeyID        string `json:"key_id,omitempty"`
+	Enabled      bool   `json:"enabled"`
+	Blocked      bool   `json:"blocked"`
+	BlockedReason string `json:"blocked_reason,omitempty"`
+	LastUsedAt   time.Time `json:"last_used_at,omitempty"`
+}
+
+// AIProvider defines the interface for AI services.
+type AIProvider interface {
+	// Process sends a request to the AI service and returns a stream of responses.
+	Process(ctx context.Context, w io.Writer, system, prompt string, images []string) error
+	// GenerateContent streams a human-readable response from AI.
+	GenerateContent(ctx context.Context, prompt string, imageData []byte, modelType string, streamCallback func(string)) (string, error)
+	// GenerateJSONData gets structured data in JSON format from AI.
+	GenerateJSONData(ctx context.Context, text, language string) (string, error)
+	// GetModelInfo returns information about the model.
+	GetModelInfo() ModelInfo
+}
 
 // AIService manages multiple AI providers and selects the active one.
 type AIService struct {
-	providers      map[string]AIProvider
-	ActiveProvider AIProvider
-	mu             sync.RWMutex
+	// providers maps provider name to a map of keyID to AIProvider instance
+	providers map[string]map[string]AIProvider
+	sm        *st.RuntimeConfigManager // Reference to the RuntimeConfigManager
+	mu        sync.RWMutex
 }
 
-// NewAIService initializes the AI service with provided providers.
-// If no providers are given, it attempts to initialize Gemini and Groq providers from environment variables.
-func NewAIService(ctx context.Context, appConfig *cfg.Config, initialProviders ...AIProvider) *AIService {
-	providers := make(map[string]AIProvider)
-
-	if len(initialProviders) > 0 {
-		for _, p := range initialProviders {
-			providers[p.GetModelInfo().ProviderName] = p
-		}
-	} else {
-		// Existing logic to initialize Gemini and Groq from env vars
-		// Initialize Gemini provider
-		geminiProvider := NewGeminiProvider(ctx)
-		if geminiProvider != nil {
-			providers[geminiProvider.GetModelInfo().ProviderName] = geminiProvider
-		}
-
-		// Initialize Groq provider
-		groqProvider := NewGroqProvider(ctx)
-		if groqProvider != nil {
-			providers[groqProvider.GetModelInfo().ProviderName] = groqProvider
-		}
-
-		// Initialize ONNX provider
-		if appConfig.Providers.ONNX.ModelPath != "" {
-			onnxProvider, err := NewONNXProvider(appConfig.Providers.ONNX.ModelPath)
-			if err != nil {
-				log.Printf("Warning: Failed to initialize ONNX provider: %v", err)
-			} else {
-				log.Println("✅ ONNX provider initialized successfully")
-				providers["ONNX"] = onnxProvider
-			}
-		}
-
+// NewAIService initializes the AI service using the RuntimeConfigManager.
+func NewAIService(ctx context.Context, sm *st.RuntimeConfigManager) *AIService {
+	s := &AIService{
+		providers: make(map[string]map[string]AIProvider),
+		sm:        sm,
 	}
 
-	if len(providers) == 0 {
-		log.Println("No AI providers could be initialized. AI features will be unavailable.")
+	s.initializeProviders(ctx)
+
+	if len(s.providers) == 0 {
+		log.Println("No AI providers could be initialized from RuntimeConfigManager. AI features will be unavailable.")
 		return nil
 	}
 
-	// Set default provider (e.g., Gemini)
-	ActiveProvider, ok := providers["Gemini"]
-	if !ok {
-		// Fallback to the first available provider if Gemini isn't there
-		for _, p := range providers {
-			ActiveProvider = p
-			break
+	// This log line needs adjustment as ActiveProvider is no longer a direct field
+	log.Printf("AI Service initialized. Available providers: %v", s.GetAvailableProviders())
+
+	return s
+}
+
+// initializeProviders populates the providers map based on the current RuntimeConfig.
+func (s *AIService) initializeProviders(ctx context.Context) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.providers = make(map[string]map[string]AIProvider) // Clear existing
+
+	currentConfig := s.sm.GetConfig()
+
+	for providerName, providerState := range currentConfig.Providers {
+		if !providerState.Enabled {
+			continue // Skip globally disabled providers
 		}
-	}
 
-	log.Printf("AI Service initialized. Available providers: %v. Active provider: %s", getMapKeys(providers), ActiveProvider.GetModelInfo().ProviderName)
+		s.providers[providerName] = make(map[string]AIProvider)
+		for keyID, keyState := range currentConfig.APIKeys {
+			if keyState.Provider == providerName && keyState.Enabled && !keyState.Blocked {
+				var provider AIProvider
+				// Assuming ProviderState now has a ModelName field which is set during RuntimeConfigManager initialization
+				modelName := providerState.ModelName 
 
-	return &AIService{
-		providers:      providers,
-		ActiveProvider: ActiveProvider,
+				switch providerName {
+				case "Gemini":
+					provider = NewGeminiProvider(ctx, keyState.Value, modelName)
+				case "Groq":
+					provider = NewGroqProvider(keyState.Value, modelName)
+				case "Hugging Face":
+					provider = NewHuggingFaceProvider(keyState.Value, modelName)
+				default:
+					log.Printf("Unknown provider type %s for key %s. Skipping.", providerName, keyID)
+					continue
+				}
+
+				if provider != nil {
+					s.providers[providerName][keyID] = provider
+					log.Printf("Initialized %s provider with key %s (ID: %s)", providerName, keyState.Value[:5]+"...", keyID[:8]+"...")
+				}
+			}
+		}
 	}
 }
 
-// SetProvider changes the active AI provider.
+// SetProvider changes the active AI provider. (This now conceptually means setting the preferred provider,
+// the actual key will be selected dynamically)
 func (s *AIService) SetProvider(providerName string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	provider, ok := s.providers[providerName]
-	if !ok {
-		return fmt.Errorf("provider '%s' not found or not configured", providerName)
+	// This now updates the RuntimeConfigManager's active provider preference
+	// rather than directly changing ActiveProvider here.
+	// For now, let's keep it simple and assume the dashboard will handle this by updating the sm.
+	// This method might become redundant or change its meaning.
+	if _, ok := s.providers[providerName]; !ok || len(s.providers[providerName]) == 0 {
+		return fmt.Errorf("provider '%s' not found or no active keys configured", providerName)
 	}
-	s.ActiveProvider = provider
-	log.Printf("Switched AI provider to %s", providerName)
+
+	// Update the RuntimeConfigManager's active provider preference
+	// TODO: Implement a method in RuntimeConfigManager to set the active provider preference.
+	// For now, we'll just log and assume the client picking the provider will check SM.
+	log.Printf("Requested to switch AI provider preference to %s", providerName)
 	return nil
 }
 
-// GetActiveProviderName returns the name of the currently active provider.
+// GetActiveProviderName returns the name of the currently active provider based on RuntimeConfigManager.
 func (s *AIService) GetActiveProviderName() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if s.ActiveProvider == nil {
-		return "None"
-	}
-	return s.ActiveProvider.GetModelInfo().ProviderName
+	currentConfig := s.sm.GetConfig()
+	// TODO: Implement storing active provider preference in RuntimeConfig. For now, use first enabled.
+	var preferredProviderName string
+	for name, ps := range currentConfig.Providers {
+		if ps.Enabled { // Arbitrarily pick first enabled
+				return name
+			}
+		}
+	return "None"
 }
 
-// GetActiveProvider returns the active AI provider.
-func (s *AIService) GetActiveProvider() AIProvider {
+// GetActiveProvider returns an active AIProvider instance for the currently preferred provider.
+// This method should select an appropriate key based on availability and health.
+func (s *AIService) GetActiveProvider(ctx context.Context) (AIProvider, st.APIKeyState, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.ActiveProvider
+
+	currentConfig := s.sm.GetConfig()
+	// TODO: Get preferred active provider from RuntimeConfig. For now, use first enabled.
+	var preferredProviderName string
+	for name, ps := range currentConfig.Providers {
+		if ps.Enabled {
+			preferredProviderName = name
+			break
+		}
+	}
+
+	if preferredProviderName == "" {
+		return nil, st.APIKeyState{}, fmt.Errorf("no enabled provider found in runtime config")
+	}
+
+	return s.selectActiveKeyForProvider(ctx, preferredProviderName)
 }
 
 // GetAvailableProviders returns a list of available provider names.
 func (s *AIService) GetAvailableProviders() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return getMapKeys(s.providers)
+	keys := make([]string, 0, len(s.providers))
+	for k := range s.providers {
+		if len(s.providers[k]) > 0 { // Only list providers with at least one active key
+			keys = append(keys, k)
+		}
+	}
+	return keys
 }
 
-// GetProvidersInfo returns a list of model information for all available providers.
+// GetProvidersInfo returns a list of model information for all available providers and their active keys.
 func (s *AIService) GetProvidersInfo() []ModelInfo {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	var infos []ModelInfo
-	for _, p := range s.providers {
-		infos = append(infos, p.GetModelInfo())
+	for providerName, keyProviders := range s.providers {
+		for keyID, provider := range keyProviders {
+			info := provider.GetModelInfo()
+			// Add key-specific info
+			if keyState, ok := s.sm.GetConfig().APIKeys[keyID]; ok {
+				info.KeyID = keyID
+				info.Enabled = keyState.Enabled
+				info.Blocked = keyState.Blocked
+				info.BlockedReason = keyState.BlockedReason
+				info.LastUsedAt = keyState.LastUsedAt
+			}
+			infos = append(infos, info)
+		}
 	}
 	return infos
 }
 
 // Process delegates the call to the active provider.
 func (s *AIService) Process(ctx context.Context, w io.Writer, system, prompt string, images []string) error {
-	s.mu.RLock()
-	provider := s.ActiveProvider
-	s.mu.RUnlock()
-
-	if provider == nil {
-		return fmt.Errorf("no active AI provider")
+	provider, keyState, err := s.GetActiveProvider(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get active provider: %w", err)
 	}
-	return provider.Process(ctx, w, system, prompt, images)
+
+	// Enforce RuntimeConfig checks for the selected key
+	if err := s.checkRuntimeConfig(keyState.ID); err != nil {
+		return err
+	}
+
+	callErr := provider.Process(ctx, w, system, prompt, images)
+	s.sm.UpdateKeyUsage(keyState.ID, func() string {
+		if callErr != nil {
+			return callErr.Error()
+		}
+		return ""
+	}(), -1) // Update key usage regardless of success or failure. Quota not tracked here.
+
+	if callErr != nil {
+		return fmt.Errorf("provider '%s' (key: %s) Process failed: %w", provider.GetModelInfo().ProviderName, keyState.ID, callErr)
+	}
+	return nil
 }
 
 // GenerateContent delegates the call to the active provider.
 func (s *AIService) GenerateContent(ctx context.Context, prompt string, imageData []byte, modelType string, streamCallback func(string)) (string, error) {
-	s.mu.RLock()
-	provider := s.ActiveProvider
-	s.mu.RUnlock()
-
-	if provider == nil {
-		return "", fmt.Errorf("no active AI provider")
+	provider, keyState, err := s.GetActiveProvider(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to get active provider: %w", err)
 	}
-	return provider.GenerateContent(ctx, prompt, imageData, modelType, streamCallback)
+
+	// Enforce RuntimeConfig checks for the selected key
+	if err := s.checkRuntimeConfig(keyState.ID); err != nil {
+		return "", err
+	}
+
+	content, callErr := provider.GenerateContent(ctx, prompt, imageData, modelType, streamCallback)
+	s.sm.UpdateKeyUsage(keyState.ID, func() string {
+		if callErr != nil {
+			return callErr.Error()
+		}
+		return ""
+	}(), -1)
+
+	if callErr != nil {
+		return "", fmt.Errorf("provider '%s' (key: %s) GenerateContent failed: %w", provider.GetModelInfo().ProviderName, keyState.ID, callErr)
+	}
+	return content, nil
 }
 
 // GenerateJSONData delegates the call to the active provider.
 func (s *AIService) GenerateJSONData(ctx context.Context, text, language string) (string, error) {
-	s.mu.RLock()
-	provider := s.ActiveProvider
-	s.mu.RUnlock()
-
-	if provider == nil {
-		return "", fmt.Errorf("no active AI provider")
+	provider, keyState, err := s.GetActiveProvider(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to get active provider: %w", err)
 	}
-	return provider.GenerateJSONData(ctx, text, language)
+
+	// Enforce RuntimeConfig checks for the selected key
+	if err := s.checkRuntimeConfig(keyState.ID); err != nil {
+		return "", err
+	}
+
+	jsonStr, callErr := provider.GenerateJSONData(ctx, text, language)
+	s.sm.UpdateKeyUsage(keyState.ID, func() string {
+		if callErr != nil {
+			return callErr.Error()
+		}
+		return ""
+	}(), -1)
+
+	if callErr != nil {
+		return "", fmt.Errorf("provider '%s' (key: %s) GenerateJSONData failed: %w", provider.GetModelInfo().ProviderName, keyState.ID, callErr)
+	}
+	return jsonStr, nil
+}
+
+// checkRuntimeConfig enforces the rules from the RuntimeConfigManager before allowing an AI call.
+func (s *AIService) checkRuntimeConfig(keyID string) error {
+	currentConfig := s.sm.GetConfig()
+
+	if !currentConfig.AIEnabled {
+		return fmt.Errorf("AI processing is globally disabled by dashboard")
+	}
+
+	keyState, ok := currentConfig.APIKeys[keyID]
+	if !ok {
+		return fmt.Errorf("API key '%s' not found in runtime configuration", keyID)
+	}
+
+	// Check provider state for the key's provider
+	providerState, ok := currentConfig.Providers[keyState.Provider]
+	if !ok {
+		return fmt.Errorf("provider '%s' for key '%s' not found in runtime configuration", keyState.Provider, keyID)
+	}
+	if !providerState.Enabled {
+		return fmt.Errorf("AI provider '%s' (for key '%s') is disabled by dashboard", keyState.Provider, keyID)
+	}
+	if providerState.Paused {
+		return fmt.Errorf("AI provider '%s' (for key '%s') is paused by dashboard", keyState.Provider, keyID)
+	}
+	if providerState.Blocked {
+		return fmt.Errorf("AI provider '%s' (for key '%s') is blocked by dashboard: %s", keyState.Provider, keyID, providerState.BlockedReason)
+	}
+
+	// Check specific key state
+	if !keyState.Enabled {
+		return fmt.Errorf("API key '%s' for provider '%s' is disabled by dashboard", keyID, keyState.Provider)
+	}
+	if keyState.Blocked {
+		return fmt.Errorf("API key '%s' for provider '%s' is blocked by dashboard: %s", keyID, keyState.Provider, keyState.BlockedReason)
+	}
+
+	// Environment check (TODO: implement this more robustly if different environments have different keys)
+	// For now, assume if an API key is selected, it's valid for the active environment.
+	// A more robust check might involve tagging keys with environments.
+
+	return nil
+}
+
+// selectActiveKeyForProvider selects an active, enabled, unblocked key for a given provider.
+// It prioritizes keys that are not blocked by transient errors (like rate limits).
+func (s *AIService) selectActiveKeyForProvider(ctx context.Context, providerName string) (AIProvider, st.APIKeyState, error) {
+	currentConfig := s.sm.GetConfig()
+
+	// Get all eligible keys for the provider
+	var eligibleKeys []st.APIKeyState
+	for _, keyState := range currentConfig.APIKeys {
+		if keyState.Provider == providerName && keyState.Enabled && !keyState.Blocked {
+			eligibleKeys = append(eligibleKeys, keyState)
+		}
+	}
+
+	if len(eligibleKeys) == 0 {
+		return nil, st.APIKeyState{}, fmt.Errorf("no eligible API keys found for provider %s", providerName)
+	}
+
+	// Prioritize keys not currently marked with a rate_limit_exceeded error
+	for _, keyState := range eligibleKeys {
+		if !strings.Contains(keyState.LastError, "rate_limit_exceeded") {
+			if provider, ok := s.providers[providerName][keyState.ID]; ok {
+				return provider, keyState, nil
+			}
+		}
+	}
+
+	// Fallback to any eligible key if all have rate limit errors or similar
+	for _, keyState := range eligibleKeys {
+		if provider, ok := s.providers[providerName][keyState.ID]; ok {
+			return provider, keyState, nil
+		}
+	}
+
+	return nil, st.APIKeyState{}, fmt.Errorf("could not select an active provider instance for %s", providerName)
 }
 
 // Helper function to get keys from a map.
