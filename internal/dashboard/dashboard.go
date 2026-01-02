@@ -71,7 +71,6 @@ func (d *Dashboard) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("/dashboard/panels/file_processing", d.handleFileProcessingPanel)
 	router.HandleFunc("/dashboard/panels/users", d.handleUsersPanel)
 	router.HandleFunc("/dashboard/panels/db_config", d.handleDbConfigPanel)
-	router.HandleFunc("/dashboard/panels/db_config", d.handleDbConfigPanel) // New route
 }
 
 
