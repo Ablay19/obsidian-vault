@@ -22,7 +22,7 @@ This phase implements the backend HTTP handlers that will allow the dashboard to
 - [x] Task: Implement dashboard HTTP handlers for managing AI providers and API keys (enable, disable, rotate). [550b00d]
 - [x] Task: Implement dashboard HTTP handlers for controlling the runtime environment (switching between dev/prod). [32b0864]
 - [x] Task: Enforce runtime configuration checks within the bot's logic before all AI provider calls. [a7429a7]
-- [ ] Task: Implement the persistence logic to save critical state changes to the database.
+- [x] Task: Implement the persistence logic to save critical state changes to the database. [56cdbed]
 - [ ] Task: Conductor - User Manual Verification 'Dashboard Backend and Core Logic' (Protocol in workflow.md)
 
 ---
