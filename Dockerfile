@@ -10,13 +10,8 @@ WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Install golangci-lint
-RUN go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-
-# Copy the rest of the source code
 COPY . .
 
-# Generate Go code from Templ files
 RUN go install github.com/a-h/templ/cmd/templ@latest
 RUN templ generate ./...
 
@@ -42,7 +37,7 @@ COPY --from=builder /build/telegram-bot .
 
 # Copy configuration and database schema
 COPY config.yml .
-COPY internal/database/schema.sql internal/database/schema.sql
+
 COPY internal/database/migrations/ internal/database/migrations/
 
 # Set correct ownership for all application files
