@@ -1,0 +1,66 @@
+# Builder stage: A lean image for building the Go application
+FROM golang:1.22-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache git build-base wget
+
+# Download and install ONNX Runtime C library
+WORKDIR /tmp
+RUN wget https://github.com/microsoft/onnxruntime/releases/download/v1.16.3/onnxruntime-linux-x64-1.16.3.tgz && \
+    tar -xzf onnxruntime-linux-x64-1.16.3.tgz && \
+    mv onnxruntime-linux-x64-1.16.3 /opt/onnxruntime
+
+# Set environment variables for CGO to find the ONNX libraries during the build
+ENV CGO_CFLAGS="-I/opt/onnxruntime/include"
+ENV CGO_LDFLAGS="-L/opt/onnxruntime/lib -lonnxruntime"
+
+# Set up the Go application build directory
+WORKDIR /app
+
+# Copy go.mod and go.sum files and download dependencies to leverage Docker cache
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy the rest of the source code
+COPY . .
+
+# Build the Go application with CGO enabled
+RUN CGO_ENABLED=1 go build -o bot cmd/bot/main.go
+
+
+# ---
+
+
+# Runtime stage: A glibc-based image for running the application
+FROM ubuntu:latest
+
+# Install runtime dependencies. 'adduser' is in the 'adduser' package.
+RUN apt-get update && apt-get install -y ca-certificates libstdc++6 adduser && rm -rf /var/lib/apt/lists/*
+
+# Copy ONNX Runtime libraries from the builder stage
+COPY --from=builder /opt/onnxruntime/lib /opt/onnxruntime/lib
+
+# Set the library path for the linker to find the ONNX libraries at runtime
+ENV LD_LIBRARY_PATH="/opt/onnxruntime/lib"
+
+# Set the working directory
+WORKDIR /app
+
+# Copy the compiled bot, models, config, and database files from the builder stage
+COPY --from=builder /app/bot .
+COPY --from=builder /app/models ./models
+COPY config.yml .
+COPY --from=builder /app/internal/database /app/internal/database
+
+# Create a non-root user and group, then give it ownership of the app files
+RUN adduser --system --group appuser
+RUN chown -R appuser:appuser /app
+
+# Switch to the non-root user
+USER appuser
+
+# Expose the port the bot runs on
+EXPOSE 8080
+
+# The command to run the bot
+CMD ["./bot"]

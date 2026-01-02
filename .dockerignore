@@ -1,15 +1,27 @@
-vault/
-attachments/
-stats.json
-.env
-*.sh
-!start.sh
-README.md
-telegram-bot
-obsidian-automation
+# Ignore directories
 .git/
-
-# Docker-specific ignores
-*.log*
+.github/
+.idea/
+.vscode/
+attachments/
 coverage/
+data/
+doc/
+specs/
+vault/
+
+# Ignore specific files and patterns
+*.log*
+*.md
+*.sh
 *.test
+.env
+noname.gv
+obsidian-automation
+obsidian-automation-bot
+stats.json
+telegram-bot
+
+# Keep specific files
+!GEMINI.md
+!start.sh

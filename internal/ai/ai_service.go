@@ -6,6 +6,8 @@ import (
 	"io"
 	"log"
 	"sync"
+
+	cfg "obsidian-automation/internal/config"
 )
 
 // AIService manages multiple AI providers and selects the active one.
@@ -17,7 +19,7 @@ type AIService struct {
 
 // NewAIService initializes the AI service with provided providers.
 // If no providers are given, it attempts to initialize Gemini and Groq providers from environment variables.
-func NewAIService(ctx context.Context, initialProviders ...AIProvider) *AIService {
+func NewAIService(ctx context.Context, appConfig *cfg.Config, initialProviders ...AIProvider) *AIService {
 	providers := make(map[string]AIProvider)
 
 	if len(initialProviders) > 0 {
@@ -39,15 +41,16 @@ func NewAIService(ctx context.Context, initialProviders ...AIProvider) *AIServic
 		}
 
 		// Initialize ONNX provider
-		if config.AppConfig.Providers.ONNX.ModelPath != "" {
-			onnxProvider, err := NewONNXProvider(config.AppConfig.Providers.ONNX.ModelPath)
+		if appConfig.Providers.ONNX.ModelPath != "" {
+			onnxProvider, err := NewONNXProvider(appConfig.Providers.ONNX.ModelPath)
 			if err != nil {
 				log.Printf("Warning: Failed to initialize ONNX provider: %v", err)
 			} else {
-				log.Println("ONNX provider initialized successfully.")
-				providers[onnxProvider.GetModelInfo().ProviderName] = onnxProvider
+				log.Println("✅ ONNX provider initialized successfully")
+				providers["ONNX"] = onnxProvider
 			}
 		}
+
 	}
 
 	if len(providers) == 0 {
