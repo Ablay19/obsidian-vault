@@ -1,11 +1,11 @@
 package dashboard
 
 templ StatsCard(icon, title, value string) {
-    <div class="bg-gray-800 p-4 rounded-lg shadow flex items-center space-x-4">
+    <div class="bg-gray-800 p-4 rounded-lg shadow flex items-center space-x-4 border border-gray-700">
         <div class="material-icons text-blue-500 text-3xl">{ icon }</div>
         <div>
-            <div class="text-gray-400 text-sm">{ title }</div>
-            <div class="text-white text-xl font-bold">{ value }</div>
+            <div class="text-gray-400 text-xs uppercase tracking-wider font-semibold">{ title }</div>
+            <div class="text-white text-lg font-bold truncate max-w-[150px]">{ value }</div>
         </div>
     </div>
 }
