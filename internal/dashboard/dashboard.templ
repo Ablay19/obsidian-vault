@@ -32,8 +32,15 @@ templ App() {
 
     <header class="flex justify-between items-center mb-4">
         <h1 class="text-2xl font-bold">🤖 Obsidian Bot</h1>
-        <div id="status-indicator">
-            <!-- dynamically updated -->
+        <div class="flex items-center space-x-4">
+            <div x-data="{ countdown: 2, init() { setInterval(() => { if(shouldPoll()) { this.countdown--; if(this.countdown < 0) this.countdown = 2; } }, 1000) } }" 
+                 @htmx:after-on-load.window="countdown = 2"
+                 class="text-xs text-gray-500 font-mono">
+                Refresh in: <span x-text="countdown"></span>s
+            </div>
+            <div id="status-indicator">
+                <!-- dynamically updated -->
+            </div>
         </div>
     </header>
 
@@ -41,14 +48,14 @@ templ App() {
         <div
             id="dashboard-content"
             hx-get="/dashboard/panels/overview"
-            hx-trigger="load, every 5s [shouldPoll()]">
+            hx-trigger="load, every 2s [shouldPoll()]">
             <!-- dashboard overview -->
         </div>
 
         <div
             id="file-processing-content"
             hx-get="/dashboard/panels/file_processing"
-            hx-trigger="load, every 10s [shouldPoll()]"
+            hx-trigger="load, every 5s [shouldPoll()]"
             class="mt-4">
             <!-- file processing -->
         </div>
@@ -56,7 +63,7 @@ templ App() {
         <div
             id="users-content"
             hx-get="/dashboard/panels/users"
-            hx-trigger="load, every 10s [shouldPoll()]"
+            hx-trigger="load, every 5s [shouldPoll()]"
             class="mt-4">
             <!-- users -->
         </div>
@@ -64,7 +71,7 @@ templ App() {
         <div
             id="db-config-content"
             hx-get="/dashboard/panels/db_config"
-            hx-trigger="load, every 10s [shouldPoll()]"
+            hx-trigger="load, every 30s [shouldPoll()]"
             class="mt-4">
             <!-- database config -->
         </div>
@@ -72,7 +79,7 @@ templ App() {
 		<div
             id="api-keys-content"
             hx-get="/dashboard/panels/api_keys"
-            hx-trigger="load, every 10s [shouldPoll()]"
+            hx-trigger="load, every 5s [shouldPoll()]"
             class="mt-4">
             <!-- API Keys management -->
         </div>

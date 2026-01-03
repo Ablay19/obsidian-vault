@@ -63,15 +63,32 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 	rcm.config.Environment.BackendHost = viper.GetString("BACKEND_HOST")
 	rcm.config.Environment.IsolationEnabled = viper.GetBool("ENVIRONMENT_ISOLATION_ENABLED")
 
+	// Initialize all supported providers with their configured models
+	rcm.config.Providers["Gemini"] = ProviderState{
+		Name:      "Gemini",
+		Enabled:   viper.GetString("GEMINI_API_KEYS") != "",
+		ModelName: viper.GetString("providers.gemini.model"),
+	}
+	rcm.config.Providers["Groq"] = ProviderState{
+		Name:      "Groq",
+		Enabled:   viper.GetString("GROQ_API_KEY") != "",
+		ModelName: viper.GetString("providers.groq.model"),
+	}
+	rcm.config.Providers["Hugging Face"] = ProviderState{
+		Name:      "Hugging Face",
+		Enabled:   viper.GetString("HUGGINGFACE_API_KEY") != "" || viper.GetString("HF_TOKEN") != "",
+		ModelName: viper.GetString("providers.huggingface.model"),
+	}
+	rcm.config.Providers["OpenRouter"] = ProviderState{
+		Name:      "OpenRouter",
+		Enabled:   viper.GetString("OPENROUTER_API_KEY") != "",
+		ModelName: viper.GetString("providers.openrouter.model"),
+	}
+
 	// Providers and API Keys
 	// Gemini
 	geminiAPIKeys := viper.GetString("GEMINI_API_KEYS")
 	if geminiAPIKeys != "" {
-		rcm.config.Providers["Gemini"] = ProviderState{
-			Name:      "Gemini",
-			Enabled:   true,
-			ModelName: viper.GetString("providers.gemini.model"),
-		}
 		for i, keyVal := range splitAPIKeys(geminiAPIKeys) {
 			rcm.config.APIKeys[generateKeyID("Gemini", i)] = APIKeyState{
 				ID:        generateKeyID("Gemini", i),
@@ -86,11 +103,6 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 	// Groq
 	groqAPIKey := viper.GetString("GROQ_API_KEY")
 	if groqAPIKey != "" {
-		rcm.config.Providers["Groq"] = ProviderState{
-			Name:      "Groq",
-			Enabled:   true,
-			ModelName: viper.GetString("providers.groq.model"),
-		}
 		rcm.config.APIKeys[generateKeyID("Groq", 0)] = APIKeyState{
 			ID:        generateKeyID("Groq", 0),
 			Provider:  "Groq",
@@ -106,11 +118,6 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 		huggingFaceAPIKey = viper.GetString("HF_TOKEN")
 	}
 	if huggingFaceAPIKey != "" {
-		rcm.config.Providers["Hugging Face"] = ProviderState{
-			Name:      "Hugging Face",
-			Enabled:   true,
-			ModelName: viper.GetString("providers.huggingface.model"),
-		}
 		rcm.config.APIKeys[generateKeyID("Hugging Face", 0)] = APIKeyState{
 			ID:        generateKeyID("Hugging Face", 0),
 			Provider:  "Hugging Face",
@@ -123,11 +130,6 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 	// OpenRouter
 	openRouterAPIKey := viper.GetString("OPENROUTER_API_KEY")
 	if openRouterAPIKey != "" {
-		rcm.config.Providers["OpenRouter"] = ProviderState{
-			Name:      "OpenRouter",
-			Enabled:   true,
-			ModelName: viper.GetString("providers.openrouter.model"),
-		}
 		rcm.config.APIKeys[generateKeyID("OpenRouter", 0)] = APIKeyState{
 			ID:        generateKeyID("OpenRouter", 0),
 			Provider:  "OpenRouter",

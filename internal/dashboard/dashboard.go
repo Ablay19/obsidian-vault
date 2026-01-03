@@ -82,10 +82,8 @@ func (d *Dashboard) handleAPIKeysPanel(w http.ResponseWriter, r *http.Request) {
 		apiKeysSlice = append(apiKeysSlice, key)
 	}
 
-	var providers []string
-	for name := range config.Providers {
-		providers = append(providers, name)
-	}
+	// List of all supported providers to ensure they are available in the dropdown
+	providers := []string{"Gemini", "Groq", "Hugging Face", "OpenRouter"}
 
 	APIKeysPanel(apiKeysSlice, providers).Render(r.Context(), w)
 }
