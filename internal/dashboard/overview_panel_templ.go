@@ -10,7 +10,6 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import (
 	"obsidian-automation/internal/status"
-	"runtime"
 )
 
 func OverviewPanel(services []status.ServiceStatus, aiProviders struct {
@@ -37,11 +36,11 @@ func OverviewPanel(services []status.ServiceStatus, aiProviders struct {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div id=\"overview-panel\"><div class=\"grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div id=\"overview-panel\"><div class=\"grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = StatsCard("bolt", "Status", getBotStatus(services)).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = StatsCard("bolt", "System", getBotStatus(services)).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -49,7 +48,7 @@ func OverviewPanel(services []status.ServiceStatus, aiProviders struct {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = StatsCard("smart_toy", "AI Provider", aiProviders.Active).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = StatsCard("smart_toy", "AI_CORE", aiProviders.Active).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -57,25 +56,25 @@ func OverviewPanel(services []status.ServiceStatus, aiProviders struct {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div><div class=\"grid grid-cols-1 lg:grid-cols-2 gap-6\"><div class=\"bg-gray-800 p-5 rounded-lg shadow-lg border border-gray-700\"><h2 class=\"text-sm font-bold mb-5 flex items-center uppercase tracking-widest text-gray-400\"><span class=\"material-icons mr-2 text-blue-400 text-lg\">settings</span> AI Provider Management</h2><div x-data=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div><div class=\"grid grid-cols-1 lg:grid-cols-3 gap-6\"><!-- AI Control Panel --><div class=\"bg-[#111114] p-6 rounded-xl shadow-2xl border border-gray-800 flex flex-col justify-between\"><div><h2 class=\"text-[10px] font-bold mb-6 flex items-center uppercase tracking-[0.2em] text-gray-500\"><span class=\"material-icons mr-2 text-blue-500 text-sm\">settings_input_component</span> AI Engine Selection</h2><div x-data=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs("{ selectedProvider: '" + aiProviders.Active + "', loading: false }")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 26, Col: 86}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 27, Col: 102}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"><div class=\"flex items-center space-x-2 mb-2\"><select x-model=\"selectedProvider\" class=\"flex-grow p-2 border rounded-md bg-gray-900 border-gray-700 text-gray-100 text-xs focus:ring-1 focus:ring-blue-500 outline-none transition-all\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" class=\"space-y-4\"><div class=\"relative\"><select x-model=\"selectedProvider\" class=\"w-full appearance-none p-3 bg-gray-900 border border-gray-800 rounded-lg text-white text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all cursor-pointer\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if len(aiProviders.Available) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<option value=\"\" disabled selected class=\"bg-gray-900 text-gray-100\">No providers</option> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<option value=\"\" disabled selected>No engines found</option> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -88,7 +87,7 @@ func OverviewPanel(services []status.ServiceStatus, aiProviders struct {
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(provider)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 33, Col: 32}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 34, Col: 60}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -101,20 +100,20 @@ func OverviewPanel(services []status.ServiceStatus, aiProviders struct {
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(provider == aiProviders.Active)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 33, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 34, Col: 104}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" class=\"bg-gray-900 text-gray-100\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(provider)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 33, Col: 123}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 34, Col: 117}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -125,46 +124,7 @@ func OverviewPanel(services []status.ServiceStatus, aiProviders struct {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</select> <button @click=\"\n\t\t\t\t\t\t\t\tloading = true;\n\t\t\t\t\t\t\t\tfetch('/api/ai/provider/set', {\n\t\t\t\t\t\t\t\t\tmethod: 'POST',\n\t\t\t\t\t\t\t\t\theaders: { 'Content-Type': 'application/json' },\n\t\t\t\t\t\t\t\t\tbody: JSON.stringify({ provider: selectedProvider })\n\t\t\t\t\t\t\t\t}).then(res => res.json()).then(data => {\n\t\t\t\t\t\t\t\t\tloading = false;\n\t\t\t\t\t\t\t\t\tif (data.status === 'success') {\n\t\t\t\t\t\t\t\t\t\t$store.notifications.show(data.message, 'success');\n\t\t\t\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\t\t\t\t$store.notifications.show(data.message || 'Error setting provider', 'error');\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t\thtmx.trigger('#dashboard-content', 'load');\n\t\t\t\t\t\t\t\t}).catch(err => {\n\t\t\t\t\t\t\t\t\tloading = false;\n\t\t\t\t\t\t\t\t\t$store.notifications.show('Failed to connect to server', 'error');\n\t\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t\" :disabled=\"loading || !selectedProvider\" class=\"bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-all font-bold text-xs flex items-center\"><span x-show=\"!loading\">SET ACTIVE</span> <span x-show=\"loading\" class=\"material-icons animate-spin text-xs\">sync</span></button></div></div></div><div class=\"bg-gray-800 p-5 rounded-lg shadow-lg border border-gray-700\"><h2 class=\"text-sm font-bold mb-5 flex items-center uppercase tracking-widest text-gray-400\"><span class=\"material-icons mr-2 text-blue-400 text-lg\">info</span> System Information</h2><div class=\"grid grid-cols-2 gap-3 text-gray-300 font-mono text-[10px]\"><div class=\"bg-gray-900 p-2 rounded border border-gray-700\"><span class=\"text-gray-500 block mb-1 uppercase font-bold\">OS</span> ")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var6 string
-		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(runtime.GOOS)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 70, Col: 148}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</div><div class=\"bg-gray-900 p-2 rounded border border-gray-700\"><span class=\"text-gray-500 block mb-1 uppercase font-bold\">ARCH</span> ")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var7 string
-		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(runtime.GOARCH)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 71, Col: 152}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div><div class=\"bg-gray-900 p-2 rounded border border-gray-700 col-span-2\"><span class=\"text-gray-500 block mb-1 uppercase font-bold\">GO VERSION</span> ")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var8 string
-		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(runtime.Version())
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 72, Col: 172}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div></div></div></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</select><div class=\"absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-600\"><span class=\"material-icons text-sm\">expand_more</span></div></div><button @click=\"\n                                loading = true;\n                                fetch('/api/ai/provider/set', {\n                                    method: 'POST',\n                                    headers: { 'Content-Type': 'application/json' },\n                                    body: JSON.stringify({ provider: selectedProvider })\n                                }).then(res => res.json()).then(data => {\n                                    loading = false;\n                                    if (data.status === 'success') {\n                                        $store.notifications.show(data.message, 'success');\n                                    } else {\n                                        $store.notifications.show(data.message || 'Error', 'error');\n                                    }\n                                    htmx.trigger('#dashboard-content', 'load');\n                                }).catch(err => {\n                                    loading = false;\n                                    $store.notifications.show('Network error', 'error');\n                                })\n                            \" :disabled=\"loading || !selectedProvider || selectedProvider === 'None'\" class=\"w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 text-white p-3 rounded-lg transition-all font-bold text-[10px] uppercase tracking-widest flex items-center justify-center shadow-lg shadow-blue-900/20\"><span x-show=\"!loading\">Switch Engine</span> <span x-show=\"loading\" class=\"material-icons animate-spin text-sm\">sync</span></button></div></div></div><!-- Activity Chart --><div class=\"lg:col-span-2 bg-[#111114] p-6 rounded-xl shadow-2xl border border-gray-800 h-64\"><h2 class=\"text-[10px] font-bold mb-4 flex items-center uppercase tracking-[0.2em] text-gray-500\"><span class=\"material-icons mr-2 text-green-500 text-sm\">analytics</span> System Load / 24h</h2><div class=\"relative h-40 w-full\" x-data=\"{\n                    init() {\n                        new Chart(this.$refs.canvas, {\n                            type: 'line',\n                            data: {\n                                labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'],\n                                datasets: [{\n                                    label: 'Processed',\n                                    data: [12, 19, 3, 5, 2, 3, 9],\n                                    borderColor: '#3b82f6',\n                                    backgroundColor: 'rgba(59, 130, 246, 0.1)',\n                                    tension: 0.4,\n                                    fill: true,\n                                    pointRadius: 0\n                                }]\n                            },\n                            options: {\n                                responsive: true,\n                                maintainAspectRatio: false,\n                                plugins: { legend: { display: false } },\n                                scales: {\n                                    y: { display: false },\n                                    x: { grid: { display: false }, ticks: { color: '#4b5563', font: { size: 8 } } }\n                                }\n                            }\n                        });\n                    }\n                }\"><canvas x-ref=\"canvas\"></canvas></div></div></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
