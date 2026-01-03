@@ -18,3 +18,5 @@ vendor/
 *.log*
 helix*
 main
+bot_binary
+pdfs/

@@ -7,9 +7,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"obsidian-automation/internal/config"
 	"obsidian-automation/internal/database"
+	"os"
 	"strings"
 	"time"
 
@@ -30,6 +32,7 @@ type UserSession struct {
 }
 
 func NewAuthService(cfg config.Config) *AuthService {
+	slog.Info("Initializing Auth Service", "redirect_url", cfg.Auth.GoogleRedirectURL)
 	return &AuthService{
 		oauthConfig: &oauth2.Config{
 			ClientID:     cfg.Auth.GoogleClientID,
@@ -172,6 +175,19 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// Check for dev bypass
+		if os.Getenv("ENVIRONMENT_MODE") == "dev" {
+			// If we are in dev mode and have no session, we'll allow a "dev-session"
+			_, err := s.VerifySession(r)
+			if err != nil {
+				slog.Info("Dev mode detected: Bypassing real OAuth")
+				devSession, _ := s.CreateDevSession()
+				ctx := context.WithValue(r.Context(), "session", devSession)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+		}
+
 		session, err := s.VerifySession(r)
 		if err != nil {
 			http.Redirect(w, r, "/auth/login", http.StatusFound)
@@ -182,6 +198,15 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), "session", session)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func (s *AuthService) CreateDevSession() (*UserSession, error) {
+	return &UserSession{
+		GoogleID: "dev-user-id",
+		Email:    "dev@example.com",
+		Name:     "Development User",
+		Exp:      time.Now().Add(24 * time.Hour).Unix(),
+	}, nil
 }
 
 func (s *AuthService) GetTokenForUser(ctx context.Context, googleID string) (*oauth2.Token, error) {

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"obsidian-automation/internal/security"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -101,8 +103,12 @@ func (rcm *RuntimeConfigManager) mergeKeysFromEnv() {
 		}
 	}
 
-	// Merge Gemini Keys
-	geminiAPIKeys := viper.GetString("GEMINI_API_KEYS")
+	// Merge Gemini Keys (Handle both plural and singular env vars)
+	geminiAPIKeys := os.Getenv("GEMINI_API_KEYS")
+	if geminiAPIKeys == "" {
+		geminiAPIKeys = os.Getenv("GEMINI_API_KEY")
+	}
+	
 	if geminiAPIKeys != "" {
 		for i, keyVal := range splitAPIKeys(geminiAPIKeys) {
 			if validateAPIKey(keyVal) {
@@ -112,22 +118,22 @@ func (rcm *RuntimeConfigManager) mergeKeysFromEnv() {
 	}
 
 	// Merge Groq Key
-	groqAPIKey := viper.GetString("GROQ_API_KEY")
+	groqAPIKey := os.Getenv("GROQ_API_KEY")
 	if validateAPIKey(groqAPIKey) {
 		mergeKey("Groq", 0, groqAPIKey)
 	}
 
 	// Merge Hugging Face Key
-	huggingFaceAPIKey := viper.GetString("HUGGINGFACE_API_KEY")
+	huggingFaceAPIKey := os.Getenv("HUGGINGFACE_API_KEY")
 	if huggingFaceAPIKey == "" {
-		huggingFaceAPIKey = viper.GetString("HF_TOKEN")
+		huggingFaceAPIKey = os.Getenv("HF_TOKEN")
 	}
 	if validateAPIKey(huggingFaceAPIKey) {
 		mergeKey("Hugging Face", 0, huggingFaceAPIKey)
 	}
 
 	// Merge OpenRouter Key
-	openRouterAPIKey := viper.GetString("OPENROUTER_API_KEY")
+	openRouterAPIKey := os.Getenv("OPENROUTER_API_KEY")
 	if validateAPIKey(openRouterAPIKey) {
 		mergeKey("OpenRouter", 0, openRouterAPIKey)
 	}
@@ -137,8 +143,9 @@ func (rcm *RuntimeConfigManager) mergeKeysFromEnv() {
 func (rcm *RuntimeConfigManager) initializeProviderStates() {
 	// Helper to set and normalize provider
 	setProvider := func(name, model string, enabled bool) {
-		// Remove old lowercase if exists
+		// Crucial: remove any legacy lowercase keys that might be in the map from previous versions
 		delete(rcm.config.Providers, strings.ToLower(name))
+		delete(rcm.config.Providers, name) // reset
 		
 		rcm.config.Providers[name] = ProviderState{
 			Name:      name,
@@ -147,10 +154,10 @@ func (rcm *RuntimeConfigManager) initializeProviderStates() {
 		}
 	}
 
-	setProvider("Gemini", viper.GetString("providers.gemini.model"), viper.GetString("GEMINI_API_KEYS") != "")
-	setProvider("Groq", viper.GetString("providers.groq.model"), viper.GetString("GROQ_API_KEY") != "")
-	setProvider("Hugging Face", viper.GetString("providers.huggingface.model"), viper.GetString("HUGGINGFACE_API_KEY") != "" || viper.GetString("HF_TOKEN") != "")
-	setProvider("OpenRouter", viper.GetString("providers.openrouter.model"), viper.GetString("OPENROUTER_API_KEY") != "")
+	setProvider("Gemini", viper.GetString("providers.gemini.model"), os.Getenv("GEMINI_API_KEYS") != "" || os.Getenv("GEMINI_API_KEY") != "")
+	setProvider("Groq", viper.GetString("providers.groq.model"), os.Getenv("GROQ_API_KEY") != "")
+	setProvider("Hugging Face", viper.GetString("providers.huggingface.model"), os.Getenv("HUGGINGFACE_API_KEY") != "" || os.Getenv("HF_TOKEN") != "")
+	setProvider("OpenRouter", viper.GetString("providers.openrouter.model"), os.Getenv("OPENROUTER_API_KEY") != "")
 	
 	// Normalize ActiveProvider if it was lowercase
 	if rcm.config.ActiveProvider != "" {
@@ -167,21 +174,21 @@ func (rcm *RuntimeConfigManager) initializeProviderStates() {
 func (rcm *RuntimeConfigManager) initializeFromEnv() {
 	// Global AI enabled (default to true if not explicitly false)
 	rcm.config.AIEnabled = true
-	if viper.IsSet("AI_ENABLED") {
-		rcm.config.AIEnabled = viper.GetBool("AI_ENABLED")
+	if os.Getenv("AI_ENABLED") != "" {
+		rcm.config.AIEnabled = os.Getenv("AI_ENABLED") == "true"
 	}
 
 	// Environment
-	rcm.config.Environment.Mode = viper.GetString("ENVIRONMENT_MODE")
-	rcm.config.Environment.BackendHost = viper.GetString("BACKEND_HOST")
-	rcm.config.Environment.IsolationEnabled = viper.GetBool("ENVIRONMENT_ISOLATION_ENABLED")
+	rcm.config.Environment.Mode = os.Getenv("ENVIRONMENT_MODE")
+	rcm.config.Environment.BackendHost = os.Getenv("BACKEND_HOST")
+	rcm.config.Environment.IsolationEnabled = os.Getenv("ENVIRONMENT_ISOLATION_ENABLED") == "true"
 
 	// Initialize all supported providers with their configured models
 	rcm.initializeProviderStates()
 
 	// Providers and API Keys
 	// Gemini
-	geminiAPIKeys := viper.GetString("GEMINI_API_KEYS")
+	geminiAPIKeys := os.Getenv("GEMINI_API_KEYS")
 	if geminiAPIKeys != "" {
 		for i, keyVal := range splitAPIKeys(geminiAPIKeys) {
 			if validateAPIKey(keyVal) {
@@ -198,7 +205,7 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 	}
 
 	// Groq
-	groqAPIKey := viper.GetString("GROQ_API_KEY")
+	groqAPIKey := os.Getenv("GROQ_API_KEY")
 	if validateAPIKey(groqAPIKey) {
 		id := generateKeyID("Groq", 0)
 		rcm.config.APIKeys[id] = APIKeyState{
@@ -211,9 +218,9 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 	}
 
 	// Hugging Face
-	huggingFaceAPIKey := viper.GetString("HUGGINGFACE_API_KEY")
+	huggingFaceAPIKey := os.Getenv("HUGGINGFACE_API_KEY")
 	if huggingFaceAPIKey == "" {
-		huggingFaceAPIKey = viper.GetString("HF_TOKEN")
+		huggingFaceAPIKey = os.Getenv("HF_TOKEN")
 	}
 	if validateAPIKey(huggingFaceAPIKey) {
 		id := generateKeyID("Hugging Face", 0)
@@ -227,7 +234,7 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 	}
 
 	// OpenRouter
-	openRouterAPIKey := viper.GetString("OPENROUTER_API_KEY")
+	openRouterAPIKey := os.Getenv("OPENROUTER_API_KEY")
 	if validateAPIKey(openRouterAPIKey) {
 		id := generateKeyID("OpenRouter", 0)
 		rcm.config.APIKeys[id] = APIKeyState{
@@ -246,8 +253,30 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 func (rcm *RuntimeConfigManager) GetConfig() RuntimeConfig {
 	rcm.mu.RLock()
 	defer rcm.mu.RUnlock()
-	// Return a deep copy to prevent external modification
-	return rcm.config // Shallow copy is okay for structs, but maps need deep copy
+	
+	// Perform a deep copy to ensure isolation and mask sensitive values
+	copy := RuntimeConfig{
+		AIEnabled:      rcm.config.AIEnabled,
+		ActiveProvider: rcm.config.ActiveProvider,
+		Providers:      make(map[string]ProviderState),
+		APIKeys:        make(map[string]APIKeyState),
+		Environment:    rcm.config.Environment,
+	}
+
+	for k, v := range rcm.config.Providers {
+		copy.Providers[k] = v
+	}
+
+	for k, v := range rcm.config.APIKeys {
+		masked := v
+		if masked.Value != "" {
+			masked.Value = "********" // Redact sensitive value
+		}
+		masked.EncryptedValue = "" // Don't expose encrypted value either
+		copy.APIKeys[k] = masked
+	}
+
+	return copy
 }
 
 // SetAIEnabled updates the global AI enabled status.
@@ -294,7 +323,7 @@ func (rcm *RuntimeConfigManager) AddAPIKey(providerName, keyValue string, enable
 	}
 
 	if !validateAPIKey(keyValue) {
-		return "", fmt.Errorf("invalid API key: must be non-empty and at least 8 characters")
+		return "", fmt.Errorf("invalid API key format")
 	}
 
 	keyID := uuid.New().String()
@@ -305,6 +334,9 @@ func (rcm *RuntimeConfigManager) AddAPIKey(providerName, keyValue string, enable
 		Enabled:   enabled,
 		IsDefault: false, // Newly added keys are not from .env
 	}
+	
+	slog.Info("New API key added", "provider", providerName, "key_id", keyID)
+	
 	if err := rcm.persistStateToDBUnprotected(); err != nil {
 		return "", err
 	}
@@ -317,6 +349,7 @@ func (rcm *RuntimeConfigManager) RemoveAPIKey(keyID string) error {
 	defer rcm.mu.Unlock()
 	if _, ok := rcm.config.APIKeys[keyID]; ok {
 		delete(rcm.config.APIKeys, keyID)
+		slog.Info("API key removed", "key_id", keyID)
 		return rcm.persistStateToDBUnprotected()
 	}
 	return fmt.Errorf("API key %s not found", keyID)
@@ -418,6 +451,19 @@ func (rcm *RuntimeConfigManager) PersistStateToDB() error {
 // persistStateToDBUnprotected performs the actual database save without acquiring locks.
 // It assumes the caller is already holding a lock (Lock or RLock).
 func (rcm *RuntimeConfigManager) persistStateToDBUnprotected() error {
+	// Prepare for persistence: encrypt all keys
+	for id, ks := range rcm.config.APIKeys {
+		if ks.Value != "" {
+			encrypted, err := security.Encrypt(ks.Value)
+			if err != nil {
+				slog.Error("Failed to encrypt API key", "key_id", id, "error", err)
+				continue
+			}
+			ks.EncryptedValue = encrypted
+			rcm.config.APIKeys[id] = ks
+		}
+	}
+
 	data, err := json.Marshal(rcm.config)
 	if err != nil {
 		return fmt.Errorf("failed to marshal runtime config: %w", err)
@@ -452,6 +498,19 @@ func (rcm *RuntimeConfigManager) LoadStateFromDB() error {
 	defer rcm.mu.Unlock()
 	if err := json.Unmarshal(configData, &rcm.config); err != nil {
 		return fmt.Errorf("failed to unmarshal runtime config from DB: %w", err)
+	}
+
+	// Decrypt loaded keys
+	for id, ks := range rcm.config.APIKeys {
+		if ks.EncryptedValue != "" {
+			decrypted, err := security.Decrypt(ks.EncryptedValue)
+			if err != nil {
+				slog.Error("Failed to decrypt API key from storage", "key_id", id, "error", err)
+				continue
+			}
+			ks.Value = decrypted
+			rcm.config.APIKeys[id] = ks
+		}
 	}
 
 	// Sanitize loaded keys: remove any that are invalid and normalize provider names
@@ -513,8 +572,7 @@ func splitAPIKeys(keys string) []string {
 
 // validateAPIKey checks if a key is valid (non-empty, minimum length).
 func validateAPIKey(key string) bool {
-	trimmed := strings.TrimSpace(key)
-	return trimmed != "" && len(trimmed) >= 8 // Basic sanity check: keys are usually long
+	return security.ValidateAPIKeyFormat(key)
 }
 
 
@@ -522,3 +580,21 @@ func validateAPIKey(key string) bool {
 func (rcm *RuntimeConfigManager) GetDB() *sql.DB {
 	return rcm.db
 }
+
+// ResetState clears all API keys and resets providers to disabled. Used primarily for testing.
+func (rcm *RuntimeConfigManager) ResetState() {
+	rcm.mu.Lock()
+	defer rcm.mu.Unlock()
+	rcm.config.APIKeys = make(map[string]APIKeyState)
+	
+	// Reset providers to known defaults but disabled
+	rcm.config.Providers = map[string]ProviderState{
+		"Gemini":       {Name: "Gemini", Enabled: false, ModelName: "gemini-pro"},
+		"Groq":         {Name: "Groq", Enabled: false, ModelName: "llama3-70b"},
+		"Hugging Face": {Name: "Hugging Face", Enabled: false, ModelName: "gpt2"},
+		"OpenRouter":   {Name: "OpenRouter", Enabled: false, ModelName: "gpt-3.5-turbo"},
+	}
+	rcm.config.ActiveProvider = ""
+	rcm.persistStateToDBUnprotected()
+}
+

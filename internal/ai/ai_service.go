@@ -70,11 +70,11 @@ func (s *AIService) RefreshProviders(ctx context.Context) {
 				case "Gemini":
 					provider = NewGeminiProvider(ctx, keyState.Value, modelName)
 				case "Groq":
-					provider = NewGroqProvider(keyState.Value, modelName)
+					provider = NewGroqProvider(keyState.Value, modelName, nil)
 				case "Hugging Face":
 					provider = NewHuggingFaceProvider(keyState.Value, modelName)
 				case "OpenRouter":
-					provider = NewOpenRouterProvider(keyState.Value, modelName)
+					provider = NewOpenRouterProvider(keyState.Value, modelName, nil)
 				case "onnx", "None", "ONNX":
 					// Known but unimplemented or handled elsewhere
 					continue
@@ -181,8 +181,8 @@ func (s *AIService) GetProvidersInfo() []ModelInfo {
 
 // === Core Logic ===
 
-// selectProvider selects an active provider and key, respecting fallback logic.
-func (s *AIService) selectProvider(ctx context.Context) (AIProvider, st.APIKeyState, error) {
+// selectProvider selects an active provider and key, respecting fallback logic and exclusion list.
+func (s *AIService) selectProvider(ctx context.Context, excludeKeyIDs []string) (AIProvider, st.APIKeyState, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	
@@ -193,6 +193,15 @@ func (s *AIService) selectProvider(ctx context.Context) (AIProvider, st.APIKeySt
 
 	preferred := cfg.ActiveProvider
 	
+	isExcluded := func(id string) bool {
+		for _, ex := range excludeKeyIDs {
+			if ex == id {
+				return true
+			}
+		}
+		return false
+	}
+
 	// Helper to find valid key for provider
 	findKey := func(provName string) (AIProvider, st.APIKeyState, bool) {
 		ps, ok := cfg.Providers[provName]
@@ -207,43 +216,65 @@ func (s *AIService) selectProvider(ctx context.Context) (AIProvider, st.APIKeySt
 		}
 
 		for id, p := range keyMap {
+			if isExcluded(id) {
+				continue
+			}
 			ks, ok := cfg.APIKeys[id]
 			if !ok || !ks.Enabled || ks.Blocked {
 				continue
 			}
-			// Avoid keys recently rate limited? (Simplification: relying on internal state/retry logic mostly)
 			return p, ks, true
 		}
 		return nil, st.APIKeyState{}, false
 	}
 
 	// 1. Try preferred
-	if preferred != "" {
+	if preferred != "" && preferred != "None" {
 		if p, k, ok := findKey(preferred); ok {
+			slog.Debug("Selected preferred AI provider", "provider", preferred, "key_id", k.ID)
 			return p, k, nil
 		}
 	}
 
 	// 2. Fallback
-	for name := range s.providers {
+	// Order fallback by attempting Gemini first, then Groq, then others
+	fallbacks := []string{"Gemini", "Groq", "Hugging Face", "OpenRouter"}
+	for _, name := range fallbacks {
 		if name == preferred {
 			continue
 		}
 		if p, k, ok := findKey(name); ok {
+			slog.Info("Using fallback AI provider", "provider", name, "key_id", k.ID)
 			return p, k, nil
 		}
 	}
 
-	return nil, st.APIKeyState{}, fmt.Errorf("no active AI providers available")
+	// 3. Catch-all for any other provider
+	for name := range s.providers {
+		// Already tried these
+		skip := false
+		for _, tried := range fallbacks {
+			if name == tried { skip = true; break }
+		}
+		if skip || name == preferred { continue }
+
+		if p, k, ok := findKey(name); ok {
+			slog.Info("Using catch-all AI provider", "provider", name, "key_id", k.ID)
+			return p, k, nil
+		}
+	}
+
+	return nil, st.APIKeyState{}, fmt.Errorf("no active AI providers available (tried %d exclusions)", len(excludeKeyIDs))
 }
 
-// ExecuteWithRetry handles retries for transient errors.
+// ExecuteWithRetry handles retries for transient errors, tracking failed keys to ensure they are skipped in subsequent attempts.
 func (s *AIService) ExecuteWithRetry(ctx context.Context, op func(AIProvider) error) error {
-	maxRetries := 3
+	maxRetries := 5 // Increased retries since we now skip failed keys
 	backoff := 1 * time.Second
+	var failedKeys []string
 
 	for i := 0; i < maxRetries; i++ {
-		provider, key, err := s.selectProvider(ctx)
+		provider, key, err := s.selectProvider(ctx, failedKeys)
 		if err != nil {
 			return err
 		}
@@ -255,16 +286,29 @@ func (s *AIService) ExecuteWithRetry(ctx context.Context, op func(AIProvider) er
 
 		// Check if error is an AppError
 		if appErr, ok := err.(*AppError); ok {
-			// Always block the specific key that failed for this session if it's a serious error
-			if appErr.Code == ErrCodeRateLimit || appErr.Code == ErrCodeUnauthorized || appErr.Code == ErrCodeInvalidRequest {
-				slog.Warn("Blocking failing key", "key_id", key.ID, "code", appErr.Code)
+			// Track this key as failed for the current request context
+			failedKeys = append(failedKeys, key.ID)
+
+			// If it's a serious permanent error, block the key globally
+			if appErr.Code == ErrCodeUnauthorized || appErr.Code == ErrCodeInvalidRequest {
+				slog.Error("Blocking failing key permanently (invalid/unauthorized)", "key_id", key.ID, "error", appErr.Message)
 				s.sm.UpdateKeyUsage(key.ID, appErr.Message, -1)
+			} else if appErr.Code == ErrCodeRateLimit {
+				slog.Warn("Key rate limited, skipping for this request", "key_id", key.ID)
+				// We don't block it permanently, just let backoff handle it or try next key
 			}
 
 			if appErr.Retry && i < maxRetries-1 {
-				slog.Warn("Transient error, retrying with next available provider/key", "attempt", i+1, "error", err)
+				slog.Warn("Transient error, retrying with different key", "attempt", i+1, "failed_key", key.ID, "error", err)
 				time.Sleep(backoff)
-				backoff = time.Duration(math.Min(float64(backoff)*2, float64(30*time.Second)))
+				backoff = time.Duration(math.Min(float64(backoff)*2, float64(15*time.Second)))
+				continue
+			}
+		} else {
+			// Non-AppError (e.g. context timeout)
+			failedKeys = append(failedKeys, key.ID)
+			if i < maxRetries-1 {
+				slog.Warn("System error, retrying with different key", "attempt", i+1, "error", err)
 				continue
 			}
 		}
@@ -272,7 +316,7 @@ func (s *AIService) ExecuteWithRetry(ctx context.Context, op func(AIProvider) er
 		return err // Non-retryable or max retries reached
 	}
 
-	return fmt.Errorf("max retries exceeded")
+	return fmt.Errorf("max retries exceeded (tried %d keys)", len(failedKeys))
 }
 
 // AnalyzeText generates structured JSON data from text.

@@ -19,13 +19,17 @@ type GroqProvider struct {
 }
 
 // NewGroqProvider creates a new Groq provider for a single API key.
-func NewGroqProvider(apiKey string, modelName string) *GroqProvider {
+func NewGroqProvider(apiKey string, modelName string, httpClient *http.Client) *GroqProvider {
 	if apiKey == "" {
 		slog.Info("Groq API key is empty. Groq AI will be unavailable for this provider instance.")
 		return nil
 	}
 
-	client := groq.NewClient(apiKey, &http.Client{Timeout: 60 * time.Second})
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 60 * time.Second}
+	}
+
+	client := groq.NewClient(apiKey, httpClient)
 
 	return &GroqProvider{
 		client:    client,

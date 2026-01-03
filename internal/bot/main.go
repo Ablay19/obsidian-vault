@@ -9,10 +9,14 @@ import (
 	"net/http"
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/database"
+	"obsidian-automation/internal/git"
+	"obsidian-automation/internal/pipeline"
 	"obsidian-automation/internal/state" // Import the new state package
 	"obsidian-automation/internal/status"
+	"obsidian-automation/internal/config" // Import app config
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -25,6 +29,8 @@ var (
 	db         *sql.DB
 	aiService  *ai.AIService
 	rcm        *state.RuntimeConfigManager // Add package-level RCM
+	ingestionPipeline *pipeline.Pipeline
+	gitManager *git.Manager
 	userStates = make(map[int64]*UserState)
 	stateMutex sync.RWMutex
 	userLocks  sync.Map // Per-user processing lock
@@ -78,6 +84,7 @@ func Run(database *sql.DB, ais *ai.AIService, runtimeConfigManager *state.Runtim
 
 	token := os.Getenv("TELEGRAM_BOT_TOKEN")
 	if token == "" {
+		fmt.Fprintf(os.Stderr, "FATAL: TELEGRAM_BOT_TOKEN is not set. Bot cannot start.\n")
 		return fmt.Errorf("TELEGRAM_BOT_TOKEN not set")
 	}
 
@@ -86,6 +93,25 @@ func Run(database *sql.DB, ais *ai.AIService, runtimeConfigManager *state.Runtim
 		return err
 	}
 	bot := &TelegramBot{botAPI}
+
+	// Initialize Git Manager
+	gitCfg := config.AppConfig.Git
+	gitManager = git.NewManager(gitCfg.VaultPath)
+	if err := gitManager.ConfigureUser(gitCfg.UserName, gitCfg.UserEmail); err != nil {
+		slog.Warn("Failed to configure Git user", "error", err)
+	}
+	if gitCfg.RemoteURL != "" {
+		if err := gitManager.EnsureRemote(gitCfg.RemoteURL); err != nil {
+			slog.Warn("Failed to ensure Git remote", "error", err)
+		}
+	}
+
+	// Initialize Pipeline
+	processor := NewBotProcessor(aiService)
+	sink := NewBotSink(db, botAPI, gitManager)
+	ingestionPipeline = pipeline.NewPipeline(3, 100, processor, sink) // 3 workers, buffer 100
+	ingestionPipeline.Start(context.Background())
+	defer ingestionPipeline.Stop()
 
 	commands := []tgbotapi.BotCommand{
 		{Command: "start", Description: "Start the bot"},
@@ -246,8 +272,56 @@ func handleCommand(bot Bot, message *tgbotapi.Message) {
 			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Nothing to process. Send a file first."))
 			return
 		}
-		statusMsg, _ := bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Processing staged file..."))
-		createObsidianNote(state.PendingFile, state.PendingFileType, message, bot, message.Chat.ID, statusMsg.MessageID, state.PendingContext)
+		statusMsg, _ := bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Submitting to processing pipeline..."))
+		
+		// Parse flags
+		args := message.CommandArguments()
+		outputFormat := "pdf" // Default to PDF
+		if strings.Contains(args, "--output md") {
+			outputFormat = "md"
+		}
+		gitCommit := strings.Contains(args, "--commit")
+
+		// Pipeline Integration
+		fileBytes, err := os.ReadFile(state.PendingFile)
+		if err != nil {
+			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "❌ Failed to read staged file."))
+			slog.Error("Read file error", "error", err)
+			return
+		}
+
+		job := pipeline.Job{
+			ID:           fmt.Sprintf("%d_%d", message.Chat.ID, time.Now().UnixNano()),
+			Source:       "telegram",
+			SourceID:     strconv.FormatInt(int64(message.MessageID), 10),
+			Data:         fileBytes,
+			ContentType:  pipeline.ContentTypeImage, // Default
+			ReceivedAt:   time.Now(),
+			MaxRetries:   3,
+			OutputFormat: outputFormat,
+			GitCommit:    gitCommit,
+			UserContext: pipeline.UserContext{
+				UserID:   strconv.FormatInt(message.From.ID, 10),
+				Language: state.Language,
+			},
+			Metadata: map[string]interface{}{
+				"caption": state.PendingContext,
+				"chat_id": message.Chat.ID, // Store ChatID for replies
+			},
+		}
+
+		if state.PendingFileType == "pdf" {
+			job.ContentType = pipeline.ContentTypePDF
+		}
+
+		if err := ingestionPipeline.Submit(job); err != nil {
+			bot.Send(tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("❌ Pipeline full/error: %v", err)))
+		} else {
+			// Update status message
+			bot.Request(tgbotapi.NewEditMessageText(message.Chat.ID, statusMsg.MessageID, "✅ Job queued. You will be notified when complete."))
+		}
+
+		// Cleanup state
 		state.IsStaging = false
 		state.PendingFile = ""
 		state.PendingContext = ""

@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -21,13 +22,14 @@ type GeminiProvider struct {
 }
 
 // NewGeminiProvider creates a new Gemini provider for a single API key.
-func NewGeminiProvider(ctx context.Context, apiKey string, modelName string) *GeminiProvider {
+func NewGeminiProvider(ctx context.Context, apiKey string, modelName string, opts ...option.ClientOption) *GeminiProvider {
 	if apiKey == "" {
 		slog.Info("Gemini API key is empty. Gemini AI will be unavailable for this provider instance.")
 		return nil
 	}
 
-	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
+	finalOpts := append([]option.ClientOption{option.WithAPIKey(apiKey)}, opts...)
+	client, err := genai.NewClient(ctx, finalOpts...)
 	if err != nil {
 		slog.Error("Error creating Gemini client", "error", err)
 		return nil
@@ -140,7 +142,8 @@ func (p *GeminiProvider) StreamCompletion(ctx context.Context, req *RequestModel
 
 func (p *GeminiProvider) mapError(err error) error {
 	slog.Error("Gemini API error", "error", err, "model", p.modelName)
-	if gerr, ok := err.(*googleapi.Error); ok {
+	var gerr *googleapi.Error
+	if errors.As(err, &gerr) {
 		if gerr.Code == 429 {
 			return NewError(ErrCodeRateLimit, "gemini rate limit exceeded", err)
 		}

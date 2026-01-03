@@ -52,7 +52,7 @@ templ OverviewPanel(services []status.ServiceStatus, aiProviders struct {
                                     } else {
                                         $store.notifications.show(data.message || 'Error', 'error');
                                     }
-                                    htmx.trigger('#dashboard-content', 'load');
+                                    htmx.trigger('#main-content', 'refresh');
                                 }).catch(err => {
                                     loading = false;
                                     $store.notifications.show('Network error', 'error');

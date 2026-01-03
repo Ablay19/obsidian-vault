@@ -194,6 +194,7 @@ templ App() {
 
         <div id="main-content" 
              class="p-4 lg:p-8 space-y-6 max-w-7xl mx-auto"
+             hx-trigger="load, refresh"
              x-init="
                 const tab = $store.app.activeTab;
                 const link = document.querySelector(`[hx-target='#main-content'][href='#${tab}']`);
