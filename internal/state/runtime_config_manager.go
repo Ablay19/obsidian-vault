@@ -42,7 +42,8 @@ func NewRuntimeConfigManager(db *sql.DB) (*RuntimeConfigManager, error) {
 		// If DB load fails, initialize from .env (bootstrap)
 		rcm.initializeFromEnv()
 	} else {
-		slog.Info("State loaded from DB successfully.")
+		slog.Info("State loaded from DB successfully. Merging keys from environment.")
+		rcm.mergeKeysFromEnv()
 	}
 
 	// Persist the current state after initialization (either from DB or env)
@@ -53,17 +54,96 @@ func NewRuntimeConfigManager(db *sql.DB) (*RuntimeConfigManager, error) {
 	return rcm, nil
 }
 
-// initializeFromEnv populates the state from environment variables (bootstrap only).
-func (rcm *RuntimeConfigManager) initializeFromEnv() {
-	// Global AI enabled (from env or default true)
-	rcm.config.AIEnabled = viper.GetBool("AI_ENABLED")
+// mergeKeysFromEnv ensures that keys provided via environment variables are injected
+// into the runtime configuration, overwriting or supplementing what was loaded from the DB.
+// This is necessary because keys are not persisted to the DB for security.
+func (rcm *RuntimeConfigManager) mergeKeysFromEnv() {
+	rcm.mu.Lock()
+	defer rcm.mu.Unlock()
 
-	// Environment
-	rcm.config.Environment.Mode = viper.GetString("ENVIRONMENT_MODE")
-	rcm.config.Environment.BackendHost = viper.GetString("BACKEND_HOST")
-	rcm.config.Environment.IsolationEnabled = viper.GetBool("ENVIRONMENT_ISOLATION_ENABLED")
+	// Re-initialize provider states from env/config to ensure enabled status is correct based on current env
+	rcm.initializeProviderStates()
 
-	// Initialize all supported providers with their configured models
+	// Merge Gemini Keys
+	geminiAPIKeys := viper.GetString("GEMINI_API_KEYS")
+	if geminiAPIKeys != "" {
+		for i, keyVal := range splitAPIKeys(geminiAPIKeys) {
+			id := generateKeyID("Gemini", i)
+			if ks, ok := rcm.config.APIKeys[id]; ok {
+				ks.Value = keyVal
+				rcm.config.APIKeys[id] = ks
+			} else {
+				rcm.config.APIKeys[id] = APIKeyState{
+					ID:        id,
+					Provider:  "Gemini",
+					Value:     keyVal,
+					Enabled:   true,
+					IsDefault: true,
+				}
+			}
+		}
+	}
+
+	// Merge Groq Key
+	groqAPIKey := viper.GetString("GROQ_API_KEY")
+	if groqAPIKey != "" {
+		id := generateKeyID("Groq", 0)
+		if ks, ok := rcm.config.APIKeys[id]; ok {
+			ks.Value = groqAPIKey
+			rcm.config.APIKeys[id] = ks
+		} else {
+			rcm.config.APIKeys[id] = APIKeyState{
+				ID:        id,
+				Provider:  "Groq",
+				Value:     groqAPIKey,
+				Enabled:   true,
+				IsDefault: true,
+			}
+		}
+	}
+
+	// Merge Hugging Face Key
+	huggingFaceAPIKey := viper.GetString("HUGGINGFACE_API_KEY")
+	if huggingFaceAPIKey == "" {
+		huggingFaceAPIKey = viper.GetString("HF_TOKEN")
+	}
+	if huggingFaceAPIKey != "" {
+		id := generateKeyID("Hugging Face", 0)
+		if ks, ok := rcm.config.APIKeys[id]; ok {
+			ks.Value = huggingFaceAPIKey
+			rcm.config.APIKeys[id] = ks
+		} else {
+			rcm.config.APIKeys[id] = APIKeyState{
+				ID:        id,
+				Provider:  "Hugging Face",
+				Value:     huggingFaceAPIKey,
+				Enabled:   true,
+				IsDefault: true,
+			}
+		}
+	}
+
+	// Merge OpenRouter Key
+	openRouterAPIKey := viper.GetString("OPENROUTER_API_KEY")
+	if openRouterAPIKey != "" {
+		id := generateKeyID("OpenRouter", 0)
+		if ks, ok := rcm.config.APIKeys[id]; ok {
+			ks.Value = openRouterAPIKey
+			rcm.config.APIKeys[id] = ks
+		} else {
+			rcm.config.APIKeys[id] = APIKeyState{
+				ID:        id,
+				Provider:  "OpenRouter",
+				Value:     openRouterAPIKey,
+				Enabled:   true,
+				IsDefault: true,
+			}
+		}
+	}
+}
+
+// initializeProviderStates sets up the Providers map based on current environment/config.
+func (rcm *RuntimeConfigManager) initializeProviderStates() {
 	rcm.config.Providers["Gemini"] = ProviderState{
 		Name:      "Gemini",
 		Enabled:   viper.GetString("GEMINI_API_KEYS") != "",
@@ -84,6 +164,20 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 		Enabled:   viper.GetString("OPENROUTER_API_KEY") != "",
 		ModelName: viper.GetString("providers.openrouter.model"),
 	}
+}
+
+// initializeFromEnv populates the state from environment variables (bootstrap only).
+func (rcm *RuntimeConfigManager) initializeFromEnv() {
+	// Global AI enabled (from env or default true)
+	rcm.config.AIEnabled = viper.GetBool("AI_ENABLED")
+
+	// Environment
+	rcm.config.Environment.Mode = viper.GetString("ENVIRONMENT_MODE")
+	rcm.config.Environment.BackendHost = viper.GetString("BACKEND_HOST")
+	rcm.config.Environment.IsolationEnabled = viper.GetBool("ENVIRONMENT_ISOLATION_ENABLED")
+
+	// Initialize all supported providers with their configured models
+	rcm.initializeProviderStates()
 
 	// Providers and API Keys
 	// Gemini

@@ -57,25 +57,25 @@ func OverviewPanel(services []status.ServiceStatus, aiProviders struct {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div><div class=\"grid grid-cols-1 lg:grid-cols-2 gap-8\"><div class=\"bg-gray-800 p-4 rounded-lg shadow\"><h2 class=\"text-xl font-bold mb-4\">AI Provider Management</h2><div x-data=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div><div class=\"grid grid-cols-1 lg:grid-cols-2 gap-8\"><div class=\"bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700\"><h2 class=\"text-xl font-bold mb-6 flex items-center\"><span class=\"material-icons mr-2 text-blue-400\">settings</span> AI Provider Management</h2><div x-data=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var2 string
-		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs("{ selectedProvider: '" + aiProviders.Active + "', message: '' }")
+		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs("{ selectedProvider: '" + aiProviders.Active + "', loading: false }")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 23, Col: 83}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 26, Col: 86}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"><div class=\"flex items-center space-x-2 mb-2\"><select x-model=\"selectedProvider\" class=\"flex-grow p-2 border rounded-md bg-gray-700 border-gray-600 text-gray-100\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"><div class=\"flex items-center space-x-2 mb-4\"><select x-model=\"selectedProvider\" class=\"flex-grow p-2.5 border rounded-md bg-gray-900 border-gray-700 text-gray-100 focus:ring-2 focus:ring-blue-500 outline-none transition-all\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if len(aiProviders.Available) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<option value=\"\" disabled selected class=\"bg-gray-700 text-gray-100\">No providers available</option> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<option value=\"\" disabled selected class=\"bg-gray-900 text-gray-100\">No providers available</option> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -88,7 +88,7 @@ func OverviewPanel(services []status.ServiceStatus, aiProviders struct {
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(provider)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 30, Col: 32}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 33, Col: 32}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -101,20 +101,20 @@ func OverviewPanel(services []status.ServiceStatus, aiProviders struct {
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(provider == aiProviders.Active)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 30, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 33, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" class=\"bg-gray-700 text-gray-100\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" class=\"bg-gray-900 text-gray-100\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(provider)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 30, Col: 123}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 33, Col: 123}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -125,59 +125,46 @@ func OverviewPanel(services []status.ServiceStatus, aiProviders struct {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</select> <button @click=\"\n\t\t\t\t\t\t\tfetch('/api/ai/provider/set', {\n\t\t\t\t\t\t\t\tmethod: 'POST',\n\t\t\t\t\t\t\t\theaders: { 'Content-Type': 'application/json' },\n\t\t\t\t\t\t\t\tbody: JSON.stringify({ provider: selectedProvider })\n\t\t\t\t\t\t\t}).then(res => res.json()).then(data => {\n\t\t\t\t\t\t\t\tmessage = data.message;\n\t\t\t\t\t\t\t\thtmx.trigger('#dashboard-content', 'load');\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\" class=\"bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700\">Set Provider</button></div><p x-text=\"message\" class=\"text-sm\"></p></div></div><div class=\"bg-gray-800 p-4 rounded-lg shadow\"><h2 class=\"text-xl font-bold mb-4\">System Information</h2><div class=\"grid grid-cols-2 gap-2 text-gray-300\"><div><span class=\"font-semibold\">OS:</span> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</select> <button @click=\"\n\t\t\t\t\t\t\t\tloading = true;\n\t\t\t\t\t\t\t\tfetch('/api/ai/provider/set', {\n\t\t\t\t\t\t\t\t\tmethod: 'POST',\n\t\t\t\t\t\t\t\t\theaders: { 'Content-Type': 'application/json' },\n\t\t\t\t\t\t\t\t\tbody: JSON.stringify({ provider: selectedProvider })\n\t\t\t\t\t\t\t\t}).then(res => res.json()).then(data => {\n\t\t\t\t\t\t\t\t\tloading = false;\n\t\t\t\t\t\t\t\t\thtmx.trigger('#dashboard-content', 'load');\n\t\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t\" :disabled=\"loading || !selectedProvider\" class=\"bg-blue-600 text-white px-6 py-2.5 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold flex items-center\"><span x-show=\"!loading\">Set Active</span> <span x-show=\"loading\" class=\"material-icons animate-spin text-sm\">sync</span></button></div></div></div><div class=\"bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700\"><h2 class=\"text-xl font-bold mb-6 flex items-center\"><span class=\"material-icons mr-2 text-blue-400\">info</span> System Information</h2><div class=\"grid grid-cols-2 gap-4 text-gray-300 font-mono text-sm\"><div class=\"bg-gray-900 p-2 rounded border border-gray-700\"><span class=\"text-gray-500 block text-xs mb-1\">OS</span> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(runtime.GOOS)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 50, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 62, Col: 136}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</div><div><span class=\"font-semibold\">Architecture:</span> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</div><div class=\"bg-gray-900 p-2 rounded border border-gray-700\"><span class=\"text-gray-500 block text-xs mb-1\">ARCH</span> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(runtime.GOARCH)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 51, Col: 75}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 63, Col: 140}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div><div><span class=\"font-semibold\">Go Version:</span> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div><div class=\"bg-gray-900 p-2 rounded border border-gray-700 col-span-2\"><span class=\"text-gray-500 block text-xs mb-1\">GO VERSION</span> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(runtime.Version())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 52, Col: 76}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 64, Col: 160}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div><div><span class=\"font-semibold\">PID:</span> ")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var9 string
-		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(getPID(services))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 53, Col: 68}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</div></div></div></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div></div></div></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
