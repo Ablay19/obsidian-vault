@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/state" // Import the new state package
@@ -13,7 +15,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -26,13 +27,17 @@ var (
 	rcm        *state.RuntimeConfigManager // Add package-level RCM
 	userStates = make(map[int64]*UserState)
 	stateMutex sync.RWMutex
-	isBusy     atomic.Bool
+	userLocks  sync.Map // Per-user processing lock
 )
 
 type UserState struct {
 	Language          string
 	LastProcessedFile string
 	LastCreatedNote   string
+	PendingFile       string
+	PendingFileType   string
+	PendingContext    string
+	IsStaging         bool
 }
 
 func getUserState(userID int64) *UserState {
@@ -106,20 +111,19 @@ func Run(database *sql.DB, ais *ai.AIService, runtimeConfigManager *state.Runtim
 	slog.Info("Bot is running...")
 
 	for update := range updates {
-		if status.IsPaused() || isBusy.Load() {
+		if status.IsPaused() {
 			time.Sleep(1 * time.Second)
 			continue
 		}
+		slog.Debug("Received update", "update_id", update.UpdateID)
 		go handleUpdate(bot, &update, token)
 	}
 	return nil
 }
 
 func handleUpdate(bot Bot, update *tgbotapi.Update, token string) {
-	isBusy.Store(true)
-	defer isBusy.Store(false)
-
 	if update.CallbackQuery != nil {
+		slog.Info("Handling callback query", "chat_id", update.CallbackQuery.Message.Chat.ID, "data", update.CallbackQuery.Data)
 		handleCallbackQuery(bot, update.CallbackQuery)
 		return
 	}
@@ -127,6 +131,19 @@ func handleUpdate(bot Bot, update *tgbotapi.Update, token string) {
 	if update.Message == nil {
 		return
 	}
+
+	// For messages, we only lock if it's NOT a command. 
+	// Commands like /setprovider should always be allowed.
+	if !update.Message.IsCommand() {
+		userID := update.Message.From.ID
+		if _, loaded := userLocks.LoadOrStore(userID, true); loaded {
+			slog.Warn("User is already being processed, skipping duplicate content update", "user_id", userID)
+			return
+		}
+		defer userLocks.Delete(userID)
+	}
+
+	slog.Info("Handling message", "chat_id", update.Message.Chat.ID, "user", update.Message.From.UserName, "text", update.Message.Text)
 
 	if update.Message.Photo != nil {
 		handlePhoto(bot, update.Message, token)
@@ -138,12 +155,22 @@ func handleUpdate(bot Bot, update *tgbotapi.Update, token string) {
 }
 
 func handleCallbackQuery(bot Bot, callback *tgbotapi.CallbackQuery) {
+	// Always answer the callback query to stop the loading spinner
+	defer bot.Request(tgbotapi.NewCallback(callback.ID, ""))
+
+	if callback.Data == "refresh_providers" {
+		// Re-trigger handleCommand for setprovider to refresh the list
+		msg := callback.Message
+		msg.From = callback.From // Crucial: preserve the user who clicked
+		msg.Text = "/setprovider"
+		handleCommand(bot, msg)
+		return
+	}
 	if strings.HasPrefix(callback.Data, "setprovider:") {
 		providerName := strings.TrimPrefix(callback.Data, "setprovider:")
 		if err := aiService.SetProvider(providerName); err != nil {
-			bot.Send(tgbotapi.NewCallbackWithAlert(callback.ID, fmt.Sprintf("Failed: %v", err)))
+			bot.Send(tgbotapi.NewMessage(callback.Message.Chat.ID, fmt.Sprintf("❌ Failed to set provider: %v", err)))
 		} else {
-			bot.Send(tgbotapi.NewCallback(callback.ID, fmt.Sprintf("AI provider set to: %s", providerName)))
 			editMsg := tgbotapi.NewEditMessageText(callback.Message.Chat.ID, callback.Message.MessageID, fmt.Sprintf("✅ AI provider has been set to: *%s*", providerName))
 			editMsg.ParseMode = "Markdown"
 			bot.Send(editMsg)
@@ -153,19 +180,43 @@ func handleCallbackQuery(bot Bot, callback *tgbotapi.CallbackQuery) {
 
 // handleCommand processes text messages and commands.
 func handleCommand(bot Bot, message *tgbotapi.Message) {
+	slog.Info("Processing command/text", "chat_id", message.Chat.ID, "text", message.Text)
 	database.UpsertUser(message.From)
 	state := getUserState(message.From.ID) // Get user state for language
 
 	if !message.IsCommand() {
+		// New Staging Logic
+		if state.IsStaging {
+			if state.PendingContext != "" {
+				state.PendingContext += "\n"
+			}
+			state.PendingContext += message.Text
+			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "📝 Context added. Add more or type /process."))
+			return
+		}
+
+		slog.Info("Handling non-command text as AI prompt", "chat_id", message.Chat.ID, "text_len", len(message.Text))
 		// Handle non-command text messages as a general AI prompt
 		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Thinking..."))
 
 		var responseText strings.Builder
-		writer := &responseText
+		// writer := &responseText // No longer using io.Writer
 
 		systemPrompt := fmt.Sprintf("Respond in %s. Output your response as valid HTML, with proper headings, paragraphs, and LaTeX formulas using MathJax syntax.", state.Language)
 
-		err := aiService.Process(context.Background(), writer, systemPrompt, message.Text, nil) // Assuming Process takes context, writer, system, prompt, images
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		req := &ai.RequestModel{
+			SystemPrompt: systemPrompt,
+			UserPrompt:   message.Text,
+			Temperature:  0.7,
+		}
+
+		err := aiService.Chat(ctx, req, func(chunk string) {
+			responseText.WriteString(chunk)
+		})
+
 		if err != nil {
 			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Sorry, I had trouble thinking: "+err.Error()))
 			return
@@ -178,8 +229,19 @@ func handleCommand(bot Bot, message *tgbotapi.Message) {
 	}
 
 	switch message.Command() {
+	case "process":
+		if !state.IsStaging {
+			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Nothing to process. Send a file first."))
+			return
+		}
+		statusMsg, _ := bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Processing staged file..."))
+		createObsidianNote(state.PendingFile, state.PendingFileType, message, bot, message.Chat.ID, statusMsg.MessageID, state.PendingContext)
+		state.IsStaging = false
+		state.PendingFile = ""
+		state.PendingContext = ""
+
 	case "start", "help":
-		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Bot active! Send images/PDFs for processing.\n\nCommands:\n/stats - Statistics\n/last - Show last created note\n/reprocess - Reprocess last file\n/lang - Set AI language (e.g. /lang English)\n/setprovider - Set AI provider (Dynamic Menu)\n/modelinfo - Show AI model information\n/help - This message"))
+		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Bot active! Send images/PDFs for processing.\n\nCommands:\n/process - Process staged file\n/stats - Statistics\n/last - Show last created note\n/reprocess - Reprocess last file\n/lang - Set AI language (e.g. /lang English)\n/setprovider - Set AI provider (Dynamic Menu)\n/modelinfo - Show AI model information\n/help - This message"))
 	case "pause_bot":
 		status.SetPaused(true)
 		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Bot is paused."))
@@ -207,7 +269,7 @@ func handleCommand(bot Bot, message *tgbotapi.Message) {
 			if strings.HasSuffix(strings.ToLower(state.LastProcessedFile), ".jpg") || strings.HasSuffix(strings.ToLower(state.LastProcessedFile), ".png") {
 				fileType = "image"
 			}
-			createObsidianNote(state.LastProcessedFile, fileType, message, bot, message.Chat.ID, 0) // messageID 0 as it's not a direct reply
+			createObsidianNote(state.LastProcessedFile, fileType, message, bot, message.Chat.ID, 0, "") // messageID 0 as it's not a direct reply
 		} else {
 			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "No file to reprocess. Please send a file first."))
 		}
@@ -244,27 +306,54 @@ func handleCommand(bot Bot, message *tgbotapi.Message) {
 			return
 		}
 
-		healthyProviders := aiService.GetHealthyProviders(context.Background())
-		if len(healthyProviders) == 0 {
-			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "No healthy AI providers found. Please check your API keys."))
+		// Handle direct argument: /setprovider Groq
+		arg := message.CommandArguments()
+		if arg != "" {
+			if err := aiService.SetProvider(arg); err != nil {
+				bot.Send(tgbotapi.NewMessage(message.Chat.ID, "❌ "+err.Error()))
+			} else {
+				bot.Send(tgbotapi.NewMessage(message.Chat.ID, "✅ AI provider set to: "+arg))
+			}
 			return
 		}
 
-		var currentProviderName string
-		currentProviderName = aiService.GetActiveProviderName()
+		availableProviders := aiService.GetAvailableProviders()
+		if len(availableProviders) == 0 {
+			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "No AI providers are configured. Please check your .env file."))
+			return
+		}
+
+		// Get healthy ones for icons
+		healthyProviders := aiService.GetHealthyProviders(context.Background())
+		healthyMap := make(map[string]bool)
+		for _, p := range healthyProviders {
+			healthyMap[p] = true
+		}
+
+		currentProviderName := aiService.GetActiveProviderName()
 
 		var rows [][]tgbotapi.InlineKeyboardButton
-		for _, p := range healthyProviders {
-			label := p
+		for _, p := range availableProviders {
+			statusIcon := "❌"
+			if healthyMap[p] {
+				statusIcon = "🟢"
+			}
+			
+			label := fmt.Sprintf("%s %s", statusIcon, p)
 			if p == currentProviderName {
 				label = "✅ " + p
 			}
+			
 			rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 				tgbotapi.NewInlineKeyboardButtonData(label, "setprovider:"+p),
 			))
 		}
 
-		msg := tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("Current AI provider: *%s*\n\nSelect a new provider from the healthy options below:", currentProviderName))
+		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔄 Refresh Status", "refresh_providers"),
+		))
+
+		msg := tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("Current AI provider: *%s*\n\nSelect a provider below (🟢=Healthy, ❌=Error/Expired):", currentProviderName))
 		msg.ParseMode = "Markdown"
 		msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(rows...)
 		bot.Send(msg)
@@ -296,29 +385,109 @@ func handleCommand(bot Bot, message *tgbotapi.Message) {
 func handlePhoto(bot Bot, message *tgbotapi.Message, token string) {
 	database.UpsertUser(message.From)
 	status.UpdateActivity()
-	statusMsg, _ := bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Processing image..."))
+	
 	photo := message.Photo[len(message.Photo)-1]
 	filename := downloadFile(bot, photo.FileID, "jpg", token)
-	if filename != "" {
-		createObsidianNote(filename, "image", message, bot, message.Chat.ID, statusMsg.MessageID)
+	if filename == "" {
+		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "❌ Failed to download image."))
+		return
 	}
+
+	state := getUserState(message.From.ID)
+	state.PendingFile = filename
+	state.PendingFileType = "image"
+	state.IsStaging = true
+	state.PendingContext = ""
+	
+	// Check for caption and add it as initial context
+	if message.Caption != "" {
+		state.PendingContext = message.Caption
+	}
+
+	bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🖼️ Image staged. Send additional text context, or type /process to analyze."))
 }
 
 // handleDocument processes incoming documents.
 func handleDocument(bot Bot, message *tgbotapi.Message, token string) {
 	database.UpsertUser(message.From)
 	status.UpdateActivity()
-	// ... document handling logic
+	
+	doc := message.Document
+	// Basic check for PDF
+	if doc.MimeType != "application/pdf" && !strings.HasSuffix(strings.ToLower(doc.FileName), ".pdf") {
+		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "⚠️ Only PDFs are currently supported for documents."))
+		return
+	}
+
+	filename := downloadFile(bot, doc.FileID, "pdf", token)
+	if filename == "" {
+		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "❌ Failed to download document."))
+		return
+	}
+
+	state := getUserState(message.From.ID)
+	state.PendingFile = filename
+	state.PendingFileType = "pdf"
+	state.IsStaging = true
+	state.PendingContext = ""
+
+	if message.Caption != "" {
+		state.PendingContext = message.Caption
+	}
+
+	bot.Send(tgbotapi.NewMessage(message.Chat.ID, "📄 PDF staged. Send additional text context, or type /process to analyze."))
 }
 
 // downloadFile downloads a file from Telegram.
 func downloadFile(bot Bot, fileID, ext, token string) string {
-	// ... download logic
-	return ""
+	file, err := bot.GetFile(tgbotapi.FileConfig{FileID: fileID})
+	if err != nil {
+		slog.Error("GetFile error", "error", err)
+		return ""
+	}
+
+	// Construct the URL manually or use the library helper if available.
+	// tgbotapi's File.Link(token) returns the URL.
+	// However, bot interface is generic. We need to cast or assume functionality.
+	// Since we passed 'token', we can construct it.
+	// But wait, bot.GetFile returns tgbotapi.File.
+	fileURL := file.Link(token)
+
+	resp, err := http.Get(fileURL)
+	if err != nil {
+		slog.Error("HTTP error downloading file", "error", err)
+		return ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		slog.Error("Bad response status", "status", resp.StatusCode)
+		return ""
+	}
+
+	// Create 'attachments' directory if not exists
+	os.MkdirAll("attachments", 0755)
+
+	filename := fmt.Sprintf("attachments/%s.%s", time.Now().Format("20060102_150405"), ext)
+	out, err := os.Create(filename)
+	if err != nil {
+		slog.Error("Create file error", "error", err)
+		return ""
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		slog.Error("Write file error", "error", err)
+		return ""
+	}
+
+	slog.Info("File downloaded", "path", filename)
+	return filename
 }
 
 // createObsidianNote orchestrates the whole process.
-func createObsidianNote(filePath, fileType string, message *tgbotapi.Message, bot Bot, chatID int64, messageID int) {
+func createObsidianNote(filePath, fileType string, message *tgbotapi.Message, bot Bot, chatID int64, messageID int, additionalContext string) {
 	state := getUserState(message.From.ID)
 	updateStatus := func(status string) {
 		if messageID != 0 {
@@ -330,7 +499,10 @@ func createObsidianNote(filePath, fileType string, message *tgbotapi.Message, bo
 		// This could be used to stream the response to the user in real-time
 	}
 
-	content := processFileWithAI(filePath, fileType, aiService, streamCallback, state.Language, updateStatus)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second) // Longer timeout for file processing
+	defer cancel()
+
+	content := processFileWithAI(ctx, filePath, fileType, aiService, streamCallback, state.Language, updateStatus, additionalContext)
 
 	if content.Category == "unprocessed" || content.Category == "error" {
 		bot.Send(tgbotapi.NewMessage(chatID, "Could not process the file."))

@@ -3,9 +3,7 @@ package ai
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
-	"strings"
 	"sync"
 
 	"github.com/google/generative-ai-go/genai"
@@ -18,7 +16,7 @@ import (
 type GeminiProvider struct {
 	client    *genai.Client
 	modelName string
-	key       string // Store the key for identification/logging if needed, but not for direct use
+	key       string
 	mu        sync.Mutex
 }
 
@@ -31,7 +29,7 @@ func NewGeminiProvider(ctx context.Context, apiKey string, modelName string) *Ge
 
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
-		slog.Error("Error creating Gemini client", "error", err, "api_key_partial", TruncateKeyForID(apiKey))
+		slog.Error("Error creating Gemini client", "error", err)
 		return nil
 	}
 
@@ -42,77 +40,114 @@ func NewGeminiProvider(ctx context.Context, apiKey string, modelName string) *Ge
 	}
 }
 
-// GenerateContent streams a human-readable response from Gemini.
-func (p *GeminiProvider) GenerateContent(ctx context.Context, prompt string, imageData []byte, modelType string, streamCallback func(string)) (string, error) {
-	var fullResponse strings.Builder
+// GenerateCompletion sends a request to the AI service and returns a complete response.
+func (p *GeminiProvider) GenerateCompletion(ctx context.Context, req *RequestModel) (*ResponseModel, error) {
+	model := p.client.GenerativeModel(p.modelName)
+	if req.Model != "" {
+		model = p.client.GenerativeModel(req.Model)
+	}
+	
+	if req.Temperature != 0 {
+		model.SetTemperature(float32(req.Temperature))
+	}
+	if req.MaxTokens != 0 {
+		model.SetMaxOutputTokens(int32(req.MaxTokens))
+	}
+	if req.JSONMode {
+		model.ResponseMIMEType = "application/json"
+	}
 
-	model := p.client.GenerativeModel(modelType)
 	var parts []genai.Part
-	parts = append(parts, genai.Text(prompt))
-	if len(imageData) > 0 {
-		parts = append(parts, genai.ImageData("jpeg", imageData))
+	if req.SystemPrompt != "" {
+		model.SystemInstruction = &genai.Content{
+			Parts: []genai.Part{genai.Text(req.SystemPrompt)},
+		}
+	}
+	
+	parts = append(parts, genai.Text(req.UserPrompt))
+	if len(req.ImageData) > 0 {
+		parts = append(parts, genai.ImageData("jpeg", req.ImageData))
+	}
+
+	resp, err := model.GenerateContent(ctx, parts...)
+	if err != nil {
+		return nil, p.mapError(err)
+	}
+
+	content := ""
+	if len(resp.Candidates) > 0 && len(resp.Candidates[0].Content.Parts) > 0 {
+		if txt, ok := resp.Candidates[0].Content.Parts[0].(genai.Text); ok {
+			content = string(txt)
+		}
+	}
+
+	return &ResponseModel{
+		Content: content,
+		ProviderInfo: p.GetModelInfo(),
+	}, nil
+}
+
+// StreamCompletion streams the response from the AI service.
+func (p *GeminiProvider) StreamCompletion(ctx context.Context, req *RequestModel) (<-chan StreamResponse, error) {
+	model := p.client.GenerativeModel(p.modelName)
+	if req.Model != "" {
+		model = p.client.GenerativeModel(req.Model)
+	}
+
+	// Configuration
+	if req.Temperature != 0 {
+		model.SetTemperature(float32(req.Temperature))
+	}
+
+	var parts []genai.Part
+	if req.SystemPrompt != "" {
+		model.SystemInstruction = &genai.Content{
+			Parts: []genai.Part{genai.Text(req.SystemPrompt)},
+		}
+	}
+	
+	parts = append(parts, genai.Text(req.UserPrompt))
+	if len(req.ImageData) > 0 {
+		parts = append(parts, genai.ImageData("jpeg", req.ImageData))
 	}
 
 	iter := model.GenerateContentStream(ctx, parts...)
-	fullResponse.Reset()
+	respChan := make(chan StreamResponse)
 
-	for {
-		resp, streamErr := iter.Next()
-		if streamErr == iterator.Done {
-			return fullResponse.String(), nil
-		}
-		if streamErr != nil {
-			// Check for 429 specifically for higher-level handling (key rotation)
-			if gerr, ok := streamErr.(*googleapi.Error); ok && gerr.Code == 429 {
-				return "", fmt.Errorf("gemini_rate_limit_exceeded: %w", streamErr)
+	go func() {
+		defer close(respChan)
+		for {
+			resp, err := iter.Next()
+			if err == iterator.Done {
+				respChan <- StreamResponse{Done: true}
+				return
 			}
-			return "", streamErr
-		}
-		if len(resp.Candidates) > 0 && len(resp.Candidates[0].Content.Parts) > 0 {
-			if txt, ok := resp.Candidates[0].Content.Parts[0].(genai.Text); ok {
-				chunk := string(txt)
-				fullResponse.WriteString(chunk)
-				if streamCallback != nil {
-					streamCallback(chunk)
+			if err != nil {
+				respChan <- StreamResponse{Error: p.mapError(err)}
+				return
+			}
+
+			if len(resp.Candidates) > 0 && len(resp.Candidates[0].Content.Parts) > 0 {
+				if txt, ok := resp.Candidates[0].Content.Parts[0].(genai.Text); ok {
+					respChan <- StreamResponse{Content: string(txt)}
 				}
 			}
 		}
-	}
+	}()
+
+	return respChan, nil
 }
 
-// GenerateJSONData gets structured data in JSON format from Gemini.
-func (p *GeminiProvider) GenerateJSONData(ctx context.Context, text, language string) (string, error) {
-	prompt := fmt.Sprintf(`Analyze the following text and return ONLY a JSON object with the following fields:
-- "category": a single category from the list [physics, math, chemistry, admin, general].
-- "topics": a list of 3-5 key topics.
-- "questions": a list of 2-3 review questions based on the text.
-The content of "topics" and "questions" fields should be in %s.
-Text to analyze:
-%s`, language, text)
-
-	model := p.client.GenerativeModel(p.modelName)
-
-	resp, err := model.GenerateContent(ctx, genai.Text(prompt))
-
-	if err == nil {
-		if len(resp.Candidates) > 0 && len(resp.Candidates[0].Content.Parts) > 0 {
-			if txt, ok := resp.Candidates[0].Content.Parts[0].(genai.Text); ok {
-				jsonStr := string(txt)
-				jsonStr = strings.TrimPrefix(jsonStr, "```json")
-				jsonStr = strings.TrimSuffix(jsonStr, "```")
-				jsonStr = strings.TrimSpace(jsonStr)
-				return jsonStr, nil
-			}
+func (p *GeminiProvider) mapError(err error) error {
+	if gerr, ok := err.(*googleapi.Error); ok {
+		if gerr.Code == 429 {
+			return NewError(ErrCodeRateLimit, "gemini rate limit exceeded", err)
 		}
-		err = fmt.Errorf("no content generated from AI for JSON data")
+		if gerr.Code >= 500 {
+			return NewError(ErrCodeProviderOffline, "gemini service unavailable", err)
+		}
 	}
-
-	// Check for 429 specifically for higher-level handling (key rotation)
-	if gerr, ok := err.(*googleapi.Error); ok && gerr.Code == 429 {
-		return "", fmt.Errorf("gemini_rate_limit_exceeded: %w", err)
-	}
-
-	return "", err
+	return NewError(ErrCodeInternal, "gemini internal error", err)
 }
 
 // GetModelInfo returns information about the model.
@@ -131,39 +166,4 @@ func (p *GeminiProvider) CheckHealth(ctx context.Context) error {
 	model := p.client.GenerativeModel(p.modelName)
 	_, err := model.GenerateContent(ctx, genai.Text("ping"))
 	return err
-}
-
-// Process sends a request to the AI service and returns a stream of responses.
-func (p *GeminiProvider) Process(ctx context.Context, w io.Writer, system, prompt string, images []string) error {
-	model := p.client.GenerativeModel(p.modelName)
-	var parts []genai.Part
-	if system != "" {
-		parts = append(parts, genai.Text(system))
-	}
-	parts = append(parts, genai.Text(prompt))
-
-	iter := model.GenerateContentStream(ctx, parts...)
-	for {
-		resp, streamErr := iter.Next()
-		if streamErr == iterator.Done {
-			return nil
-		}
-		if streamErr != nil {
-			// Check for 429 specifically for higher-level handling (key rotation)
-			if gerr, ok := streamErr.(*googleapi.Error); ok && gerr.Code == 429 {
-				return fmt.Errorf("gemini_rate_limit_exceeded: %w", streamErr)
-			}
-			return streamErr
-		}
-		if len(resp.Candidates) > 0 {
-			candidate := resp.Candidates[0]
-			if candidate.Content != nil {
-				for _, part := range candidate.Content.Parts {
-					if txt, ok := part.(genai.Text); ok {
-						fmt.Fprint(w, txt)
-					}
-				}
-			}
-		}
-	}
 }

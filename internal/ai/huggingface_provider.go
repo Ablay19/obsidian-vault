@@ -1,121 +1,267 @@
 package ai
 
 import (
+	"bufio"
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
+	"net/http"
+	"os"
 	"strings"
-
-	"github.com/hupe1980/go-huggingface"
+	"time"
 )
 
-// HuggingFaceProvider implements the AIProvider interface for Hugging Face models.
+// HuggingFaceProvider implements the AIProvider interface for Hugging Face Router (OpenAI-compatible).
 type HuggingFaceProvider struct {
-	client *huggingface.InferenceClient
-	model  string
+	apiKey     string
+	modelName  string
+	httpClient *http.Client
 }
 
 // NewHuggingFaceProvider creates a new HuggingFaceProvider.
 func NewHuggingFaceProvider(apiKey, model string) *HuggingFaceProvider {
 	if apiKey == "" {
-		return nil // Return nil if API key is empty
+		return nil
 	}
-	client := huggingface.NewInferenceClient(apiKey)
 	return &HuggingFaceProvider{
-		client: client,
-		model:  model,
+		apiKey:    apiKey,
+		modelName: model,
+		httpClient: &http.Client{
+			Timeout: 60 * time.Second,
+		},
 	}
+}
+
+type hfMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type hfChatRequest struct {
+	Model    string      `json:"model"`
+	Messages []hfMessage `json:"messages"`
+	Stream   bool        `json:"stream,omitempty"`
+}
+
+type hfChatResponse struct {
+	Choices []struct {
+		Message struct {
+			Content string `json:"content"`
+		} `json:"message"`
+	} `json:"choices"`
+	Error interface{} `json:"error,omitempty"`
+}
+
+type hfStreamResponse struct {
+	Choices []struct {
+		Delta struct {
+			Content string `json:"content"`
+		} `json:"delta"`
+	} `json:"choices"`
+}
+
+func (p *HuggingFaceProvider) getBaseURL() string {
+	baseURL := os.Getenv("HUGGINGFACE_BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://router.huggingface.co/v1"
+	}
+	return strings.TrimSuffix(baseURL, "/")
 }
 
 // Process sends a request to the Hugging Face service and returns a stream of responses.
 func (p *HuggingFaceProvider) Process(ctx context.Context, w io.Writer, system, prompt string, images []string) error {
-	fullPrompt := prompt
+	messages := []hfMessage{}
 	if system != "" {
-		fullPrompt = fmt.Sprintf("%s\n\n%s", system, prompt)
+		messages = append(messages, hfMessage{Role: "system", Content: system})
 	}
+	messages = append(messages, hfMessage{Role: "user", Content: prompt})
 
-	res, err := p.client.TextGeneration(ctx, &huggingface.TextGenerationRequest{
-		Model:  p.model,
-		Inputs: fullPrompt,
+	reqBody, err := json.Marshal(hfChatRequest{
+		Model:    p.modelName,
+		Messages: messages,
+		Stream:   true,
 	})
 	if err != nil {
 		return err
 	}
 
-	if len(res) > 0 {
-		_, err := fmt.Fprint(w, res[0].GeneratedText)
+	url := fmt.Sprintf("%s/chat/completions", p.getBaseURL())
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(reqBody))
+	if err != nil {
 		return err
 	}
 
-	return fmt.Errorf("no text generated")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+p.apiKey)
+
+	slog.Info("HF Router Request (Stream)", "url", url, "model", p.modelName)
+
+	resp, err := p.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("hugging face router api error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	reader := bufio.NewReader(resp.Body)
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+
+		line = strings.TrimSpace(line)
+		if line == "" || !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+
+		data := strings.TrimPrefix(line, "data: ")
+		if data == "[DONE]" {
+			break
+		}
+
+		var streamResp hfStreamResponse
+		if err := json.Unmarshal([]byte(data), &streamResp); err != nil {
+			continue
+		}
+
+		if len(streamResp.Choices) > 0 {
+			content := streamResp.Choices[0].Delta.Content
+			fmt.Fprint(w, content)
+		}
+	}
+
+	return nil
 }
 
-// GenerateContent streams a human-readable response from Hugging Face.
+// GenerateContent generates a non-streaming response.
 func (p *HuggingFaceProvider) GenerateContent(ctx context.Context, prompt string, imageData []byte, modelType string, streamCallback func(string)) (string, error) {
-	res, err := p.client.TextGeneration(ctx, &huggingface.TextGenerationRequest{
-		Model:  p.model,
-		Inputs: prompt,
+	reqBody, err := json.Marshal(hfChatRequest{
+		Model: p.modelName,
+		Messages: []hfMessage{
+			{Role: "user", Content: prompt},
+		},
+		Stream: false,
 	})
 	if err != nil {
 		return "", err
 	}
 
-	if len(res) > 0 {
-		text := res[0].GeneratedText
-		if streamCallback != nil {
-			streamCallback(text)
-		}
-		return text, nil
+	url := fmt.Sprintf("%s/chat/completions", p.getBaseURL())
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(reqBody))
+	if err != nil {
+		return "", err
 	}
 
-	return "", fmt.Errorf("no text generated")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+p.apiKey)
+
+	slog.Info("HF Router Request", "url", url, "model", p.modelName)
+
+	resp, err := p.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("hugging face router api error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var chatResp hfChatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
+		return "", err
+	}
+
+	if len(chatResp.Choices) > 0 {
+		content := chatResp.Choices[0].Message.Content
+		if streamCallback != nil {
+			streamCallback(content)
+		}
+		return content, nil
+	}
+
+	return "", fmt.Errorf("no content generated from Hugging Face Router")
 }
 
-// GenerateJSONData gets structured data in JSON format from Hugging Face.
+// GenerateJSONData gets structured data in JSON format.
 func (p *HuggingFaceProvider) GenerateJSONData(ctx context.Context, text, language string) (string, error) {
 	prompt := fmt.Sprintf(`Analyze the following text and return ONLY a JSON object with the following fields:
-- "category": a single category from the list [physics, math, chemistry, admin, general].
-- "topics": a list of 3-5 key topics.
-- "questions": a list of 2-3 review questions based on the text.
-The content of "topics" and "questions" fields should be in %s.
+- \"category\": a single category from the list [physics, math, chemistry, admin, general].
+- \"topics\": a list of 3-5 key topics.
+- \"questions\": a list of 2-3 review questions based on the text.
+The content of \"topics\" and \"questions\" fields should be in %s.
 Text to analyze:
 %s`, language, text)
 
-	res, err := p.client.TextGeneration(ctx, &huggingface.TextGenerationRequest{
-		Model:  p.model,
-		Inputs: prompt,
+	reqBody, err := json.Marshal(hfChatRequest{
+		Model: p.modelName,
+		Messages: []hfMessage{
+			{Role: "user", Content: prompt},
+		},
+		Stream: false,
 	})
 	if err != nil {
 		return "", err
 	}
 
-	if len(res) > 0 {
-		jsonStr := res[0].GeneratedText
+	url := fmt.Sprintf("%s/chat/completions", p.getBaseURL())
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(reqBody))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+p.apiKey)
+
+	resp, err := p.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("hugging face router api error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var chatResp hfChatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
+		return "", err
+	}
+
+	if len(chatResp.Choices) > 0 {
+		jsonStr := chatResp.Choices[0].Message.Content
 		jsonStr = strings.TrimPrefix(jsonStr, "```json")
 		jsonStr = strings.TrimSuffix(jsonStr, "```")
 		jsonStr = strings.TrimSpace(jsonStr)
 		return jsonStr, nil
 	}
 
-	return "", fmt.Errorf("no text generated from Hugging Face for JSON data")
+	return "", fmt.Errorf("no content generated from Hugging Face Router for JSON data")
 }
 
 // GetModelInfo returns information about the model.
 func (p *HuggingFaceProvider) GetModelInfo() ModelInfo {
 	return ModelInfo{
 		ProviderName: "Hugging Face",
-		ModelName:    p.model,
+		ModelName:    p.modelName,
 	}
 }
 
 // CheckHealth verifies if the provider is currently operational.
 func (p *HuggingFaceProvider) CheckHealth(ctx context.Context) error {
-	if p.client == nil {
-		return fmt.Errorf("hugging face client is nil")
-	}
-	_, err := p.client.TextGeneration(ctx, &huggingface.TextGenerationRequest{
-		Model:  p.model,
-		Inputs: "ping",
-	})
+	_, err := p.GenerateContent(ctx, "ping", nil, "", nil)
 	return err
 }

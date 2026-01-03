@@ -2,7 +2,6 @@ package ai
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -16,7 +15,7 @@ import (
 type GroqProvider struct {
 	client    groq.Client
 	modelName string
-	key       string // Store the key for identification/logging if needed
+	key       string
 }
 
 // NewGroqProvider creates a new Groq provider for a single API key.
@@ -35,68 +34,119 @@ func NewGroqProvider(apiKey string, modelName string) *GroqProvider {
 	}
 }
 
-// GenerateContent generates a non-streaming response from Groq.
-func (p *GroqProvider) GenerateContent(ctx context.Context, prompt string, imageData []byte, modelType string, streamCallback func(string)) (string, error) {
-	req := groq.ChatCompletionRequest{
-		Model: groq.ModelID(p.modelName), // Cast to groq.ModelID
-		Messages: []groq.Message{
-			{
-				Role:    "user",
-				Content: prompt,
-			},
-		},
+// GenerateCompletion sends a request to the AI service and returns a complete response.
+func (p *GroqProvider) GenerateCompletion(ctx context.Context, req *RequestModel) (*ResponseModel, error) {
+	model := p.modelName
+	if req.Model != "" {
+		model = req.Model
 	}
 
-	resp, err := p.client.CreateChatCompletion(req)
+	messages := []groq.Message{}
+	if req.SystemPrompt != "" {
+		messages = append(messages, groq.Message{
+			Role:    "system",
+			Content: req.SystemPrompt,
+		})
+	}
+	messages = append(messages, groq.Message{
+		Role:    "user",
+		Content: req.UserPrompt,
+	})
+
+	gReq := groq.ChatCompletionRequest{
+		Model:    groq.ModelID(model),
+		Messages: messages,
+	}
+	
+	// ResponseFormat might not be supported in this SDK version, relying on prompt.
+	if req.Temperature != 0 {
+		gReq.Temperature = req.Temperature
+	}
+	if req.MaxTokens != 0 {
+		gReq.MaxTokens = req.MaxTokens
+	}
+
+	resp, err := p.client.CreateChatCompletion(gReq)
 	if err != nil {
-		return "", fmt.Errorf("groq content generation failed: %w", err)
+		return nil, p.mapError(err)
 	}
 
+	content := ""
 	if len(resp.Choices) > 0 {
-		fullResponse := resp.Choices[0].Message.Content
-		if streamCallback != nil {
-			streamCallback(fullResponse)
-		}
-		return fullResponse, nil
+		content = resp.Choices[0].Message.Content
 	}
 
-	return "", fmt.Errorf("no content generated from Groq")
+	return &ResponseModel{
+		Content: content,
+		ProviderInfo: p.GetModelInfo(),
+	}, nil
 }
 
-// GenerateJSONData gets structured data in JSON format from Groq.
-func (p *GroqProvider) GenerateJSONData(ctx context.Context, text, language string) (string, error) {
-	prompt := fmt.Sprintf(`Analyze the following text and return ONLY a JSON object with the following fields:
-- "category": a single category from the list [physics, math, chemistry, admin, general].
-- "topics": a list of 3-5 key topics.
-- "questions": a list of 2-3 review questions based on the text.
-The content of "topics" and "questions" fields should be in %s.
-Text to analyze:
-%s`, language, text)
-
-	req := groq.ChatCompletionRequest{
-		Model: groq.ModelID(p.modelName), // Cast to groq.ModelID
-		Messages: []groq.Message{
-			{
-				Role:    "user",
-				Content: prompt,
-			},
-		},
+// StreamCompletion streams the response from the AI service.
+func (p *GroqProvider) StreamCompletion(ctx context.Context, req *RequestModel) (<-chan StreamResponse, error) {
+	model := p.modelName
+	if req.Model != "" {
+		model = req.Model
 	}
 
-	resp, err := p.client.CreateChatCompletion(req)
+	messages := []groq.Message{}
+	if req.SystemPrompt != "" {
+		messages = append(messages, groq.Message{
+			Role:    "system",
+			Content: req.SystemPrompt,
+		})
+	}
+	messages = append(messages, groq.Message{
+		Role:    "user",
+		Content: req.UserPrompt,
+	})
+
+	gReq := groq.ChatCompletionRequest{
+		Model:    groq.ModelID(model),
+		Messages: messages,
+		Stream:   true,
+	}
+
+	if req.Temperature != 0 {
+		gReq.Temperature = req.Temperature
+	}
+
+	respCh, _, err := p.client.CreateChatCompletionStream(ctx, gReq)
 	if err != nil {
-		return "", fmt.Errorf("groq json generation failed: %w", err)
+		return nil, p.mapError(err)
 	}
 
-	if len(resp.Choices) > 0 {
-		jsonStr := resp.Choices[0].Message.Content
-		jsonStr = strings.TrimPrefix(jsonStr, "```json")
-		jsonStr = strings.TrimSuffix(jsonStr, "```")
-		jsonStr = strings.TrimSpace(jsonStr)
-		return jsonStr, nil
-	}
+	outputChan := make(chan StreamResponse)
 
-	return "", fmt.Errorf("no content generated from Groq for JSON data")
+	go func() {
+		defer close(outputChan)
+		for res := range respCh {
+			if res.Error != nil {
+				if res.Error == io.EOF {
+					outputChan <- StreamResponse{Done: true}
+					return
+				}
+				outputChan <- StreamResponse{Error: p.mapError(res.Error)}
+				return
+			}
+			if len(res.Response.Choices) > 0 {
+				outputChan <- StreamResponse{Content: res.Response.Choices[0].Delta.Content}
+			}
+		}
+	}()
+
+	return outputChan, nil
+}
+
+func (p *GroqProvider) mapError(err error) error {
+	// Simple mapping, actual SDK might have specific error types
+	if strings.Contains(err.Error(), "429") {
+		return NewError(ErrCodeRateLimit, "groq rate limit exceeded", err)
+	}
+	if strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "500") {
+		return NewError(ErrCodeProviderOffline, "groq service unavailable", err)
+	}
+	return NewError(ErrCodeInternal, "groq internal error", err)
 }
 
 // GetModelInfo returns information about the model.
@@ -117,40 +167,4 @@ func (p *GroqProvider) CheckHealth(ctx context.Context) error {
 	}
 	_, err := p.client.CreateChatCompletion(req)
 	return err
-}
-
-// Process sends a request to the AI service and returns a stream of responses.
-func (p *GroqProvider) Process(ctx context.Context, w io.Writer, system, prompt string, images []string) error {
-	req := groq.ChatCompletionRequest{
-		Model: groq.ModelID(p.modelName), // Cast to groq.ModelID
-		Messages: []groq.Message{
-			{
-				Role:    "system",
-				Content: system,
-			},
-			{
-				Role:    "user",
-				Content: prompt,
-			},
-		},
-		Stream: true,
-	}
-
-	respCh, _, err := p.client.CreateChatCompletionStream(ctx, req)
-	if err != nil {
-		return fmt.Errorf("groq content generation failed: %w", err)
-	}
-
-	for res := range respCh {
-		if res.Error != nil {
-			if res.Error == io.EOF {
-				return nil
-			}
-			return fmt.Errorf("error occurred during stream: %v", res.Error)
-		}
-		if len(res.Response.Choices) > 0 {
-			fmt.Fprint(w, res.Response.Choices[0].Delta.Content)
-		}
-	}
-	return nil
 }
