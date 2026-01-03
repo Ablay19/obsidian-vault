@@ -6,12 +6,12 @@
     --colorlinks: #0abefb;
     --ff: "JetBrains Mono", monospace;
 
-    --h1: bold 54px/70px var(--ff);
-    --h2: bold 36px/36px var(--ff);
-    --h3: bold 24px/30px var(--ff);
-    --links: bold 18px/18px var(--ff);
-    --p2: 30px/36px var(--ff);
-    --p: 18px/30px var(--ff);
+    --h1: bold 32px/1.2 var(--ff);
+    --h2: bold 24px/1.2 var(--ff);
+    --h3: bold 18px/1.2 var(--ff);
+    --links: bold 14px/1.2 var(--ff);
+    --p2: 16px/1.4 var(--ff);
+    --p: 14px/1.4 var(--ff);
 
     --transition: 0.3s ease-in-out;
 
