@@ -110,9 +110,6 @@ func Run(database *sql.DB, ais *ai.AIService, runtimeConfigManager *state.Runtim
 			time.Sleep(1 * time.Second)
 			continue
 		}
-		if update.Message == nil {
-			continue
-		}
 		go handleUpdate(bot, &update, token)
 	}
 	return nil
@@ -122,12 +119,35 @@ func handleUpdate(bot Bot, update *tgbotapi.Update, token string) {
 	isBusy.Store(true)
 	defer isBusy.Store(false)
 
+	if update.CallbackQuery != nil {
+		handleCallbackQuery(bot, update.CallbackQuery)
+		return
+	}
+
+	if update.Message == nil {
+		return
+	}
+
 	if update.Message.Photo != nil {
 		handlePhoto(bot, update.Message, token)
 	} else if update.Message.Document != nil {
 		handleDocument(bot, update.Message, token)
 	} else if update.Message.IsCommand() || update.Message.Text != "" {
 		handleCommand(bot, update.Message)
+	}
+}
+
+func handleCallbackQuery(bot Bot, callback *tgbotapi.CallbackQuery) {
+	if strings.HasPrefix(callback.Data, "setprovider:") {
+		providerName := strings.TrimPrefix(callback.Data, "setprovider:")
+		if err := aiService.SetProvider(providerName); err != nil {
+			bot.Send(tgbotapi.NewCallbackWithAlert(callback.ID, fmt.Sprintf("Failed: %v", err)))
+		} else {
+			bot.Send(tgbotapi.NewCallback(callback.ID, fmt.Sprintf("AI provider set to: %s", providerName)))
+			editMsg := tgbotapi.NewEditMessageText(callback.Message.Chat.ID, callback.Message.MessageID, fmt.Sprintf("✅ AI provider has been set to: *%s*", providerName))
+			editMsg.ParseMode = "Markdown"
+			bot.Send(editMsg)
+		}
 	}
 }
 
@@ -159,7 +179,7 @@ func handleCommand(bot Bot, message *tgbotapi.Message) {
 
 	switch message.Command() {
 	case "start", "help":
-		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Bot active! Send images/PDFs for processing.\n\nCommands:\n/stats - Statistics\n/last - Show last created note\n/reprocess - Reprocess last file\n/lang - Set AI language (e.g. /lang English)\n/switchkey - Switch to next API key (Gemini only)\n/setprovider - Set AI provider (e.g. /setprovider Groq)\n/modelinfo - Show AI model information\n/help - This message"))
+		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Bot active! Send images/PDFs for processing.\n\nCommands:\n/stats - Statistics\n/last - Show last created note\n/reprocess - Reprocess last file\n/lang - Set AI language (e.g. /lang English)\n/setprovider - Set AI provider (Dynamic Menu)\n/modelinfo - Show AI model information\n/help - This message"))
 	case "pause_bot":
 		status.SetPaused(true)
 		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Bot is paused."))
@@ -219,29 +239,35 @@ func handleCommand(bot Bot, message *tgbotapi.Message) {
 			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Unsupported language. Please use English or French."))
 		}
 	case "setprovider":
-		if aiService == nil || len(aiService.GetAvailableProviders()) == 0 {
-			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "AI service is not available or no providers are configured."))
-			return
-		}
-		providerName := message.CommandArguments()
-		if providerName == "" {
-			var currentProviderName string
-			activeProvider, _, _ := aiService.GetActiveProvider(context.Background())
-			if activeProvider != nil {
-				currentProviderName = activeProvider.GetModelInfo().ProviderName
-			} else {
-				currentProviderName = "None"
-			}
-			availableProviders := aiService.GetAvailableProviders()
-			bot.Send(tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("Current provider is %s.\nAvailable providers: %s\nUsage: /setprovider <provider>", currentProviderName, strings.Join(availableProviders, ", "))))
+		if aiService == nil {
+			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "AI service is not available."))
 			return
 		}
 
-		if err := aiService.SetProvider(providerName); err != nil {
-			bot.Send(tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("Failed to set AI provider: %v", err)))
-		} else {
-			bot.Send(tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("AI provider set to: %s", providerName)))
+		healthyProviders := aiService.GetHealthyProviders(context.Background())
+		if len(healthyProviders) == 0 {
+			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "No healthy AI providers found. Please check your API keys."))
+			return
 		}
+
+		var currentProviderName string
+		currentProviderName = aiService.GetActiveProviderName()
+
+		var rows [][]tgbotapi.InlineKeyboardButton
+		for _, p := range healthyProviders {
+			label := p
+			if p == currentProviderName {
+				label = "✅ " + p
+			}
+			rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData(label, "setprovider:"+p),
+			))
+		}
+
+		msg := tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("Current AI provider: *%s*\n\nSelect a new provider from the healthy options below:", currentProviderName))
+		msg.ParseMode = "Markdown"
+		msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(rows...)
+		bot.Send(msg)
 	case "stats": // Handler for /stats command
 		statsData := status.GetStats() // Assuming status.GetStats() returns relevant statistics
 		var statsText strings.Builder

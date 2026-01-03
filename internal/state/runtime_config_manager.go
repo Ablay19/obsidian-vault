@@ -239,6 +239,17 @@ func (rcm *RuntimeConfigManager) SetAIEnabled(enabled bool) error {
 	return rcm.PersistStateToDB()
 }
 
+// SetActiveProvider updates the preferred active AI provider.
+func (rcm *RuntimeConfigManager) SetActiveProvider(providerName string) error {
+	rcm.mu.Lock()
+	defer rcm.mu.Unlock()
+	if _, ok := rcm.config.Providers[providerName]; ok || providerName == "None" {
+		rcm.config.ActiveProvider = providerName
+		return rcm.PersistStateToDB()
+	}
+	return fmt.Errorf("provider %s not found", providerName)
+}
+
 // SetProviderState updates the state of a specific provider.
 func (rcm *RuntimeConfigManager) SetProviderState(providerName string, enabled, paused, blocked bool, blockedReason string) error {
 	rcm.mu.Lock()

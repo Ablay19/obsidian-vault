@@ -123,6 +123,16 @@ func (p *GeminiProvider) GetModelInfo() ModelInfo {
 	}
 }
 
+// CheckHealth verifies if the provider is currently operational.
+func (p *GeminiProvider) CheckHealth(ctx context.Context) error {
+	if p.client == nil {
+		return fmt.Errorf("gemini client is nil")
+	}
+	model := p.client.GenerativeModel(p.modelName)
+	_, err := model.GenerateContent(ctx, genai.Text("ping"))
+	return err
+}
+
 // Process sends a request to the AI service and returns a stream of responses.
 func (p *GeminiProvider) Process(ctx context.Context, w io.Writer, system, prompt string, images []string) error {
 	model := p.client.GenerativeModel(p.modelName)

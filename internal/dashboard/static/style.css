@@ -51,19 +51,6 @@ a:hover {
 .center { text-align: center; }
 .hidden { display: none; }
 
-.flex {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--spacing4);
-    flex-wrap: wrap;
-}
-
-.flex > * {
-    flex: 1;
-    min-width: 400px;
-}
-
 .reverse { flex-direction: row-reverse; }
 
 section {

@@ -107,6 +107,18 @@ func (p *GroqProvider) GetModelInfo() ModelInfo {
 	}
 }
 
+// CheckHealth verifies if the provider is currently operational.
+func (p *GroqProvider) CheckHealth(ctx context.Context) error {
+	req := groq.ChatCompletionRequest{
+		Model: groq.ModelID(p.modelName),
+		Messages: []groq.Message{
+			{Role: "user", Content: "ping"},
+		},
+	}
+	_, err := p.client.CreateChatCompletion(req)
+	return err
+}
+
 // Process sends a request to the AI service and returns a stream of responses.
 func (p *GroqProvider) Process(ctx context.Context, w io.Writer, system, prompt string, images []string) error {
 	req := groq.ChatCompletionRequest{

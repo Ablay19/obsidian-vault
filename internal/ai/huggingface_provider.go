@@ -107,3 +107,15 @@ func (p *HuggingFaceProvider) GetModelInfo() ModelInfo {
 		ModelName:    p.model,
 	}
 }
+
+// CheckHealth verifies if the provider is currently operational.
+func (p *HuggingFaceProvider) CheckHealth(ctx context.Context) error {
+	if p.client == nil {
+		return fmt.Errorf("hugging face client is nil")
+	}
+	_, err := p.client.TextGeneration(ctx, &huggingface.TextGenerationRequest{
+		Model:  p.model,
+		Inputs: "ping",
+	})
+	return err
+}

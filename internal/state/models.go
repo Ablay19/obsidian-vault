@@ -6,10 +6,11 @@ import (
 
 // RuntimeConfig holds the authoritative operational state of the bot.
 type RuntimeConfig struct {
-	AIEnabled   bool                     `json:"ai_enabled"`
-	Providers   map[string]ProviderState `json:"providers"`
-	APIKeys     map[string]APIKeyState   `json:"api_keys"`
-	Environment EnvironmentState         `json:"environment"`
+	AIEnabled      bool                     `json:"ai_enabled"`
+	ActiveProvider string                   `json:"active_provider"`
+	Providers      map[string]ProviderState `json:"providers"`
+	APIKeys        map[string]APIKeyState   `json:"api_keys"`
+	Environment    EnvironmentState         `json:"environment"`
 	// Add other global flags/settings here
 }
 
