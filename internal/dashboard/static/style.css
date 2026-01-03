@@ -4,7 +4,7 @@
     --colorsecondary: #ffffff;
     --coloraccent: #05f903;
     --colorlinks: #0abefb;
-    --ff: "Open Sans", sans-serif;
+    --ff: "JetBrains Mono", monospace;
 
     --h1: bold 54px/70px var(--ff);
     --h2: bold 36px/36px var(--ff);
