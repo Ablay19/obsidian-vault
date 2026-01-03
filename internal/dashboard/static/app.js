@@ -6,6 +6,7 @@ document.addEventListener('alpine:init', () => {
         lastUpdate: new Date(),
         isPaused: false,
         sidebarOpen: false,
+        activeTab: window.location.hash.replace('#', '') || 'overview',
 
         init() {
             // Polling interval logic
@@ -18,6 +19,20 @@ document.addEventListener('alpine:init', () => {
                     }
                 }
             }, 1000);
+            
+            // Handle back/forward buttons
+            window.addEventListener('hashchange', () => {
+                this.activeTab = window.location.hash.replace('#', '') || 'overview';
+                // Trigger HTMX if needed? (Usually better to let HTMX handle its own navigation if using hx-boost)
+                // But since we use discrete hx-get, we might need to manually trigger the target.
+                const link = document.querySelector(`[hx-target="#main-content"][href="#${this.activeTab}"]`);
+                if (link) htmx.trigger(link, 'click');
+            });
+        },
+
+        setActiveTab(tab) {
+            this.activeTab = tab;
+            window.location.hash = tab;
         },
 
         // Helper to check if polling should occur (e.g., pause on input focus)
@@ -46,6 +61,27 @@ document.addEventListener('alpine:init', () => {
         
         toggleSidebar() {
             this.sidebarOpen = !this.sidebarOpen;
+        }
+    });
+
+    // QA Store for persistence
+    Alpine.store('qa', {
+        draft: '',
+        messages: [], // Store recent local messages to prevent loss on swap
+        
+        addMessage(direction, text) {
+            this.messages.push({
+                direction: direction,
+                text: text,
+                timestamp: new Date()
+            });
+            // Keep only last 20 messages in local memory
+            if (this.messages.length > 20) this.messages.shift();
+        },
+        
+        clear() {
+            this.messages = [];
+            this.draft = '';
         }
     });
 

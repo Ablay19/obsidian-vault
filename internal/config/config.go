@@ -36,6 +36,12 @@ type Config struct {
 	Dashboard struct {
 		Port int `mapstructure:"port"`
 	} `mapstructure:"dashboard"`
+	Auth struct {
+		GoogleClientID     string `mapstructure:"google_client_id"`
+		GoogleClientSecret string `mapstructure:"google_client_secret"`
+		GoogleRedirectURL  string `mapstructure:"google_redirect_url"`
+		SessionSecret      string `mapstructure:"session_secret"`
+	} `mapstructure:"auth"`
 }
 
 // AppConfig is the loaded configuration.
@@ -60,6 +66,7 @@ func LoadConfig() {
 	})
 	viper.SetDefault("language_detection.french_words", []string{"le", "la", "de", "et", "un"})
 	viper.SetDefault("dashboard.port", 8080) // New default for dashboard port
+	viper.SetDefault("auth.session_secret", "change-me-to-something-very-secure")
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {

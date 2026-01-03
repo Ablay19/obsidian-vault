@@ -1,0 +1,81 @@
+{
+  "report_metadata": {
+    "target_repo": ".",
+    "severity_filter": "high",
+    "complexity_range": {
+      "min": 5,
+      "max": 15
+    },
+    "included_elements": ["tests", "documentation", "code"],
+    "generated_at": "2026-01-03T00:00:00Z"
+  },
+  "summary": "The system is a Go-based automation bot for Obsidian with a modular architecture. Key strengths include a flexible AI provider system and centralized state management. Major weaknesses include tight coupling in bot command logic and a lack of comprehensive unit testing for core processing functions.",
+  "architecture": {
+    "patterns": [
+      {
+        "name": "Provider Pattern",
+        "location": "internal/ai",
+        "description": "Abstracts different LLM providers (Gemini, Groq) behind a common interface."
+      },
+      {
+        "name": "Centralized State Management",
+        "location": "internal/state",
+        "description": "Uses RuntimeConfigManager to synchronize configuration between environment variables and the database."
+      }
+    ],
+    "dependencies": [
+      "github.com/go-telegram-bot-api/telegram-bot-api/v5",
+      "github.com/google/generative-ai-go",
+      "github.com/spf13/viper",
+      "github.com/a-h/templ"
+    ]
+  },
+  "complexity_analysis": [
+    {
+      "symbol": "handleCommand",
+      "file": "internal/bot/main.go",
+      "complexity": 15,
+      "description": "Routes all bot commands and manages user 'staging' state."
+    },
+    {
+      "symbol": "processFileWithAI",
+      "file": "internal/bot/processor.go",
+      "complexity": 12,
+      "description": "Orchestrates multi-step file processing (OCR, AI analysis, categorization)."
+    },
+    {
+      "symbol": "mergeKeysFromEnv",
+      "file": "internal/state/runtime_config_manager.go",
+      "complexity": 12,
+      "description": "Handles conditional configuration injection from environment variables."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "high",
+      "category": "Architecture",
+      "issue": "Tight coupling in bot command logic",
+      "location": "internal/bot/main.go",
+      "description": "Command handling is mixed with state management, making it difficult to test and extend."
+    },
+    {
+      "severity": "high",
+      "category": "Testing",
+      "issue": "Missing unit tests for core logic",
+      "location": "internal/bot/processor.go, internal/ai/ai_service.go",
+      "description": "Critical file processing and AI orchestration logic lack verification tests."
+    },
+    {
+      "severity": "medium",
+      "category": "Resilience",
+      "issue": "Implicit dependency on external binaries",
+      "location": "internal/bot/processor.go",
+      "description": "OCR relies on 'tesseract' binary; failure to find it results in runtime errors rather than a graceful fallback."
+    }
+  ],
+  "recommendations": [
+    "Refactor handleCommand into a separate state machine for better modularity.",
+    "Implement unit tests for processFileWithAI using mocks for the AI providers and file system.",
+    "Add a startup check for required external binaries (tesseract, pdftotext) and log clear error messages."
+  ]
+}

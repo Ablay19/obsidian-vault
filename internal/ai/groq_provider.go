@@ -140,10 +140,17 @@ func (p *GroqProvider) StreamCompletion(ctx context.Context, req *RequestModel) 
 
 func (p *GroqProvider) mapError(err error) error {
 	// Simple mapping, actual SDK might have specific error types
-	if strings.Contains(err.Error(), "429") {
+	errStr := err.Error()
+	if strings.Contains(errStr, "429") {
 		return NewError(ErrCodeRateLimit, "groq rate limit exceeded", err)
 	}
-	if strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "500") {
+	if strings.Contains(errStr, "404") || strings.Contains(errStr, "400") {
+		return NewError(ErrCodeInvalidRequest, "groq invalid request or model not found", err)
+	}
+	if strings.Contains(errStr, "401") {
+		return NewError(ErrCodeUnauthorized, "groq unauthorized (check API key)", err)
+	}
+	if strings.Contains(errStr, "503") || strings.Contains(errStr, "500") {
 		return NewError(ErrCodeProviderOffline, "groq service unavailable", err)
 	}
 	return NewError(ErrCodeInternal, "groq internal error", err)

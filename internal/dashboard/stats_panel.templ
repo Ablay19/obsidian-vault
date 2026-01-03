@@ -1,0 +1,38 @@
+package dashboard
+
+import (
+	"obsidian-automation/internal/status"
+	"fmt"
+)
+
+templ StatsPanel(stats status.Stats) {
+	<div class="space-y-6">
+		<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+			@StatsCard("description", "Total Files", fmt.Sprintf("%d", stats.TotalFiles))
+			@StatsCard("auto_awesome", "AI Operations", fmt.Sprintf("%d", stats.AICalls))
+			@StatsCard("update", "Last Activity", stats.LastActivity.Format("15:04:05"))
+		</div>
+
+		<div class="bg-[#111114] p-6 rounded-xl shadow-2xl border border-gray-800">
+			<h2 class="text-[10px] font-bold mb-6 flex items-center uppercase tracking-[0.2em] text-gray-500">
+				<span class="material-icons mr-2 text-green-500 text-sm">analytics</span>
+				Usage Statistics
+			</h2>
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+				<div class="space-y-4">
+					<div class="flex justify-between items-center p-3 bg-gray-900/50 border border-gray-800 rounded-lg">
+						<span class="text-gray-400">Total Files Processed</span>
+						<span class="text-white font-bold">{ fmt.Sprintf("%d", stats.TotalFiles) }</span>
+					</div>
+					<div class="flex justify-between items-center p-3 bg-gray-900/50 border border-gray-800 rounded-lg">
+						<span class="text-gray-400">Total AI Completions</span>
+						<span class="text-white font-bold">{ fmt.Sprintf("%d", stats.AICalls) }</span>
+					</div>
+				</div>
+				<div class="relative h-48 bg-gray-900/30 rounded-lg flex items-center justify-center border border-gray-800/50">
+					<span class="text-gray-600 text-[10px] uppercase tracking-widest italic">Chart coming soon</span>
+				</div>
+			</div>
+		</div>
+	</div>
+}

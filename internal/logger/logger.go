@@ -22,15 +22,7 @@ func Setup() {
 
 	// Application Logger Configuration
 	// Policy: 10MB max size, keep 5 backups, max age 30 days
-	appRotator := &lumberjack.Logger{
-		Filename:   filepath.Join("logs", "app.log"),
-		MaxSize:    10, // megabytes
-		MaxBackups: 5,
-		MaxAge:     30, // days
-		Compress:   true,
-	}
-
-	appLogger = slog.New(slog.NewTextHandler(appRotator, nil))
+	appLogger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(appLogger) // Set as default for the application
 
 	// Database Logger Configuration

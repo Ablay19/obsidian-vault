@@ -1,0 +1,57 @@
+package dashboard
+
+import (
+	"obsidian-automation/internal/state"
+	"fmt"
+)
+
+templ AIProviderManagementPanel(config state.RuntimeConfig) {
+	<div class="bg-[#111114] p-6 rounded-xl shadow-2xl border border-gray-800">
+		<h2 class="text-[10px] font-bold mb-6 flex items-center uppercase tracking-[0.2em] text-gray-500">
+			<span class="material-icons mr-2 text-purple-500 text-sm">psychology</span>
+			AI Provider Management
+		</h2>
+		<div class="space-y-4">
+			for _, provider := range config.Providers {
+				<div class="bg-gray-900/50 border border-gray-800 rounded-lg p-4 flex items-center justify-between">
+					<div class="flex items-center space-x-4">
+						<div class={ "w-2 h-2 rounded-full ", templ.KV("bg-green-500", provider.Enabled && !provider.Blocked), templ.KV("bg-red-500", provider.Blocked), templ.KV("bg-gray-500", !provider.Enabled) }></div>
+						<div>
+							<div class="text-[10px] font-bold text-white uppercase tracking-wider">{ provider.Name }</div>
+							<div class="text-[9px] text-gray-500 mt-1">Model: { provider.ModelName }</div>
+						</div>
+					</div>
+					<div class="flex items-center space-x-2">
+						<button 
+							@click={ fmt.Sprintf("toggleProvider('%s', %t)", provider.Name, !provider.Enabled) }
+							class={ "text-[8px] font-bold px-3 py-1 rounded border uppercase tracking-widest transition-all ", 
+									templ.KV("bg-blue-600 border-blue-500 text-white hover:bg-blue-500", !provider.Enabled),
+									templ.KV("bg-red-600/20 border-red-500/50 text-red-500 hover:bg-red-600/30", provider.Enabled) }>
+							if provider.Enabled {
+								Disable
+							} else {
+								Enable
+							}
+						</button>
+					</div>
+				</div>
+			}
+		</div>
+	</div>
+	<script>
+		function toggleProvider(name, enabled) {
+			fetch('/api/ai/provider/toggle', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ provider: name, enabled: enabled })
+			}).then(res => {
+				if (res.ok) {
+					$store.notifications.show('Provider status updated', 'success');
+					htmx.trigger('#main-content', 'refresh');
+				} else {
+					$store.notifications.show('Failed to update provider', 'error');
+				}
+			})
+		}
+	</script>
+}

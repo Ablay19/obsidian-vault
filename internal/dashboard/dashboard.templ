@@ -1,5 +1,17 @@
 package dashboard
-import _"fmt"
+
+import (
+    "obsidian-automation/internal/auth"
+    "context"
+)
+
+func getSessionUser(ctx context.Context) *auth.UserSession {
+    val := ctx.Value("session")
+    if val == nil {
+        return nil
+    }
+    return val.(*auth.UserSession)
+}
 
 templ App() {
 <!DOCTYPE html>
@@ -45,10 +57,17 @@ templ App() {
                     <span class="material-icons mr-2 text-blue-500">smart_toy</span>
                     Obsidian Bot
                 </h1>
-                <div class="mt-2 flex items-center space-x-2">
-                    <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                    <span class="text-[10px] text-gray-500 uppercase font-bold tracking-tighter">System Online</span>
-                </div>
+                if user := getSessionUser(ctx); user != nil {
+                    <div class="mt-2 flex items-center space-x-2">
+                        <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                        <span class="text-[9px] text-blue-400 font-bold uppercase truncate max-w-[120px]">{ user.Name }</span>
+                    </div>
+                } else {
+                    <div class="mt-2 flex items-center space-x-2">
+                        <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                        <span class="text-[10px] text-gray-500 uppercase font-bold tracking-tighter">System Online</span>
+                    </div>
+                }
             </div>
             <!-- Close button for mobile -->
             <button @click="$store.app.toggleSidebar()" class="lg:hidden text-gray-500 hover:text-white">
@@ -57,18 +76,83 @@ templ App() {
         </div>
         
         <nav class="flex-grow p-4 space-y-1">
-            <a href="#" class="flex items-center px-4 py-2.5 text-blue-400 bg-blue-500/10 rounded-lg group transition-all border border-blue-500/20">
+            <a href="#overview" 
+               @click="$store.app.setActiveTab('overview')"
+               :class="$store.app.activeTab === 'overview' ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' : 'text-gray-500 hover:text-white hover:bg-gray-800 border-transparent'"
+               hx-get="/dashboard/panels/overview" 
+               hx-target="#main-content"
+               hx-sync="this:replace"
+               class="flex items-center px-4 py-2.5 rounded-lg group transition-all border">
                 <span class="material-icons mr-3 text-sm">dashboard</span>
                 Control Center
             </a>
-            <a href="/api/services/status" target="_blank" class="flex items-center px-4 py-2.5 text-gray-500 hover:text-white hover:bg-gray-800 rounded-lg group transition-all">
-                <span class="material-icons mr-3 text-sm">api</span>
-                API Status
+            <a href="#status" 
+               @click="$store.app.setActiveTab('status')"
+               :class="$store.app.activeTab === 'status' ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' : 'text-gray-500 hover:text-white hover:bg-gray-800 border-transparent'"
+               hx-get="/dashboard/panels/service_status" 
+               hx-target="#main-content"
+               hx-sync="this:replace"
+               class="flex items-center px-4 py-2.5 rounded-lg group transition-all border">
+                <span class="material-icons mr-3 text-sm">analytics</span>
+                Service Status
             </a>
-            <a href="https://github.com/yourusername/obsidian-bot" target="_blank" class="flex items-center px-4 py-2.5 text-gray-500 hover:text-white hover:bg-gray-800 rounded-lg group transition-all">
-                <span class="material-icons mr-3 text-sm">code</span>
-                Repository
+            <a href="#providers" 
+               @click="$store.app.setActiveTab('providers')"
+               :class="$store.app.activeTab === 'providers' ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' : 'text-gray-500 hover:text-white hover:bg-gray-800 border-transparent'"
+               hx-get="/dashboard/panels/ai_providers" 
+               hx-target="#main-content"
+               hx-sync="this:replace"
+               class="flex items-center px-4 py-2.5 rounded-lg group transition-all border">
+                <span class="material-icons mr-3 text-sm">psychology</span>
+                AI Providers
             </a>
+            <a href="#keys" 
+               @click="$store.app.setActiveTab('keys')"
+               :class="$store.app.activeTab === 'keys' ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' : 'text-gray-500 hover:text-white hover:bg-gray-800 border-transparent'"
+               hx-get="/dashboard/panels/api_keys" 
+               hx-target="#main-content"
+               hx-sync="this:replace"
+               class="flex items-center px-4 py-2.5 rounded-lg group transition-all border">
+                <span class="material-icons mr-3 text-sm">vpn_key</span>
+                Access Keys
+            </a>
+            <a href="#history" 
+               @click="$store.app.setActiveTab('history')"
+               :class="$store.app.activeTab === 'history' ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' : 'text-gray-500 hover:text-white hover:bg-gray-800 border-transparent'"
+               hx-get="/dashboard/panels/chat_history" 
+               hx-target="#main-content"
+               hx-sync="this:replace"
+               class="flex items-center px-4 py-2.5 rounded-lg group transition-all border">
+                <span class="material-icons mr-3 text-sm">history</span>
+                Chat History
+            </a>
+            <a href="#chat" 
+               @click="$store.app.setActiveTab('chat')"
+               :class="$store.app.activeTab === 'chat' ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' : 'text-gray-500 hover:text-white hover:bg-gray-800 border-transparent'"
+               hx-get="/dashboard/panels/qa_console" 
+               hx-target="#main-content"
+               hx-sync="this:replace"
+               class="flex items-center px-4 py-2.5 rounded-lg group transition-all border">
+                <span class="material-icons mr-3 text-sm">chat</span>
+                QA Console
+            </a>
+            <a href="#env" 
+               @click="$store.app.setActiveTab('env')"
+               :class="$store.app.activeTab === 'env' ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' : 'text-gray-500 hover:text-white hover:bg-gray-800 border-transparent'"
+               hx-get="/dashboard/panels/environment" 
+               hx-target="#main-content"
+               hx-sync="this:replace"
+               class="flex items-center px-4 py-2.5 rounded-lg group transition-all border">
+                <span class="material-icons mr-3 text-sm">settings</span>
+                Environment
+            </a>
+            
+            <div class="pt-4 mt-4 border-t border-gray-800">
+                <a href="/auth/logout" class="flex items-center px-4 py-2.5 text-red-500/70 hover:text-red-500 hover:bg-red-500/5 rounded-lg group transition-all">
+                    <span class="material-icons mr-3 text-sm">logout</span>
+                    Logout
+                </a>
+            </div>
         </nav>
 
         <div class="p-4 border-t border-gray-800">
@@ -108,55 +192,20 @@ templ App() {
             <span class="text-blue-500 font-bold">Control Center</span>
         </div>
 
-        <div class="p-4 lg:p-8 space-y-6 max-w-7xl mx-auto">
-            <!-- Top Stats -->
-            <div
-                id="dashboard-content"
-                hx-get="/dashboard/panels/overview"
-                hx-trigger="load, every 5s [shouldPoll()]"
-                @htmx:after-on-load="$store.app.resetCountdown()">
-                <div class="animate-pulse bg-gray-800/50 h-24 rounded-xl border border-gray-700/50"></div>
-            </div>
-
-            <!-- Main Grid -->
-            <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                <!-- Left Column: Primary Data -->
-                <div class="xl:col-span-2 space-y-6">
-                    <div
-                        id="file-processing-content"
-                        hx-get="/dashboard/panels/file_processing"
-                        hx-trigger="load, every 10s [shouldPoll()]"
-                        class="bg-[#111114] rounded-xl border border-gray-800 shadow-2xl overflow-hidden">
-                        <div class="p-8 text-center text-gray-600">Initializing history engine...</div>
-                    </div>
-
-                    <div
-                        id="users-content"
-                        hx-get="/dashboard/panels/users"
-                        hx-trigger="load, every 30s [shouldPoll()]"
-                        class="bg-[#111114] rounded-xl border border-gray-800 shadow-2xl overflow-hidden">
-                        <div class="p-8 text-center text-gray-600">Syncing active users...</div>
-                    </div>
-                </div>
-
-                <!-- Right Column: Settings & Config -->
-                <div class="space-y-6">
-                    <div
-                        id="api-keys-content"
-                        hx-get="/dashboard/panels/api_keys"
-                        hx-trigger="load, every 10s [shouldPoll()]"
-                        class="bg-[#111114] rounded-xl border border-gray-800 shadow-2xl overflow-hidden">
-                        <!-- API Keys management -->
-                    </div>
-
-                    <div
-                        id="db-config-content"
-                        hx-get="/dashboard/panels/db_config"
-                        hx-trigger="load, every 60s [shouldPoll()]"
-                        class="bg-[#111114] rounded-xl border border-gray-800 shadow-2xl overflow-hidden">
-                        <!-- database config -->
-                    </div>
-                </div>
+        <div id="main-content" 
+             class="p-4 lg:p-8 space-y-6 max-w-7xl mx-auto"
+             x-init="
+                const tab = $store.app.activeTab;
+                const link = document.querySelector(`[hx-target='#main-content'][href='#${tab}']`);
+                if (link) {
+                    htmx.process(link); // Ensure HTMX has processed the link
+                    htmx.trigger(link, 'click');
+                } else {
+                    htmx.ajax('GET', '/dashboard/panels/overview', '#main-content');
+                }
+             ">
+            <div class="flex items-center justify-center h-64">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
             </div>
         </div>
 

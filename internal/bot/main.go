@@ -145,6 +145,15 @@ func handleUpdate(bot Bot, update *tgbotapi.Update, token string) {
 
 	slog.Info("Handling message", "chat_id", update.Message.Chat.ID, "user", update.Message.From.UserName, "text", update.Message.Text)
 
+	// Save incoming message to history
+	contentType := "text"
+	if update.Message.Photo != nil {
+		contentType = "image"
+	} else if update.Message.Document != nil {
+		contentType = "pdf"
+	}
+	database.SaveMessage(update.Message.From.ID, update.Message.Chat.ID, update.Message.MessageID, "in", contentType, update.Message.Text, "")
+
 	if update.Message.Photo != nil {
 		handlePhoto(bot, update.Message, token)
 	} else if update.Message.Document != nil {
@@ -224,7 +233,10 @@ func handleCommand(bot Bot, message *tgbotapi.Message) {
 
 		msg := tgbotapi.NewMessage(message.Chat.ID, responseText.String())
 		msg.ParseMode = tgbotapi.ModeHTML
-		bot.Send(msg)
+		sentMsg, err := bot.Send(msg)
+		if err == nil {
+			database.SaveMessage(message.From.ID, message.Chat.ID, sentMsg.MessageID, "out", "text", responseText.String(), "")
+		}
 		return
 	}
 
@@ -241,13 +253,19 @@ func handleCommand(bot Bot, message *tgbotapi.Message) {
 		state.PendingContext = ""
 
 	case "start", "help":
-		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Bot active! Send images/PDFs for processing.\n\nCommands:\n/process - Process staged file\n/stats - Statistics\n/last - Show last created note\n/reprocess - Reprocess last file\n/lang - Set AI language (e.g. /lang English)\n/setprovider - Set AI provider (Dynamic Menu)\n/modelinfo - Show AI model information\n/help - This message"))
+		msg := tgbotapi.NewMessage(message.Chat.ID, "🤖 Bot active! Send images/PDFs for processing.\n\nCommands:\n/process - Process staged file\n/stats - Statistics\n/last - Show last created note\n/reprocess - Reprocess last file\n/lang - Set AI language (e.g. /lang English)\n/setprovider - Set AI provider (Dynamic Menu)\n/modelinfo - Show AI model information\n/help - This message")
+		sent, _ := bot.Send(msg)
+		database.SaveMessage(message.From.ID, message.Chat.ID, sent.MessageID, "out", "text", msg.Text, "")
 	case "pause_bot":
 		status.SetPaused(true)
-		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Bot is paused."))
+		msg := tgbotapi.NewMessage(message.Chat.ID, "Bot is paused.")
+		sent, _ := bot.Send(msg)
+		database.SaveMessage(message.From.ID, message.Chat.ID, sent.MessageID, "out", "text", msg.Text, "")
 	case "resume_bot":
 		status.SetPaused(false)
-		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Bot is resumed."))
+		msg := tgbotapi.NewMessage(message.Chat.ID, "Bot is resumed.")
+		sent, _ := bot.Send(msg)
+		database.SaveMessage(message.From.ID, message.Chat.ID, sent.MessageID, "out", "text", msg.Text, "")
 	case "service_status":
 		statuses := status.GetServicesStatus(aiService, rcm)
 		var sb strings.Builder
@@ -358,7 +376,7 @@ func handleCommand(bot Bot, message *tgbotapi.Message) {
 		msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(rows...)
 		bot.Send(msg)
 	case "stats": // Handler for /stats command
-		statsData := status.GetStats() // Assuming status.GetStats() returns relevant statistics
+		statsData := status.GetStats(rcm) // Pass the rcm to GetStats
 		var statsText strings.Builder
 		statsText.WriteString("📊 *Bot Statistics*\n\n")
 		statsText.WriteString(fmt.Sprintf("• *Total Files Processed:* %d\n", statsData.TotalFiles))

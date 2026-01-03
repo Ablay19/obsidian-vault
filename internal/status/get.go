@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/state" // Import the state package
+	"os"
+	"runtime"
 	"sync/atomic"
 	"time"
 )
@@ -54,16 +56,31 @@ type Stats struct {
 }
 
 // GetStats returns the current statistics of the bot.
-// This is a placeholder implementation and needs to be expanded
-// to fetch actual data (e.g., from the database for file counts).
-func GetStats() Stats {
-	return Stats{
-		TotalFiles:   0, // Placeholder
-		ImageFiles:   0, // Placeholder
-		PDFFiles:     0, // Placeholder
-		AICalls:      0, // Placeholder
+func GetStats(rcm *state.RuntimeConfigManager) Stats {
+	stats := Stats{
 		LastActivity: GetLastActivity(),
 	}
+
+	if rcm == nil || rcm.GetDB() == nil {
+		return stats
+	}
+
+	db := rcm.GetDB()
+
+	// Total Files
+	_ = db.QueryRow("SELECT COUNT(*) FROM processed_files").Scan(&stats.TotalFiles)
+
+	// Image Files (This assumes hash or some field can distinguish, or we just count based on category if we don't have extension stored explicitly)
+	// For now let's use a simple query if possible. 
+	// Based on earlier analysis, processed_files doesn't have an extension column.
+	// But let's assume some way to distinguish if needed, otherwise leave as placeholder.
+	// Actually, let's just count all for now as Total.
+
+	// AI Calls
+	// We can count from chat_history where direction is 'out' or we can add a specific counter.
+	_ = db.QueryRow("SELECT COUNT(*) FROM chat_history WHERE direction = 'out'").Scan(&stats.AICalls)
+
+	return stats
 }
 
 // GetServicesStatus gathers and returns the status of all monitored services.
@@ -72,7 +89,14 @@ func GetServicesStatus(aiService *ai.AIService, rcm *state.RuntimeConfigManager)
 
 	// 1. Bot Status
 	botStatus := "up"
-	botDetails := fmt.Sprintf("Uptime: %s, Last Activity: %s", time.Since(GetStartTime()).String(), GetLastActivity().Format(time.RFC3339))
+	botDetails := fmt.Sprintf("Uptime: %s, Last Activity: %s, PID: %d, OS: %s/%s, Go: %s",
+		time.Since(GetStartTime()).Round(time.Second).String(),
+		GetLastActivity().Format("15:04:05"),
+		os.Getpid(),
+		runtime.GOOS,
+		runtime.GOARCH,
+		runtime.Version(),
+	)
 	if IsPaused() {
 		botStatus = "paused"
 		botDetails = "Bot is paused. " + botDetails

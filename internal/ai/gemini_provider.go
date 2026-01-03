@@ -139,9 +139,13 @@ func (p *GeminiProvider) StreamCompletion(ctx context.Context, req *RequestModel
 }
 
 func (p *GeminiProvider) mapError(err error) error {
+	slog.Error("Gemini API error", "error", err, "model", p.modelName)
 	if gerr, ok := err.(*googleapi.Error); ok {
 		if gerr.Code == 429 {
 			return NewError(ErrCodeRateLimit, "gemini rate limit exceeded", err)
+		}
+		if gerr.Code == 404 || gerr.Code == 400 {
+			return NewError(ErrCodeInvalidRequest, "gemini invalid request or model not found", err)
 		}
 		if gerr.Code >= 500 {
 			return NewError(ErrCodeProviderOffline, "gemini service unavailable", err)

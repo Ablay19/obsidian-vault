@@ -1,15 +1,21 @@
 package dashboard
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url" // New import
 	"obsidian-automation/internal/ai"
+	"obsidian-automation/internal/auth"
+	"obsidian-automation/internal/database"
+	"obsidian-automation/internal/gcp"
 	"obsidian-automation/internal/state" // Import the state package
 	"obsidian-automation/internal/status"
 	"os" // New import
+	"strings"
 	"time"
 )
 
@@ -27,22 +33,35 @@ type ProcessedFile struct {
 
 // Dashboard holds dependencies for the dashboard server.
 type Dashboard struct {
-	aiService *ai.AIService
-	rcm       *state.RuntimeConfigManager
-	db        *sql.DB
+	aiService   *ai.AIService
+	rcm         *state.RuntimeConfigManager
+	db          *sql.DB
+	authService *auth.AuthService
 }
 
 // NewDashboard creates a new Dashboard instance.
-func NewDashboard(aiService *ai.AIService, rcm *state.RuntimeConfigManager, db *sql.DB) *Dashboard {
+func NewDashboard(aiService *ai.AIService, rcm *state.RuntimeConfigManager, db *sql.DB, authService *auth.AuthService) *Dashboard {
 	return &Dashboard{
-		aiService: aiService,
-		rcm:       rcm,
-		db:        db,
+		aiService:   aiService,
+		rcm:         rcm,
+		db:          db,
+		authService: authService,
 	}
 }
 
 // RegisterRoutes registers the dashboard's HTTP handlers on the provided router.
 func (d *Dashboard) RegisterRoutes(router *http.ServeMux) {
+	// Auth routes (unprotected)
+	router.HandleFunc("/auth/login", d.handleLoginPage)
+	router.HandleFunc("/auth/google/login", d.handleGoogleLogin)
+	router.HandleFunc("/auth/google/callback", d.handleGoogleCallback)
+	router.HandleFunc("/auth/logout", d.handleLogout)
+
+	// GCP Discovery routes
+	router.HandleFunc("/api/auth/google/list-projects", d.handleGCPListProjects)
+	router.HandleFunc("/api/auth/google/list-keys", d.handleGCPListKeys)
+
+	// Protected routes
 	router.HandleFunc("/", d.handleDashboard)
 	router.HandleFunc("/api/services/status", d.handleServicesStatus)
 
@@ -71,7 +90,106 @@ func (d *Dashboard) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("/dashboard/panels/file_processing", d.handleFileProcessingPanel)
 	router.HandleFunc("/dashboard/panels/users", d.handleUsersPanel)
 	router.HandleFunc("/dashboard/panels/db_config", d.handleDbConfigPanel)
-	router.HandleFunc("/dashboard/panels/api_keys", d.handleAPIKeysPanel) // New route for API Keys panel
+	router.HandleFunc("/dashboard/panels/api_keys", d.handleAPIKeysPanel)
+	router.HandleFunc("/dashboard/panels/service_status", d.handleServiceStatusPanel)
+	router.HandleFunc("/dashboard/panels/ai_providers", d.handleAIProvidersPanel)
+	router.HandleFunc("/dashboard/panels/stats", d.handleStatsPanel)
+	router.HandleFunc("/dashboard/panels/chat_history", d.handleChatHistoryPanel)
+	router.HandleFunc("/dashboard/panels/environment", d.handleEnvironmentPanel)
+	router.HandleFunc("/dashboard/panels/qa_console", d.handleQAConsolePanel)
+	router.HandleFunc("/api/qa", d.handleQA)
+}
+
+// handleQA handles the Q&A requests from the dashboard console.
+func (d *Dashboard) handleQA(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	question := r.FormValue("question")
+	if question == "" {
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	// Create a simple chat request
+	req := &ai.RequestModel{
+		UserPrompt: question,
+	}
+
+	// Stream the response back
+	slog.Info("Handling QA request", "question", question)
+	err := d.aiService.Chat(r.Context(), req, func(chunk string) {
+		fmt.Fprint(w, chunk)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+	})
+
+	if err != nil {
+		slog.Error("QA request failed", "error", err)
+		fmt.Fprintf(w, "<div class='text-red-500'>Error: %v</div>", err)
+	}
+}
+
+// handleServiceStatusPanel serves the ServiceStatusPanel HTML fragment.
+func (d *Dashboard) handleServiceStatusPanel(w http.ResponseWriter, r *http.Request) {
+	services := status.GetServicesStatus(d.aiService, d.rcm)
+	ServiceStatusPanel(services).Render(r.Context(), w)
+}
+
+// handleAIProvidersPanel serves the AIProviderManagementPanel HTML fragment.
+func (d *Dashboard) handleAIProvidersPanel(w http.ResponseWriter, r *http.Request) {
+	config := d.rcm.GetConfig()
+	AIProviderManagementPanel(config).Render(r.Context(), w)
+}
+
+// handleStatsPanel serves the StatsPanel HTML fragment.
+func (d *Dashboard) handleStatsPanel(w http.ResponseWriter, r *http.Request) {
+	stats := status.GetStats(d.rcm)
+	StatsPanel(stats).Render(r.Context(), w)
+}
+
+// handleChatHistoryPanel serves the ChatHistoryPanel HTML fragment.
+func (d *Dashboard) handleChatHistoryPanel(w http.ResponseWriter, r *http.Request) {
+	// For now, let's fetch global history or just a default user
+	// In a real scenario, we might want a user selector
+	history, err := database.GetChatHistory(0, 50) // UserID 0 as placeholder for "all" or just demo
+	if err != nil {
+		// Fallback if user_id 0 doesn't exist or we want all
+		// Let's try to fetch all if userID filter is problematic
+		rows, err := d.db.Query("SELECT id, user_id, chat_id, message_id, direction, content_type, text_content, file_path, created_at FROM chat_history ORDER BY created_at DESC LIMIT 100")
+		if err == nil {
+			defer rows.Close()
+			var messages []database.ChatMessage
+			for rows.Next() {
+				var msg database.ChatMessage
+				if err := rows.Scan(&msg.ID, &msg.UserID, &msg.ChatID, &msg.MessageID, &msg.Direction, &msg.ContentType, &msg.TextContent, &msg.FilePath, &msg.CreatedAt); err != nil {
+					slog.Error("Failed to scan chat history row", "error", err)
+					continue
+				}
+				messages = append(messages, msg)
+			}
+			ChatHistoryPanel(messages).Render(r.Context(), w)
+			return
+		}
+	}
+	ChatHistoryPanel(history).Render(r.Context(), w)
+}
+
+// handleEnvironmentPanel serves the EnvironmentPanel HTML fragment.
+func (d *Dashboard) handleEnvironmentPanel(w http.ResponseWriter, r *http.Request) {
+	config := d.rcm.GetConfig()
+	EnvironmentPanel(config.Environment).Render(r.Context(), w)
+}
+
+// handleQAConsolePanel serves the QAConsolePanel HTML fragment.
+func (d *Dashboard) handleQAConsolePanel(w http.ResponseWriter, r *http.Request) {
+	QAConsolePanel().Render(r.Context(), w)
 }
 
 // handleAPIKeysPanel serves the APIKeysPanel HTML fragment.
@@ -102,7 +220,12 @@ func (d *Dashboard) handleOverviewPanel(w http.ResponseWriter, r *http.Request) 
 
 // handleFileProcessingPanel serves the FileProcessingPanel HTML fragment.
 func (d *Dashboard) handleFileProcessingPanel(w http.ResponseWriter, r *http.Request) {
-	rows, err := d.db.Query("SELECT id, hash, category, timestamp, extracted_text, summary, topics, questions, ai_provider FROM processed_files ORDER BY timestamp DESC LIMIT 10")
+	limit := r.URL.Query().Get("limit")
+	if limit == "" {
+		limit = "50" // Default safe limit
+	}
+	query := fmt.Sprintf("SELECT id, hash, category, timestamp, extracted_text, summary, topics, questions, ai_provider FROM processed_files ORDER BY timestamp DESC LIMIT %s", limit)
+	rows, err := d.db.Query(query)
 	if err != nil {
 		http.Error(w, "Failed to query database", http.StatusInternalServerError)
 		return
@@ -309,6 +432,9 @@ func (d *Dashboard) handleToggleProviderStatus(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Refresh AI service
+	d.aiService.RefreshProviders(context.Background())
+
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"status":"success", "message":"Provider '%s' status updated."}`, req.Provider)
 }
@@ -367,16 +493,19 @@ func (d *Dashboard) handleAddAPIKey(w http.ResponseWriter, r *http.Request) {
 		req.Enabled = true // Default to enabled for form submissions
 	}
 
-	if req.ProviderName == "" || req.KeyValue == "" {
+	if req.ProviderName == "" || strings.TrimSpace(req.KeyValue) == "" {
 		http.Error(w, "Provider name and API key are required", http.StatusBadRequest)
 		return
 	}
 
-	keyID, err := d.rcm.AddAPIKey(req.ProviderName, req.KeyValue, req.Enabled)
+	keyID, err := d.rcm.AddAPIKey(req.ProviderName, strings.TrimSpace(req.KeyValue), req.Enabled)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest) // Return 400 for validation errors
 		return
 	}
+
+	// Refresh AI service
+	d.aiService.RefreshProviders(context.Background())
 
 	// If it's an HTMX request, we might want to return the updated panel instead of JSON
 	if r.Header.Get("HX-Request") == "true" {
@@ -425,6 +554,9 @@ func (d *Dashboard) handleRemoveAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Refresh AI service
+	d.aiService.RefreshProviders(context.Background())
+
 	// If it's an HTMX request, we might want to return the updated panel instead of JSON
 	if r.Header.Get("HX-Request") == "true" {
 		d.handleAPIKeysPanel(w, r)
@@ -459,6 +591,9 @@ func (d *Dashboard) handleToggleAPIKeyStatus(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Refresh AI service
+	d.aiService.RefreshProviders(context.Background())
+
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"status":"success", "message":"API key '%s' status updated."}`, req.KeyID)
 }
@@ -483,6 +618,9 @@ func (d *Dashboard) handleRotateAPIKey(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// Refresh AI service
+	d.aiService.RefreshProviders(context.Background())
 
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"status":"success", "message":"API key for provider '%s' rotated."}`, req.ProviderName)
@@ -531,3 +669,98 @@ func (d *Dashboard) handleSetEnvironmentState(w http.ResponseWriter, r *http.Req
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"status":"success", "message":"Environment state updated to mode '%s'."}`, req.Mode)
 }
+
+func (d *Dashboard) handleLoginPage(w http.ResponseWriter, r *http.Request) {
+	LoginPage().Render(r.Context(), w)
+}
+
+func (d *Dashboard) handleGoogleLogin(w http.ResponseWriter, r *http.Request) {
+	url := d.authService.GetLoginURL("state-token") // TODO: secure state
+	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
+}
+
+func (d *Dashboard) handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
+	code := r.URL.Query().Get("code")
+	session, err := d.authService.HandleCallback(r.Context(), code)
+	if err != nil {
+		http.Error(w, "Auth failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	cookie, err := d.authService.CreateSessionCookie(session)
+	if err != nil {
+		http.Error(w, "Session creation failed", http.StatusInternalServerError)
+		return
+	}
+
+	http.SetCookie(w, cookie)
+	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+func (d *Dashboard) handleLogout(w http.ResponseWriter, r *http.Request) {
+	cookie := &http.Cookie{
+		Name:     "session",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+	}
+	http.SetCookie(w, cookie)
+	http.Redirect(w, r, "/auth/login", http.StatusFound)
+}
+
+func (d *Dashboard) handleGCPListProjects(w http.ResponseWriter, r *http.Request) {
+	session := getSessionUser(r.Context())
+	if session == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	httpClient, err := d.authService.GetClientForUser(r.Context(), session.GoogleID)
+	if err != nil {
+		http.Error(w, "Failed to get GCP client", http.StatusInternalServerError)
+		return
+	}
+
+	gcpClient := gcp.NewClient(httpClient)
+	projects, err := gcpClient.ListProjects()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(projects)
+}
+
+func (d *Dashboard) handleGCPListKeys(w http.ResponseWriter, r *http.Request) {
+	projectID := r.URL.Query().Get("projectId")
+	if projectID == "" {
+		http.Error(w, "Missing projectId", http.StatusBadRequest)
+		return
+	}
+
+	session := getSessionUser(r.Context())
+	if session == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	httpClient, err := d.authService.GetClientForUser(r.Context(), session.GoogleID)
+	if err != nil {
+		http.Error(w, "Failed to get GCP client", http.StatusInternalServerError)
+		return
+	}
+
+	gcpClient := gcp.NewClient(httpClient)
+	keys, err := gcpClient.ListAPIKeys(projectID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(keys)
+}
+
+

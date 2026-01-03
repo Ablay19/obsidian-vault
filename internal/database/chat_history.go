@@ -1,6 +1,9 @@
 package database
 
-import "time"
+import (
+	"database/sql"
+	"time"
+)
 
 type ChatMessage struct {
 	ID          int
@@ -18,21 +21,35 @@ func SaveMessage(userID, chatID int64, messageID int, direction, contentType, te
 	query := `
         INSERT INTO chat_history 
         (user_id, chat_id, message_id, direction, content_type, text_content, file_path)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
     `
 	_, err := DB.Exec(query, userID, chatID, messageID, direction, contentType, text, filePath)
 	return err
 }
 
 func GetChatHistory(userID int64, limit int) ([]ChatMessage, error) {
-	query := `
-        SELECT id, user_id, chat_id, message_id, direction, content_type, text_content, file_path, created_at
-        FROM chat_history
-        WHERE user_id = $1
-        ORDER BY created_at DESC
-        LIMIT $2
-    `
-	rows, err := DB.Query(query, userID, limit)
+	var rows *sql.Rows
+	var err error
+	
+	if userID == 0 {
+		query := `
+			SELECT id, user_id, chat_id, message_id, direction, content_type, text_content, file_path, created_at
+			FROM chat_history
+			ORDER BY created_at DESC
+			LIMIT ?
+		`
+		rows, err = DB.Query(query, limit)
+	} else {
+		query := `
+			SELECT id, user_id, chat_id, message_id, direction, content_type, text_content, file_path, created_at
+			FROM chat_history
+			WHERE user_id = ?
+			ORDER BY created_at DESC
+			LIMIT ?
+		`
+		rows, err = DB.Query(query, userID, limit)
+	}
+	
 	if err != nil {
 		return nil, err
 	}
