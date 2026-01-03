@@ -37,7 +37,6 @@ func SetPaused(paused bool) {
 	isPaused.Store(paused)
 }
 
-
 // ServiceStatus represents the status of a single service.
 type ServiceStatus struct {
 	Name    string `json:"name"`

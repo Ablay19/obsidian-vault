@@ -67,7 +67,11 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 	// Gemini
 	geminiAPIKeys := viper.GetString("GEMINI_API_KEYS")
 	if geminiAPIKeys != "" {
-		rcm.config.Providers["Gemini"] = ProviderState{Name: "Gemini", Enabled: true}
+		rcm.config.Providers["Gemini"] = ProviderState{
+			Name:      "Gemini",
+			Enabled:   true,
+			ModelName: viper.GetString("providers.gemini.model"),
+		}
 		for i, keyVal := range splitAPIKeys(geminiAPIKeys) {
 			rcm.config.APIKeys[generateKeyID("Gemini", i)] = APIKeyState{
 				ID:        generateKeyID("Gemini", i),
@@ -82,7 +86,11 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 	// Groq
 	groqAPIKey := viper.GetString("GROQ_API_KEY")
 	if groqAPIKey != "" {
-		rcm.config.Providers["Groq"] = ProviderState{Name: "Groq", Enabled: true}
+		rcm.config.Providers["Groq"] = ProviderState{
+			Name:      "Groq",
+			Enabled:   true,
+			ModelName: viper.GetString("providers.groq.model"),
+		}
 		rcm.config.APIKeys[generateKeyID("Groq", 0)] = APIKeyState{
 			ID:        generateKeyID("Groq", 0),
 			Provider:  "Groq",
@@ -95,7 +103,11 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 	// Hugging Face
 	huggingFaceAPIKey := viper.GetString("HUGGINGFACE_API_KEY")
 	if huggingFaceAPIKey != "" {
-		rcm.config.Providers["Hugging Face"] = ProviderState{Name: "Hugging Face", Enabled: true}
+		rcm.config.Providers["Hugging Face"] = ProviderState{
+			Name:      "Hugging Face",
+			Enabled:   true,
+			ModelName: viper.GetString("providers.huggingface.model"),
+		}
 		rcm.config.APIKeys[generateKeyID("Hugging Face", 0)] = APIKeyState{
 			ID:        generateKeyID("Hugging Face", 0),
 			Provider:  "Hugging Face",
