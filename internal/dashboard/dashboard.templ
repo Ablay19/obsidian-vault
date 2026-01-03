@@ -13,6 +13,13 @@ templ App() {
     <script src="//unpkg.com/alpinejs" defer></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <link rel="stylesheet" href="/static/style.css">
+    <script>
+        function shouldPoll() {
+            const active = document.activeElement;
+            const isInput = active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT';
+            return !isInput;
+        }
+    </script>
 </head>
 
 <body class="bg-gray-900 text-gray-100">
@@ -29,14 +36,14 @@ templ App() {
         <div
             id="dashboard-content"
             hx-get="/dashboard/panels/overview"
-            hx-trigger="load, every 5s">
+            hx-trigger="load, every 5s [shouldPoll()]">
             <!-- dashboard overview -->
         </div>
 
         <div
             id="file-processing-content"
             hx-get="/dashboard/panels/file_processing"
-            hx-trigger="load, every 10s"
+            hx-trigger="load, every 10s [shouldPoll()]"
             class="mt-4">
             <!-- file processing -->
         </div>
@@ -44,7 +51,7 @@ templ App() {
         <div
             id="users-content"
             hx-get="/dashboard/panels/users"
-            hx-trigger="load, every 10s"
+            hx-trigger="load, every 10s [shouldPoll()]"
             class="mt-4">
             <!-- users -->
         </div>
@@ -52,7 +59,7 @@ templ App() {
         <div
             id="db-config-content"
             hx-get="/dashboard/panels/db_config"
-            hx-trigger="load, every 10s"
+            hx-trigger="load, every 10s [shouldPoll()]"
             class="mt-4">
             <!-- database config -->
         </div>
@@ -60,7 +67,7 @@ templ App() {
 		<div
             id="api-keys-content"
             hx-get="/dashboard/panels/api_keys"
-            hx-trigger="load, every 10s"
+            hx-trigger="load, every 10s [shouldPoll()]"
             class="mt-4">
             <!-- API Keys management -->
         </div>

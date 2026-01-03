@@ -11,7 +11,7 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import "obsidian-automation/internal/state"
 
-func APIKeysPanel(keys []state.APIKeyState) templ.Component {
+func APIKeysPanel(keys []state.APIKeyState, providers []string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -102,7 +102,43 @@ func APIKeysPanel(keys []state.APIKeyState) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</tbody></table></div><div class=\"mt-4\"><h3 class=\"text-lg font-bold mb-2\">Add New Key</h3><form hx-post=\"/api/ai/key/add\" hx-target=\"#api-keys-content\" class=\"flex items-center space-x-2\"><input type=\"text\" name=\"providerName\" placeholder=\"Provider (e.g., gemini)\" class=\"bg-gray-700 text-white rounded-md px-3 py-2 w-1/3 focus:outline-none focus:ring-2 focus:ring-blue-500\"> <input type=\"text\" name=\"keyValue\" placeholder=\"API Key\" class=\"bg-gray-700 text-white rounded-md px-3 py-2 w-2/3 focus:outline-none focus:ring-2 focus:ring-blue-500\"> <button type=\"submit\" class=\"bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded\">Add Key</button></form></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</tbody></table></div><div class=\"mt-4\"><h3 class=\"text-lg font-bold mb-2\">Add New Key</h3><form hx-post=\"/api/ai/key/add\" hx-target=\"#api-keys-content\" class=\"flex items-center space-x-2\"><select name=\"providerName\" class=\"bg-gray-700 text-white rounded-md px-3 py-2 w-1/3 focus:outline-none focus:ring-2 focus:ring-blue-500\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		for _, p := range providers {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<option value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var5 string
+			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(p)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 61, Col: 23}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\" class=\"bg-gray-700 text-white\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var6 string
+			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(p)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 61, Col: 60}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</option>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</select> <input type=\"text\" name=\"keyValue\" placeholder=\"API Key\" class=\"bg-gray-700 text-white rounded-md px-3 py-2 w-2/3 focus:outline-none focus:ring-2 focus:ring-blue-500\"> <button type=\"submit\" class=\"bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded\">Add Key</button></form></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
