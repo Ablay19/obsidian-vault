@@ -16,6 +16,8 @@ type AIProvider interface {
 	GenerateJSONData(ctx context.Context, text, language string) (string, error)
 	// GetModelInfo returns information about the model.
 	GetModelInfo() ModelInfo
+	// CheckHealth verifies if the provider is currently operational.
+	CheckHealth(ctx context.Context) error
 }
 
 // ModelInfo holds information about an AI model.

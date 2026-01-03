@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	st "obsidian-automation/internal/state" // Import the state package
 )
@@ -127,24 +128,12 @@ func truncateString(s string, maxLen int) string {
 	return s[:maxLen] + "..."
 }
 
-// SetProvider changes the active AI provider. (This now conceptually means setting the preferred provider,
-// the actual key will be selected dynamically)
+// SetProvider changes the active AI provider preference in RuntimeConfig.
 func (s *AIService) SetProvider(providerName string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// This now updates the RuntimeConfigManager's active provider preference
-	// rather than directly changing ActiveProvider here.
-	// For now, let's keep it simple and assume the dashboard will handle this by updating the sm.
-	// This method might become redundant or change its meaning.
-	if _, ok := s.providers[providerName]; !ok || len(s.providers[providerName]) == 0 {
-		return fmt.Errorf("provider '%s' not found or no active keys configured", providerName)
+	if err := s.sm.SetActiveProvider(providerName); err != nil {
+		return err
 	}
-
-	// Update the RuntimeConfigManager's active provider preference
-	// TODO: Implement a method in RuntimeConfigManager to set the active provider preference.
-	// For now, we'll just log and assume the client picking the provider will check SM.
-	slog.Info("Requested to switch AI provider preference.", "provider", providerName)
+	slog.Info("Switched active AI provider preference.", "provider", providerName)
 	return nil
 }
 
@@ -153,9 +142,12 @@ func (s *AIService) GetActiveProviderName() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	currentConfig := s.sm.GetConfig()
-	// TODO: Implement storing active provider preference in RuntimeConfig. For now, use first enabled.
+	if currentConfig.ActiveProvider != "" {
+		return currentConfig.ActiveProvider
+	}
+	// Fallback to first enabled if none preferred
 	for name, ps := range currentConfig.Providers {
-		if ps.Enabled { // Arbitrarily pick first enabled
+		if ps.Enabled {
 			return name
 		}
 	}
@@ -169,12 +161,15 @@ func (s *AIService) GetActiveProvider(ctx context.Context) (AIProvider, st.APIKe
 	defer s.mu.RUnlock()
 
 	currentConfig := s.sm.GetConfig()
-	// TODO: Get preferred active provider from RuntimeConfig. For now, use first enabled.
-	var preferredProviderName string
-	for name, ps := range currentConfig.Providers {
-		if ps.Enabled {
-			preferredProviderName = name
-			break
+	preferredProviderName := currentConfig.ActiveProvider
+
+	if preferredProviderName == "" || preferredProviderName == "None" {
+		// Fallback to first enabled if none preferred
+		for name, ps := range currentConfig.Providers {
+			if ps.Enabled {
+				preferredProviderName = name
+				break
+			}
 		}
 	}
 
@@ -196,6 +191,50 @@ func (s *AIService) GetAvailableProviders() []string {
 		}
 	}
 	return keys
+}
+
+// GetHealthyProviders returns a list of provider names that are currently operational.
+func (s *AIService) GetHealthyProviders(ctx context.Context) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var healthy []string
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	for providerName, keyProviders := range s.providers {
+		for _, provider := range keyProviders {
+			wg.Add(1)
+			go func(name string, p AIProvider) {
+				defer wg.Done()
+				// Use a shorter timeout for health checks
+				healthCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+				defer cancel()
+
+				if err := p.CheckHealth(healthCtx); err == nil {
+					mu.Lock()
+					// Check if already added
+					alreadyAdded := false
+					for _, h := range healthy {
+						if h == name {
+							alreadyAdded = true
+							break
+						}
+					}
+					if !alreadyAdded {
+						healthy = append(healthy, name)
+					}
+					mu.Unlock()
+				} else {
+					slog.Warn("Provider health check failed", "provider", name, "error", err)
+				}
+			}(providerName, provider)
+			break // Only need to check one provider (key) per provider type for overall health
+		}
+	}
+
+	wg.Wait()
+	return healthy
 }
 
 // GetProvidersInfo returns a list of model information for all available providers and their active keys.

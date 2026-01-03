@@ -256,3 +256,9 @@ func (p *OpenRouterProvider) GetModelInfo() ModelInfo {
 		ModelName:    p.modelName,
 	}
 }
+
+// CheckHealth verifies if the provider is currently operational.
+func (p *OpenRouterProvider) CheckHealth(ctx context.Context) error {
+	_, err := p.GenerateContent(ctx, "ping", nil, "", nil)
+	return err
+}
