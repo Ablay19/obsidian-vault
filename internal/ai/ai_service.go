@@ -76,6 +76,7 @@ func (s *AIService) initializeProviders(ctx context.Context) {
 				var tempGeminiProvider *GeminiProvider
 				var tempGroqProvider *GroqProvider
 				var tempHuggingFaceProvider *HuggingFaceProvider
+				var tempOpenRouterProvider *OpenRouterProvider
 
 				switch providerName {
 				case "Gemini":
@@ -99,6 +100,13 @@ func (s *AIService) initializeProviders(ctx context.Context) {
 						continue
 					}
 					provider = tempHuggingFaceProvider
+				case "OpenRouter":
+					tempOpenRouterProvider = NewOpenRouterProvider(keyState.Value, modelName)
+					if tempOpenRouterProvider == nil { // Check concrete type directly
+						slog.Error("Failed to initialize OpenRouter provider, skipping.", "key_id_partial", truncateString(keyID, 8))
+						continue
+					}
+					provider = tempOpenRouterProvider
 				default:
 					slog.Warn("Unknown provider type, skipping.", "provider_type", providerName, "key_id", keyID)
 					continue

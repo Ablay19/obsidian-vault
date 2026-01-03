@@ -21,6 +21,11 @@ type Config struct {
 			APIKey string `mapstructure:"api_key"`
 			Model  string `mapstructure:"model"`
 		} `mapstructure:"huggingface"`
+
+		OpenRouter struct {
+			APIKey string `mapstructure:"api_key"`
+			Model  string `mapstructure:"model"`
+		} `mapstructure:"openrouter"`
 	} `mapstructure:"providers"`
 	Classification struct {
 		Patterns map[string][]string `mapstructure:"patterns"`
@@ -46,6 +51,7 @@ func LoadConfig() {
 	// Set defaults
 	viper.SetDefault("providers.gemini.model", "gemini-pro")
 	viper.SetDefault("providers.groq.model", "llama3-70b")
+	viper.SetDefault("providers.openrouter.model", "openai/gpt-3.5-turbo")
 	viper.SetDefault("classification.patterns", map[string][]string{
 		"physics":   {"force", "energy", "mass", "velocity", "acceleration"},
 		"math":      {"equation", "function", "derivative", "integral", "matrix"},

@@ -117,6 +117,23 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 		}
 	}
 
+	// OpenRouter
+	openRouterAPIKey := viper.GetString("OPENROUTER_API_KEY")
+	if openRouterAPIKey != "" {
+		rcm.config.Providers["OpenRouter"] = ProviderState{
+			Name:      "OpenRouter",
+			Enabled:   true,
+			ModelName: viper.GetString("providers.openrouter.model"),
+		}
+		rcm.config.APIKeys[generateKeyID("OpenRouter", 0)] = APIKeyState{
+			ID:        generateKeyID("OpenRouter", 0),
+			Provider:  "OpenRouter",
+			Value:     openRouterAPIKey,
+			Enabled:   true,
+			IsDefault: true,
+		}
+	}
+
 	// TODO: Add other providers (ONNX if re-enabled)
 }
 
