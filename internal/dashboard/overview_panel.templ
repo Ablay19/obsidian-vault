@@ -11,10 +11,10 @@ templ OverviewPanel(services []status.ServiceStatus, aiProviders struct {
 }) {
 	<div id="overview-panel">
 		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-			@StatsCard("⚡", "Status", getBotStatus(services))
-			@StatsCard("⏱️", "Uptime", getUptime(services))
-			@StatsCard("🔧", "AI Provider", aiProviders.Active)
-			@StatsCard("📊", "Last Activity", getLastActivity(services))
+			@StatsCard("bolt", "Status", getBotStatus(services))
+			@StatsCard("schedule", "Uptime", getUptime(services))
+			@StatsCard("smart_toy", "AI Provider", aiProviders.Active)
+			@StatsCard("history", "Last Activity", getLastActivity(services))
 		</div>
 
 		<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">

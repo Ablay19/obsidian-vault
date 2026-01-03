@@ -41,19 +41,19 @@ func OverviewPanel(services []status.ServiceStatus, aiProviders struct {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = StatsCard("⚡", "Status", getBotStatus(services)).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = StatsCard("bolt", "Status", getBotStatus(services)).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = StatsCard("⏱️", "Uptime", getUptime(services)).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = StatsCard("schedule", "Uptime", getUptime(services)).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = StatsCard("🔧", "AI Provider", aiProviders.Active).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = StatsCard("smart_toy", "AI Provider", aiProviders.Active).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = StatsCard("📊", "Last Activity", getLastActivity(services)).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = StatsCard("history", "Last Activity", getLastActivity(services)).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
