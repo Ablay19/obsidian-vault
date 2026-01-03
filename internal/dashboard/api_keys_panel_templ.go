@@ -84,25 +84,38 @@ func APIKeysPanel(keys []state.APIKeyState, providers []string) templ.Component 
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</td><td class=\"py-4 px-6 whitespace-nowrap\"><button hx-post=\"/api/ai/key/remove\" hx-vals=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</td><td class=\"py-4 px-6 whitespace-nowrap\"><button @click=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var4 string
-			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(`{"keyID": "` + key.ID + `"}`)
+			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(`if(confirm('Are you sure you want to remove this key?')) {
+											fetch('/api/ai/key/remove', {
+												method: 'POST',
+												headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+												body: new URLSearchParams({ keyID: '` + key.ID + `' })
+											}).then(res => {
+												if (res.ok) {
+													$store.notifications.show('Key removed', 'success');
+													htmx.trigger('#api-keys-content', 'load');
+												} else {
+													$store.notifications.show('Failed to remove key', 'error');
+												}
+											})
+										}`)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 39, Col: 48}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 51, Col: 12}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\" hx-confirm=\"Are you sure you want to remove this key?\" hx-target=\"#api-keys-content\" class=\"text-red-500 hover:text-red-700\">Remove</button></td></tr>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\" class=\"text-red-500 hover:text-red-700 font-bold\">Remove</button></td></tr>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</tbody></table></div><div class=\"mt-4\"><h3 class=\"text-lg font-bold mb-2\">Add New Key</h3><form hx-post=\"/api/ai/key/add\" hx-target=\"#api-keys-content\" class=\"flex items-center space-x-2\"><select name=\"providerName\" class=\"bg-gray-700 text-white rounded-md px-3 py-2 w-1/3 focus:outline-none focus:ring-2 focus:ring-blue-500\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</tbody></table></div><div class=\"mt-4\" x-data=\"{ providerName: '', keyValue: '', loading: false }\"><h3 class=\"text-lg font-bold mb-2\">Add New Key</h3><form @submit.prevent=\"\n\t\t\t\t\tloading = true;\n\t\t\t\t\tfetch('/api/ai/key/add', {\n\t\t\t\t\t\tmethod: 'POST',\n\t\t\t\t\t\theaders: { 'Content-Type': 'application/x-www-form-urlencoded' },\n\t\t\t\t\t\tbody: new URLSearchParams({ providerName, keyValue })\n\t\t\t\t\t}).then(res => {\n\t\t\t\t\t\tloading = false;\n\t\t\t\t\t\tif (res.ok) {\n\t\t\t\t\t\t\t$store.notifications.show('API key added successfully', 'success');\n\t\t\t\t\t\t\tkeyValue = '';\n\t\t\t\t\t\t\thtmx.trigger('#api-keys-content', 'load');\n\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\t$store.notifications.show('Failed to add API key', 'error');\n\t\t\t\t\t\t}\n\t\t\t\t\t})\n\t\t\t\t\" class=\"flex items-center space-x-2\"><select x-model=\"providerName\" name=\"providerName\" class=\"bg-gray-700 text-white rounded-md px-3 py-2 w-1/3 focus:outline-none focus:ring-2 focus:ring-blue-500\"><option value=\"\" disabled selected>Select Provider</option> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -114,7 +127,7 @@ func APIKeysPanel(keys []state.APIKeyState, providers []string) templ.Component 
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(p)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 61, Col: 23}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 87, Col: 23}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -127,7 +140,7 @@ func APIKeysPanel(keys []state.APIKeyState, providers []string) templ.Component 
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(p)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 61, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 87, Col: 60}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -138,7 +151,7 @@ func APIKeysPanel(keys []state.APIKeyState, providers []string) templ.Component 
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</select> <input type=\"text\" name=\"keyValue\" placeholder=\"API Key\" class=\"bg-gray-700 text-white rounded-md px-3 py-2 w-2/3 focus:outline-none focus:ring-2 focus:ring-blue-500\"> <button type=\"submit\" class=\"bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded\">Add Key</button></form></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</select> <input x-model=\"keyValue\" type=\"text\" name=\"keyValue\" placeholder=\"API Key\" class=\"bg-gray-700 text-white rounded-md px-3 py-2 w-2/3 focus:outline-none focus:ring-2 focus:ring-blue-500\"> <button :disabled=\"loading || !providerName || !keyValue\" type=\"submit\" class=\"bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50 transition-all\"><span x-show=\"!loading\">Add Key</span> <span x-show=\"loading\" class=\"material-icons animate-spin text-sm\">sync</span></button></form></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

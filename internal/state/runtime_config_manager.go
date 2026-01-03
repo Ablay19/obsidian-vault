@@ -64,19 +64,30 @@ func (rcm *RuntimeConfigManager) mergeKeysFromEnv() {
 	// Re-initialize provider states from env/config to ensure enabled status is correct based on current env
 	rcm.initializeProviderStates()
 
-	// Merge Gemini Keys
-	geminiAPIKeys := viper.GetString("GEMINI_API_KEYS")
-	if geminiAPIKeys != "" {
-		for i, keyVal := range splitAPIKeys(geminiAPIKeys) {
-			id := generateKeyID("Gemini", i)
-			if ks, ok := rcm.config.APIKeys[id]; ok {
-				ks.Value = keyVal
-				rcm.config.APIKeys[id] = ks
-			} else {
+	// Helper to merge a single key
+	mergeKey := func(provider string, index int, value string) {
+		id := generateKeyID(provider, index)
+		if ks, ok := rcm.config.APIKeys[id]; ok {
+			ks.Value = value
+			rcm.config.APIKeys[id] = ks
+		} else {
+			// If not found by ID, look for any default key for this provider and index
+			// (handles cases where the ID might have changed in code but we want to recover)
+			found := false
+			for existingID, ks := range rcm.config.APIKeys {
+				if ks.Provider == provider && ks.IsDefault && strings.HasPrefix(existingID, fmt.Sprintf("%s-%d", provider, index)) {
+					ks.Value = value
+					rcm.config.APIKeys[existingID] = ks
+					found = true
+					break
+				}
+			}
+
+			if !found {
 				rcm.config.APIKeys[id] = APIKeyState{
 					ID:        id,
-					Provider:  "Gemini",
-					Value:     keyVal,
+					Provider:  provider,
+					Value:     value,
 					Enabled:   true,
 					IsDefault: true,
 				}
@@ -84,22 +95,18 @@ func (rcm *RuntimeConfigManager) mergeKeysFromEnv() {
 		}
 	}
 
+	// Merge Gemini Keys
+	geminiAPIKeys := viper.GetString("GEMINI_API_KEYS")
+	if geminiAPIKeys != "" {
+		for i, keyVal := range splitAPIKeys(geminiAPIKeys) {
+			mergeKey("Gemini", i, keyVal)
+		}
+	}
+
 	// Merge Groq Key
 	groqAPIKey := viper.GetString("GROQ_API_KEY")
 	if groqAPIKey != "" {
-		id := generateKeyID("Groq", 0)
-		if ks, ok := rcm.config.APIKeys[id]; ok {
-			ks.Value = groqAPIKey
-			rcm.config.APIKeys[id] = ks
-		} else {
-			rcm.config.APIKeys[id] = APIKeyState{
-				ID:        id,
-				Provider:  "Groq",
-				Value:     groqAPIKey,
-				Enabled:   true,
-				IsDefault: true,
-			}
-		}
+		mergeKey("Groq", 0, groqAPIKey)
 	}
 
 	// Merge Hugging Face Key
@@ -108,37 +115,13 @@ func (rcm *RuntimeConfigManager) mergeKeysFromEnv() {
 		huggingFaceAPIKey = viper.GetString("HF_TOKEN")
 	}
 	if huggingFaceAPIKey != "" {
-		id := generateKeyID("Hugging Face", 0)
-		if ks, ok := rcm.config.APIKeys[id]; ok {
-			ks.Value = huggingFaceAPIKey
-			rcm.config.APIKeys[id] = ks
-		} else {
-			rcm.config.APIKeys[id] = APIKeyState{
-				ID:        id,
-				Provider:  "Hugging Face",
-				Value:     huggingFaceAPIKey,
-				Enabled:   true,
-				IsDefault: true,
-			}
-		}
+		mergeKey("Hugging Face", 0, huggingFaceAPIKey)
 	}
 
 	// Merge OpenRouter Key
 	openRouterAPIKey := viper.GetString("OPENROUTER_API_KEY")
 	if openRouterAPIKey != "" {
-		id := generateKeyID("OpenRouter", 0)
-		if ks, ok := rcm.config.APIKeys[id]; ok {
-			ks.Value = openRouterAPIKey
-			rcm.config.APIKeys[id] = ks
-		} else {
-			rcm.config.APIKeys[id] = APIKeyState{
-				ID:        id,
-				Provider:  "OpenRouter",
-				Value:     openRouterAPIKey,
-				Enabled:   true,
-				IsDefault: true,
-			}
-		}
+		mergeKey("OpenRouter", 0, openRouterAPIKey)
 	}
 }
 
@@ -184,8 +167,9 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 	geminiAPIKeys := viper.GetString("GEMINI_API_KEYS")
 	if geminiAPIKeys != "" {
 		for i, keyVal := range splitAPIKeys(geminiAPIKeys) {
-			rcm.config.APIKeys[generateKeyID("Gemini", i)] = APIKeyState{
-				ID:        generateKeyID("Gemini", i),
+			id := generateKeyID("Gemini", i)
+			rcm.config.APIKeys[id] = APIKeyState{
+				ID:        id,
 				Provider:  "Gemini",
 				Value:     keyVal,
 				Enabled:   true,
@@ -197,8 +181,9 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 	// Groq
 	groqAPIKey := viper.GetString("GROQ_API_KEY")
 	if groqAPIKey != "" {
-		rcm.config.APIKeys[generateKeyID("Groq", 0)] = APIKeyState{
-			ID:        generateKeyID("Groq", 0),
+		id := generateKeyID("Groq", 0)
+		rcm.config.APIKeys[id] = APIKeyState{
+			ID:        id,
 			Provider:  "Groq",
 			Value:     groqAPIKey,
 			Enabled:   true,
@@ -212,8 +197,9 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 		huggingFaceAPIKey = viper.GetString("HF_TOKEN")
 	}
 	if huggingFaceAPIKey != "" {
-		rcm.config.APIKeys[generateKeyID("Hugging Face", 0)] = APIKeyState{
-			ID:        generateKeyID("Hugging Face", 0),
+		id := generateKeyID("Hugging Face", 0)
+		rcm.config.APIKeys[id] = APIKeyState{
+			ID:        id,
 			Provider:  "Hugging Face",
 			Value:     huggingFaceAPIKey,
 			Enabled:   true,
@@ -224,8 +210,9 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 	// OpenRouter
 	openRouterAPIKey := viper.GetString("OPENROUTER_API_KEY")
 	if openRouterAPIKey != "" {
-		rcm.config.APIKeys[generateKeyID("OpenRouter", 0)] = APIKeyState{
-			ID:        generateKeyID("OpenRouter", 0),
+		id := generateKeyID("OpenRouter", 0)
+		rcm.config.APIKeys[id] = APIKeyState{
+			ID:        id,
 			Provider:  "OpenRouter",
 			Value:     openRouterAPIKey,
 			Enabled:   true,
@@ -433,9 +420,9 @@ func (rcm *RuntimeConfigManager) LoadStateFromDB() error {
 }
 
 // generateKeyID creates a unique ID for an API key.
+// For default keys (from env), it produces a deterministic ID.
 func generateKeyID(providerName string, index int) string {
-	// A simple way to generate initial IDs, can be improved
-	return fmt.Sprintf("%s-%d-%s", providerName, index, uuid.New().String()[:8])
+	return fmt.Sprintf("%s-%d-default", providerName, index)
 }
 
 // splitAPIKeys splits a comma-separated string of API keys.
