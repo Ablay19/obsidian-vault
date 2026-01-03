@@ -65,6 +65,145 @@ type openRouterStreamResponse struct {
 	} `json:"choices"`
 }
 
+// GenerateCompletion sends a request to the AI service and returns a complete response.
+func (p *OpenRouterProvider) GenerateCompletion(ctx context.Context, req *RequestModel) (*ResponseModel, error) {
+	messages := []openRouterMessage{}
+	if req.SystemPrompt != "" {
+		messages = append(messages, openRouterMessage{Role: "system", Content: req.SystemPrompt})
+	}
+	messages = append(messages, openRouterMessage{Role: "user", Content: req.UserPrompt})
+
+	reqBody, err := json.Marshal(openRouterChatRequest{
+		Model:    p.modelName,
+		Messages: messages,
+		Stream:   false,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewBuffer(reqBody))
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("HTTP-Referer", "https://github.com/obsidian-automation-bot")
+	httpReq.Header.Set("X-Title", "Obsidian Automation Bot")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, p.mapError(resp.StatusCode, string(body))
+	}
+
+	var chatResp openRouterChatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
+		return nil, err
+	}
+
+	if chatResp.Error != nil {
+		return nil, fmt.Errorf("openrouter api error: %s", chatResp.Error.Message)
+	}
+
+	content := ""
+	if len(chatResp.Choices) > 0 {
+		content = chatResp.Choices[0].Message.Content
+	}
+
+	return &ResponseModel{
+		Content:      content,
+		ProviderInfo: p.GetModelInfo(),
+	}, nil
+}
+
+// StreamCompletion streams the response from the AI service.
+func (p *OpenRouterProvider) StreamCompletion(ctx context.Context, req *RequestModel) (<-chan StreamResponse, error) {
+	messages := []openRouterMessage{}
+	if req.SystemPrompt != "" {
+		messages = append(messages, openRouterMessage{Role: "system", Content: req.SystemPrompt})
+	}
+	messages = append(messages, openRouterMessage{Role: "user", Content: req.UserPrompt})
+
+	reqBody, err := json.Marshal(openRouterChatRequest{
+		Model:    p.modelName,
+		Messages: messages,
+		Stream:   true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewBuffer(reqBody))
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("HTTP-Referer", "https://github.com/obsidian-automation-bot")
+	httpReq.Header.Set("X-Title", "Obsidian Automation Bot")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+
+	respChan := make(chan StreamResponse)
+	go func() {
+		defer resp.Body.Close()
+		defer close(respChan)
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			respChan <- StreamResponse{Error: p.mapError(resp.StatusCode, string(body))}
+			return
+		}
+
+		reader := bufio.NewReader(resp.Body)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err == io.EOF {
+					respChan <- StreamResponse{Done: true}
+					break
+				}
+				respChan <- StreamResponse{Error: err}
+				return
+			}
+
+			line = strings.TrimSpace(line)
+			if line == "" || !strings.HasPrefix(line, "data: ") {
+				continue
+			}
+
+			data := strings.TrimPrefix(line, "data: ")
+			if data == "[DONE]" {
+				respChan <- StreamResponse{Done: true}
+				break
+			}
+
+			var streamResp openRouterStreamResponse
+			if err := json.Unmarshal([]byte(data), &streamResp); err != nil {
+				continue
+			}
+
+			if len(streamResp.Choices) > 0 {
+				content := streamResp.Choices[0].Delta.Content
+				respChan <- StreamResponse{Content: content}
+			}
+		}
+	}()
+
+	return respChan, nil
+}
+
 // Process sends a request to the OpenRouter service and returns a stream of responses.
 func (p *OpenRouterProvider) Process(ctx context.Context, w io.Writer, system, prompt string, images []string) error {
 	messages := []openRouterMessage{}
@@ -259,6 +398,19 @@ func (p *OpenRouterProvider) GetModelInfo() ModelInfo {
 
 // CheckHealth verifies if the provider is currently operational.
 func (p *OpenRouterProvider) CheckHealth(ctx context.Context) error {
-	_, err := p.GenerateContent(ctx, "ping", nil, "", nil)
+	_, err := p.GenerateCompletion(ctx, &RequestModel{UserPrompt: "ping"})
 	return err
+}
+
+func (p *OpenRouterProvider) mapError(status int, body string) error {
+	if status == 429 {
+		return NewError(ErrCodeRateLimit, "openrouter rate limit exceeded", fmt.Errorf("status %d: %s", status, body))
+	}
+	if status == 404 || status == 400 {
+		return NewError(ErrCodeInvalidRequest, "openrouter invalid request or model not found", fmt.Errorf("status %d: %s", status, body))
+	}
+	if status >= 500 {
+		return NewError(ErrCodeProviderOffline, "openrouter service unavailable", fmt.Errorf("status %d: %s", status, body))
+	}
+	return NewError(ErrCodeInternal, "openrouter internal error", fmt.Errorf("status %d: %s", status, body))
 }

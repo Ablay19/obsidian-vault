@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"obsidian-automation/internal/ai"
+	"obsidian-automation/internal/auth"
 	"obsidian-automation/internal/bot"
 	"obsidian-automation/internal/config"
 	"obsidian-automation/internal/dashboard"
@@ -65,17 +66,22 @@ func main() {
 		slog.Info("AI Service failed to initialize. No AI providers available or configured. Proceeding without AI features.")
 	}
 
+	authService := auth.NewAuthService(config.AppConfig)
+
 	router := http.NewServeMux()
 	bot.StartHealthServer(router) // This needs to be updated to use runtimeConfigManager later
 	// Pass aiService and db
-	dash := dashboard.NewDashboard(aiService, runtimeConfigManager, db)
+	dash := dashboard.NewDashboard(aiService, runtimeConfigManager, db, authService)
 	dash.RegisterRoutes(router)
+
+	// Wrap with Middleware
+	protectedRouter := authService.Middleware(router)
 
 	dashboardPort := config.AppConfig.Dashboard.Port // Dashboard port still comes from AppConfig
 	go func() {
 		addr := fmt.Sprintf(":%d", dashboardPort)
 		slog.Info("Starting HTTP server for health and dashboard...", "addr", addr)
-		if err := http.ListenAndServe(addr, router); err != nil {
+		if err := http.ListenAndServe(addr, protectedRouter); err != nil {
 			slog.Error("HTTP server failed to start", "error", err)
 			os.Exit(1)
 		}

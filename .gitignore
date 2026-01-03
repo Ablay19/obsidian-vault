@@ -16,3 +16,5 @@ vendor/
 .Makefile.swp
 /config/.env
 *.log*
+helix*
+main

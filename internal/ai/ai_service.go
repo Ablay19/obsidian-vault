@@ -26,7 +26,7 @@ func NewAIService(ctx context.Context, sm *st.RuntimeConfigManager) *AIService {
 		providers: make(map[string]map[string]AIProvider),
 		sm:        sm,
 	}
-	s.initializeProviders(ctx)
+	s.RefreshProviders(ctx)
 	
 	// Quick check if any providers loaded
 	count := 0
@@ -42,13 +42,14 @@ func NewAIService(ctx context.Context, sm *st.RuntimeConfigManager) *AIService {
 	return s
 }
 
-// initializeProviders populates the providers map based on the current RuntimeConfig.
-func (s *AIService) initializeProviders(ctx context.Context) {
+// RefreshProviders populates the providers map based on the current RuntimeConfig.
+func (s *AIService) RefreshProviders(ctx context.Context) {
+	config := s.sm.GetConfig()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.providers = make(map[string]map[string]AIProvider)
-	config := s.sm.GetConfig()
 
 	for providerName, providerState := range config.Providers {
 		if !providerState.Enabled {
@@ -70,6 +71,13 @@ func (s *AIService) initializeProviders(ctx context.Context) {
 					provider = NewGeminiProvider(ctx, keyState.Value, modelName)
 				case "Groq":
 					provider = NewGroqProvider(keyState.Value, modelName)
+				case "Hugging Face":
+					provider = NewHuggingFaceProvider(keyState.Value, modelName)
+				case "OpenRouter":
+					provider = NewOpenRouterProvider(keyState.Value, modelName)
+				case "onnx", "None", "ONNX":
+					// Known but unimplemented or handled elsewhere
+					continue
 				default:
 					slog.Warn("Unknown provider", "name", providerName)
 					continue
@@ -245,20 +253,23 @@ func (s *AIService) ExecuteWithRetry(ctx context.Context, op func(AIProvider) er
 			return nil
 		}
 
-		if appErr, ok := err.(*AppError); ok && appErr.Retry {
-			slog.Warn("Transient error, retrying", "attempt", i+1, "error", err)
-			
-			// If rate limit, maybe mark key as temporarily exhausted?
-			if appErr.Code == ErrCodeRateLimit {
-				s.sm.UpdateKeyUsage(key.ID, "rate_limit_exceeded", -1)
+		// Check if error is an AppError
+		if appErr, ok := err.(*AppError); ok {
+			// Always block the specific key that failed for this session if it's a serious error
+			if appErr.Code == ErrCodeRateLimit || appErr.Code == ErrCodeUnauthorized || appErr.Code == ErrCodeInvalidRequest {
+				slog.Warn("Blocking failing key", "key_id", key.ID, "code", appErr.Code)
+				s.sm.UpdateKeyUsage(key.ID, appErr.Message, -1)
 			}
 
-			time.Sleep(backoff)
-			backoff = time.Duration(math.Min(float64(backoff)*2, float64(30*time.Second)))
-			continue
+			if appErr.Retry && i < maxRetries-1 {
+				slog.Warn("Transient error, retrying with next available provider/key", "attempt", i+1, "error", err)
+				time.Sleep(backoff)
+				backoff = time.Duration(math.Min(float64(backoff)*2, float64(30*time.Second)))
+				continue
+			}
 		}
 
-		return err // Non-retryable
+		return err // Non-retryable or max retries reached
 	}
 
 	return fmt.Errorf("max retries exceeded")

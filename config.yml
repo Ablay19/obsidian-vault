@@ -1,6 +1,6 @@
 providers:
   gemini:
-    model: gemini-3-pro-image-preview
+    model: gemini-1.5-flash-latest
   groq:
     model: llama-3.1-8b-instant # Or llama3-70b-8192, mixtral-8x7b-32768, etc.
   huggingface:

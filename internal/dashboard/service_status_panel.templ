@@ -1,0 +1,32 @@
+package dashboard
+
+import "obsidian-automation/internal/status"
+
+templ ServiceStatusPanel(services []status.ServiceStatus) {
+	<div class="bg-[#111114] p-6 rounded-xl shadow-2xl border border-gray-800">
+		<h2 class="text-[10px] font-bold mb-6 flex items-center uppercase tracking-[0.2em] text-gray-500">
+			<span class="material-icons mr-2 text-blue-500 text-sm">settings_input_component</span>
+			Service Status
+		</h2>
+		<div class="space-y-4">
+			for _, service := range services {
+				<div class="bg-gray-900/50 border border-gray-800 rounded-lg p-4 flex items-center justify-between">
+					<div class="flex items-center space-x-4">
+						<div class={ "w-2 h-2 rounded-full ", templ.KV("bg-green-500", service.Status == "up"), templ.KV("bg-red-500", service.Status == "down"), templ.KV("bg-yellow-500", service.Status == "paused"), templ.KV("bg-gray-500", service.Status == "disabled") }></div>
+						<div>
+							<div class="text-[10px] font-bold text-white uppercase tracking-wider">{ service.Name }</div>
+							<div class="text-[9px] text-gray-500 mt-1">{ service.Details }</div>
+						</div>
+					</div>
+					<div class="text-[8px] font-bold px-2 py-0.5 rounded border uppercase tracking-tighter"
+						class={ templ.KV("text-green-500 border-green-500/20 bg-green-500/10", service.Status == "up"), 
+								templ.KV("text-red-500 border-red-500/20 bg-red-500/10", service.Status == "down"),
+								templ.KV("text-yellow-500 border-yellow-500/20 bg-yellow-500/10", service.Status == "paused"),
+								templ.KV("text-gray-500 border-gray-500/20 bg-gray-500/10", service.Status == "disabled") }>
+						{ service.Status }
+					</div>
+				</div>
+			}
+		</div>
+	</div>
+}
