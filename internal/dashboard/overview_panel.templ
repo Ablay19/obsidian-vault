@@ -42,7 +42,15 @@ templ OverviewPanel(services []status.ServiceStatus, aiProviders struct {
 									body: JSON.stringify({ provider: selectedProvider })
 								}).then(res => res.json()).then(data => {
 									loading = false;
+									if (data.status === 'success') {
+										$store.notifications.show(data.message, 'success');
+									} else {
+										$store.notifications.show(data.message || 'Error setting provider', 'error');
+									}
 									htmx.trigger('#dashboard-content', 'load');
+								}).catch(err => {
+									loading = false;
+									$store.notifications.show('Failed to connect to server', 'error');
 								})
 							" 
 							:disabled="loading || !selectedProvider"
