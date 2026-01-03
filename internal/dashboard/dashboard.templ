@@ -17,11 +17,39 @@ templ App() {
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="//unpkg.com/alpinejs" defer></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <link rel="stylesheet" href="/static/style.css">
     <script>
         document.addEventListener('alpine:init', () => {
+            Alpine.store('app', {
+                syncInterval: 5,
+                countdown: 5,
+                lastUpdate: new Date(),
+                isPaused: false,
+                
+                init() {
+                    setInterval(() => {
+                        if(!this.isPaused && shouldPoll()) {
+                            this.countdown--;
+                            if(this.countdown < 0) {
+                                this.countdown = this.syncInterval;
+                            }
+                        }
+                    }, 1000);
+                },
+                
+                resetCountdown() {
+                    this.countdown = this.syncInterval;
+                    this.lastUpdate = new Date();
+                },
+                
+                togglePause() {
+                    this.isPaused = !this.isPaused;
+                }
+            });
+
             Alpine.store('notifications', {
                 show(message, type = 'success') {
                     Toastify({
@@ -31,12 +59,16 @@ templ App() {
                         gravity: "top",
                         position: "right",
                         stopOnFocus: true,
+                        className: "font-mono text-xs",
                         style: {
-                            background: type === 'success' ? "#10b981" : "#ef4444",
+                            background: type === 'success' ? "#059669" : "#dc2626",
+                            boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+                            borderRadius: "8px",
+                            border: "1px solid rgba(255,255,255,0.1)"
                         }
                     }).showToast();
                 }
-            })
+            });
         })
 
         function shouldPoll() {
@@ -47,88 +79,123 @@ templ App() {
     </script>
 </head>
 
-<body class="bg-gray-900 text-gray-100 font-['JetBrains_Mono'] text-sm">
-<div class="container mx-auto p-4 max-w-6xl">
-
-    <header class="flex justify-between items-center mb-6 border-b border-gray-800 pb-4">
-        <h1 class="text-xl font-bold flex items-center tracking-tight">
-            <span class="material-icons mr-2 text-blue-500 text-2xl">smart_toy</span>
-            OBSIDIAN BOT <span class="text-[10px] ml-2 bg-blue-900 text-blue-300 px-1.5 py-0.5 rounded uppercase tracking-widest">v2.0</span>
-        </h1>
-        <div class="flex items-center space-x-4">
-            <div x-data="{ 
-                    countdown: 5, 
-                    timer: null,
-                    startTimer() {
-                        this.timer = setInterval(() => {
-                            if(shouldPoll()) {
-                                this.countdown--;
-                                if(this.countdown < 0) this.countdown = 5;
-                            }
-                        }, 1000);
-                    }
-                 }" 
-                 x-init="startTimer()"
-                 @htmx:after-on-load.window="countdown = 5"
-                 class="text-xs text-gray-500 font-mono bg-gray-800 px-3 py-1 rounded-full border border-gray-700">
-                <span class="opacity-50">SYNC:</span> <span x-text="countdown" class="text-blue-400 font-bold"></span>s
-            </div>
-            <div id="status-indicator">
-                <!-- dynamically updated -->
+<body class="bg-[#0a0a0c] text-gray-300 font-['JetBrains_Mono'] text-xs selection:bg-blue-500/30">
+<div class="flex min-h-screen">
+    <!-- Sidebar / Navigation -->
+    <aside class="w-64 bg-[#111114] border-r border-gray-800 hidden lg:flex flex-col sticky top-0 h-screen">
+        <div class="p-6 border-b border-gray-800">
+            <h1 class="text-sm font-bold flex items-center text-white tracking-widest uppercase">
+                <span class="material-icons mr-2 text-blue-500">smart_toy</span>
+                Obsidian Bot
+            </h1>
+            <div class="mt-2 flex items-center space-x-2">
+                <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                <span class="text-[10px] text-gray-500 uppercase font-bold tracking-tighter">System Online</span>
             </div>
         </div>
-    </header>
+        
+        <nav class="flex-grow p-4 space-y-1">
+            <a href="#" class="flex items-center px-4 py-2.5 text-blue-400 bg-blue-500/10 rounded-lg group transition-all border border-blue-500/20">
+                <span class="material-icons mr-3 text-sm">dashboard</span>
+                Control Center
+            </a>
+            <a href="/api/services/status" target="_blank" class="flex items-center px-4 py-2.5 text-gray-500 hover:text-white hover:bg-gray-800 rounded-lg group transition-all">
+                <span class="material-icons mr-3 text-sm">api</span>
+                API Status
+            </a>
+            <a href="https://github.com/yourusername/obsidian-bot" target="_blank" class="flex items-center px-4 py-2.5 text-gray-500 hover:text-white hover:bg-gray-800 rounded-lg group transition-all">
+                <span class="material-icons mr-3 text-sm">code</span>
+                Repository
+            </a>
+        </nav>
 
-    <main>
-        <div
-            id="dashboard-content"
-            hx-get="/dashboard/panels/overview"
-            hx-trigger="load, every 2s [shouldPoll()]">
-            <!-- dashboard overview -->
+        <div class="p-4 border-t border-gray-800">
+            <div class="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
+                <div class="text-[10px] text-gray-500 uppercase font-bold mb-2">Sync Engine</div>
+                <div class="flex justify-between items-center font-mono">
+                    <span class="text-gray-400">NEXT:</span>
+                    <span x-data x-text="$store.app.countdown + 's'" class="text-blue-500 font-bold"></span>
+                </div>
+                <div class="w-full bg-gray-800 h-1 mt-2 rounded-full overflow-hidden">
+                    <div class="bg-blue-500 h-full transition-all duration-1000" x-data :style="'width: ' + (($store.app.countdown / $store.app.syncInterval) * 100) + '%'"></div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-grow overflow-y-auto">
+        <header class="bg-[#111114]/80 backdrop-blur-md sticky top-0 z-10 px-8 py-4 border-b border-gray-800 flex justify-between items-center lg:hidden">
+             <h1 class="text-xs font-bold flex items-center text-white tracking-widest uppercase">
+                <span class="material-icons mr-2 text-blue-500">smart_toy</span>
+                BOT
+            </h1>
+            <div x-data class="text-[10px] font-mono text-blue-500">
+                SYNC: <span x-text="$store.app.countdown"></span>s
+            </div>
+        </header>
+
+        <div class="p-4 lg:p-8 space-y-6 max-w-7xl mx-auto">
+            <!-- Top Stats -->
+            <div
+                id="dashboard-content"
+                hx-get="/dashboard/panels/overview"
+                hx-trigger="load, every 5s [shouldPoll()]"
+                @htmx:after-on-load="$store.app.resetCountdown()">
+                <div class="animate-pulse bg-gray-800/50 h-24 rounded-xl border border-gray-700/50"></div>
+            </div>
+
+            <!-- Main Grid -->
+            <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                <!-- Left Column: Primary Data -->
+                <div class="xl:col-span-2 space-y-6">
+                    <div
+                        id="file-processing-content"
+                        hx-get="/dashboard/panels/file_processing"
+                        hx-trigger="load, every 10s [shouldPoll()]"
+                        class="bg-[#111114] rounded-xl border border-gray-800 shadow-2xl overflow-hidden">
+                        <div class="p-8 text-center text-gray-600">Initializing history engine...</div>
+                    </div>
+
+                    <div
+                        id="users-content"
+                        hx-get="/dashboard/panels/users"
+                        hx-trigger="load, every 30s [shouldPoll()]"
+                        class="bg-[#111114] rounded-xl border border-gray-800 shadow-2xl overflow-hidden">
+                        <div class="p-8 text-center text-gray-600">Syncing active users...</div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Settings & Config -->
+                <div class="space-y-6">
+                    <div
+                        id="api-keys-content"
+                        hx-get="/dashboard/panels/api_keys"
+                        hx-trigger="load, every 10s [shouldPoll()]"
+                        class="bg-[#111114] rounded-xl border border-gray-800 shadow-2xl overflow-hidden">
+                        <!-- API Keys management -->
+                    </div>
+
+                    <div
+                        id="db-config-content"
+                        hx-get="/dashboard/panels/db_config"
+                        hx-trigger="load, every 60s [shouldPoll()]"
+                        class="bg-[#111114] rounded-xl border border-gray-800 shadow-2xl overflow-hidden">
+                        <!-- database config -->
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div
-            id="file-processing-content"
-            hx-get="/dashboard/panels/file_processing"
-            hx-trigger="load, every 5s [shouldPoll()]"
-            class="mt-4">
-            <!-- file processing -->
-        </div>
-
-        <div
-            id="users-content"
-            hx-get="/dashboard/panels/users"
-            hx-trigger="load, every 5s [shouldPoll()]"
-            class="mt-4">
-            <!-- users -->
-        </div>
-
-        <div
-            id="db-config-content"
-            hx-get="/dashboard/panels/db_config"
-            hx-trigger="load, every 30s [shouldPoll()]"
-            class="mt-4">
-            <!-- database config -->
-        </div>
-
-		<div
-            id="api-keys-content"
-            hx-get="/dashboard/panels/api_keys"
-            hx-trigger="load, every 5s [shouldPoll()]"
-            class="mt-4">
-            <!-- API Keys management -->
-        </div>
+        <footer class="px-8 py-12 border-t border-gray-800 text-center space-y-2">
+            <div class="text-gray-600 font-bold uppercase tracking-[0.3em] text-[10px]">Obsidian Bot Dashboard © 2026</div>
+            <div class="flex justify-center items-center space-x-4 text-[10px] text-gray-500">
+                <a href="/api/services/status" target="_blank" class="hover:text-blue-400 transition-colors">SYSTEM_STATUS</a>
+                <span class="text-gray-800">/</span>
+                <a href="https://github.com/yourusername/obsidian-bot" target="_blank" class="hover:text-blue-400 transition-colors">SOURCE_CODE</a>
+            </div>
+        </footer>
     </main>
-
-    <footer class="sajid text-sm text-gray-500 mt-8">
-        <p>Obsidian Bot Dashboard © 2026</p>
-        <p>
-            <a href="/api/services/status" target="_blank">API Status</a>
-            &bull;
-            <a href="https://github.com/yourusername/obsidian-bot" target="_blank">GitHub</a>
-        </p>
-    </footer>
-
 </div>
 </body>
 </html>

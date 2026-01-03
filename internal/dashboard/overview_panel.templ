@@ -2,7 +2,6 @@ package dashboard
 
 import (
 	"obsidian-automation/internal/status"
-	"runtime"
 )
 
 templ OverviewPanel(services []status.ServiceStatus, aiProviders struct {
@@ -10,68 +9,101 @@ templ OverviewPanel(services []status.ServiceStatus, aiProviders struct {
 	Active    string   `json:"active"`
 }) {
 	<div id="overview-panel">
-		<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-			@StatsCard("bolt", "Status", getBotStatus(services))
+		<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+			@StatsCard("bolt", "System", getBotStatus(services))
 			@StatsCard("schedule", "Uptime", getUptime(services))
-			@StatsCard("smart_toy", "AI Provider", aiProviders.Active)
+			@StatsCard("smart_toy", "AI_CORE", aiProviders.Active)
 			@StatsCard("history", "Activity", getLastActivity(services))
 		</div>
 
-		<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-			<div class="bg-gray-800 p-5 rounded-lg shadow-lg border border-gray-700">
-				<h2 class="text-sm font-bold mb-5 flex items-center uppercase tracking-widest text-gray-400">
-					<span class="material-icons mr-2 text-blue-400 text-lg">settings</span>
-					AI Provider Management
-				</h2>
-				<div x-data={ "{ selectedProvider: '" + aiProviders.Active + "', loading: false }" }>
-					<div class="flex items-center space-x-2 mb-2">
-						<select x-model="selectedProvider" class="flex-grow p-2 border rounded-md bg-gray-900 border-gray-700 text-gray-100 text-xs focus:ring-1 focus:ring-blue-500 outline-none transition-all">
-							if len(aiProviders.Available) == 0 {
-								<option value="" disabled selected class="bg-gray-900 text-gray-100">No providers</option>
-							}
-							for _, provider := range aiProviders.Available {
-								<option value={ provider } selected={ provider == aiProviders.Active } class="bg-gray-900 text-gray-100">{ provider }</option>
-							}
-						</select>
-						<button 
-							@click="
-								loading = true;
-								fetch('/api/ai/provider/set', {
-									method: 'POST',
-									headers: { 'Content-Type': 'application/json' },
-									body: JSON.stringify({ provider: selectedProvider })
-								}).then(res => res.json()).then(data => {
-									loading = false;
-									if (data.status === 'success') {
-										$store.notifications.show(data.message, 'success');
-									} else {
-										$store.notifications.show(data.message || 'Error setting provider', 'error');
-									}
-									htmx.trigger('#dashboard-content', 'load');
-								}).catch(err => {
-									loading = false;
-									$store.notifications.show('Failed to connect to server', 'error');
-								})
-							" 
-							:disabled="loading || !selectedProvider"
-							class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-all font-bold text-xs flex items-center">
-							<span x-show="!loading">SET ACTIVE</span>
-							<span x-show="loading" class="material-icons animate-spin text-xs">sync</span>
-						</button>
-					</div>
-				</div>
+		<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- AI Control Panel -->
+			<div class="bg-[#111114] p-6 rounded-xl shadow-2xl border border-gray-800 flex flex-col justify-between">
+				<div>
+                    <h2 class="text-[10px] font-bold mb-6 flex items-center uppercase tracking-[0.2em] text-gray-500">
+                        <span class="material-icons mr-2 text-blue-500 text-sm">settings_input_component</span>
+                        AI Engine Selection
+                    </h2>
+                    <div x-data={ "{ selectedProvider: '" + aiProviders.Active + "', loading: false }" } class="space-y-4">
+                        <div class="relative">
+                            <select x-model="selectedProvider" class="w-full appearance-none p-3 bg-gray-900 border border-gray-800 rounded-lg text-white text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all cursor-pointer">
+                                if len(aiProviders.Available) == 0 {
+                                    <option value="" disabled selected>No engines found</option>
+                                }
+                                for _, provider := range aiProviders.Available {
+                                    <option value={ provider } selected={ provider == aiProviders.Active }>{ provider }</option>
+                                }
+                            </select>
+                            <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-600">
+                                <span class="material-icons text-sm">expand_more</span>
+                            </div>
+                        </div>
+                        <button 
+                            @click="
+                                loading = true;
+                                fetch('/api/ai/provider/set', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ provider: selectedProvider })
+                                }).then(res => res.json()).then(data => {
+                                    loading = false;
+                                    if (data.status === 'success') {
+                                        $store.notifications.show(data.message, 'success');
+                                    } else {
+                                        $store.notifications.show(data.message || 'Error', 'error');
+                                    }
+                                    htmx.trigger('#dashboard-content', 'load');
+                                }).catch(err => {
+                                    loading = false;
+                                    $store.notifications.show('Network error', 'error');
+                                })
+                            " 
+                            :disabled="loading || !selectedProvider || selectedProvider === 'None'"
+                            class="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 text-white p-3 rounded-lg transition-all font-bold text-[10px] uppercase tracking-widest flex items-center justify-center shadow-lg shadow-blue-900/20">
+                            <span x-show="!loading">Switch Engine</span>
+                            <span x-show="loading" class="material-icons animate-spin text-sm">sync</span>
+                        </button>
+                    </div>
+                </div>
 			</div>
-			<div class="bg-gray-800 p-5 rounded-lg shadow-lg border border-gray-700">
-				<h2 class="text-sm font-bold mb-5 flex items-center uppercase tracking-widest text-gray-400">
-					<span class="material-icons mr-2 text-blue-400 text-lg">info</span>
-					System Information
-				</h2>
-				<div class="grid grid-cols-2 gap-3 text-gray-300 font-mono text-[10px]">
-					<div class="bg-gray-900 p-2 rounded border border-gray-700"><span class="text-gray-500 block mb-1 uppercase font-bold">OS</span> { runtime.GOOS }</div>
-					<div class="bg-gray-900 p-2 rounded border border-gray-700"><span class="text-gray-500 block mb-1 uppercase font-bold">ARCH</span> { runtime.GOARCH }</div>
-					<div class="bg-gray-900 p-2 rounded border border-gray-700 col-span-2"><span class="text-gray-500 block mb-1 uppercase font-bold">GO VERSION</span> { runtime.Version() }</div>
-				</div>
-			</div>
+
+            <!-- Activity Chart -->
+            <div class="lg:col-span-2 bg-[#111114] p-6 rounded-xl shadow-2xl border border-gray-800 h-64">
+                <h2 class="text-[10px] font-bold mb-4 flex items-center uppercase tracking-[0.2em] text-gray-500">
+                    <span class="material-icons mr-2 text-green-500 text-sm">analytics</span>
+                    System Load / 24h
+                </h2>
+                <div class="relative h-40 w-full" x-data="{
+                    init() {
+                        new Chart(this.$refs.canvas, {
+                            type: 'line',
+                            data: {
+                                labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'],
+                                datasets: [{
+                                    label: 'Processed',
+                                    data: [12, 19, 3, 5, 2, 3, 9],
+                                    borderColor: '#3b82f6',
+                                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                    tension: 0.4,
+                                    fill: true,
+                                    pointRadius: 0
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { display: false } },
+                                scales: {
+                                    y: { display: false },
+                                    x: { grid: { display: false }, ticks: { color: '#4b5563', font: { size: 8 } } }
+                                }
+                            }
+                        });
+                    }
+                }">
+                    <canvas x-ref="canvas"></canvas>
+                </div>
+            </div>
 		</div>
 	</div>
 }

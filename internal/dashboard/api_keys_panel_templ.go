@@ -32,104 +32,116 @@ func APIKeysPanel(keys []state.APIKeyState, providers []string) templ.Component 
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"bg-gray-800 p-4 rounded-lg shadow-lg border border-gray-700\"><h2 class=\"text-lg font-bold mb-4 flex items-center\"><span class=\"material-icons mr-2 text-blue-400\">vpn_key</span> API Key Management</h2><div class=\"overflow-x-auto\"><table class=\"min-w-full divide-y divide-gray-700 text-xs\"><thead class=\"bg-gray-900\"><tr><th scope=\"col\" class=\"py-2 px-4 text-left font-medium text-gray-400 uppercase tracking-wider\">Provider</th><th scope=\"col\" class=\"py-2 px-4 text-left font-medium text-gray-400 uppercase tracking-wider\">Key (Partial)</th><th scope=\"col\" class=\"py-2 px-4 text-left font-medium text-gray-400 uppercase tracking-wider\">Status</th><th scope=\"col\" class=\"py-2 px-4 text-left font-medium text-gray-400 uppercase tracking-wider\">Actions</th></tr></thead> <tbody class=\"bg-gray-800 divide-y divide-gray-700\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"bg-[#111114] p-6 rounded-xl shadow-2xl border border-gray-800\"><h2 class=\"text-[10px] font-bold mb-6 flex items-center uppercase tracking-[0.2em] text-gray-500\"><span class=\"material-icons mr-2 text-yellow-500 text-sm\">vpn_key</span> Vault Access Keys</h2><div class=\"space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if len(keys) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<tr><td colspan=\"4\" class=\"text-center py-4 text-gray-500\">No API keys found.</td></tr>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div class=\"text-center py-8 text-gray-600 border-2 border-dashed border-gray-800 rounded-xl\">No keys in vault</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		for _, key := range keys {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<tr><td class=\"py-2 px-4 whitespace-nowrap font-semibold\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div class=\"bg-gray-900/50 border border-gray-800 rounded-lg p-3 flex items-center justify-between group hover:border-gray-700 transition-all\"><div class=\"flex items-center space-x-3\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var2 string
-			templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(key.Provider)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 30, Col: 75}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
+			var templ_7745c5c3_Var2 = []any{"w-1.5 h-8 rounded-full ", templ.KV("bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]", key.Enabled && !key.Blocked), templ.KV("bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]", key.Blocked), templ.KV("bg-gray-700", !key.Enabled && !key.Blocked)}
+			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</td><td class=\"py-2 px-4 whitespace-nowrap font-mono text-gray-300\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if key.Value != "" {
-				var templ_7745c5c3_Var3 string
-				templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(partialKey(key.Value))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 33, Col: 32}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<span class=\"text-gray-600 italic\">empty</span>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
+			var templ_7745c5c3_Var3 string
+			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var2).String())
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 1, Col: 0}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</td><td class=\"py-2 px-4 whitespace-nowrap\">")
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if key.Enabled && !key.Blocked {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<span class=\"px-2 py-0.5 inline-flex text-[10px] leading-4 font-bold rounded-full bg-green-900 text-green-300 border border-green-700\">Active</span>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			} else if key.Blocked {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<span class=\"px-2 py-0.5 inline-flex text-[10px] leading-4 font-bold rounded-full bg-red-900 text-red-300 border border-red-700\">Blocked</span>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<span class=\"px-2 py-0.5 inline-flex text-[10px] leading-4 font-bold rounded-full bg-gray-900 text-gray-400 border border-gray-700\">Disabled</span>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</td><td class=\"py-2 px-4 whitespace-nowrap\"><button @click=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\"></div><div><div class=\"text-[10px] font-bold text-white uppercase tracking-tighter\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var4 string
-			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(`if(confirm('Permanently remove this key?')) {
-											const params = new URLSearchParams();
-											params.append('keyID', '` + key.ID + `');
-											fetch('/api/ai/key/remove', {
-												method: 'POST',
-												headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-												body: params
-											}).then(res => {
-												if (res.ok) {
-													$store.notifications.show('Key removed', 'success');
-													htmx.trigger('#api-keys-content', 'load');
-												} else {
-													$store.notifications.show('Failed to remove key', 'error');
-												}
-											})
-										}`)
+			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(key.Provider)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 64, Col: 12}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 23, Col: 94}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\" class=\"text-red-400 hover:text-red-300 transition-colors\"><span class=\"material-icons text-sm\">delete</span></button></td></tr>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</div><div class=\"text-[9px] font-mono text-gray-500\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if key.Value != "" {
+				var templ_7745c5c3_Var5 string
+				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(partialKey(key.Value))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 26, Col: 32}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			} else {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<span class=\"italic opacity-50\">missing_value</span>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</div></div></div><div class=\"flex items-center space-x-2\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if key.Blocked {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<span class=\"text-[8px] font-bold text-red-500/80 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20 uppercase\">Quota Exceeded</span> ")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<button @click=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var6 string
+			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(`if(confirm('Revoke access key?')) {
+									const params = new URLSearchParams();
+									params.append('keyID', '` + key.ID + `');
+									fetch('/api/ai/key/remove', {
+										method: 'POST',
+										headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+										body: params
+									}).then(res => {
+										if (res.ok) {
+											$store.notifications.show('Key revoked', 'success');
+											htmx.trigger('#api-keys-content', 'load');
+										} else {
+											$store.notifications.show('Revocation failed', 'error');
+										}
+									})
+								}`)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 53, Col: 10}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\" class=\"opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 p-1.5 rounded hover:bg-red-500/10 transition-all\"><span class=\"material-icons text-sm\">delete_outline</span></button></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</tbody></table></div><div class=\"mt-6 pt-4 border-t border-gray-700\" x-data=\"{ providerName: '', keyValue: '', loading: false }\"><h3 class=\"text-sm font-bold mb-3 text-gray-400 uppercase tracking-widest\">Add New Key</h3><form @submit.prevent=\"\n\t\t\t\t\tloading = true;\n\t\t\t\t\tconst params = new URLSearchParams();\n\t\t\t\t\tparams.append('providerName', providerName);\n\t\t\t\t\tparams.append('keyValue', keyValue);\n\t\t\t\t\tfetch('/api/ai/key/add', {\n\t\t\t\t\t\tmethod: 'POST',\n\t\t\t\t\t\theaders: { 'Content-Type': 'application/x-www-form-urlencoded' },\n\t\t\t\t\t\tbody: params\n\t\t\t\t\t}).then(res => {\n\t\t\t\t\t\tloading = false;\n\t\t\t\t\t\tif (res.ok) {\n\t\t\t\t\t\t\t$store.notifications.show('API key added successfully', 'success');\n\t\t\t\t\t\t\tkeyValue = '';\n\t\t\t\t\t\t\thtmx.trigger('#api-keys-content', 'load');\n\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\t$store.notifications.show('Failed to add API key', 'error');\n\t\t\t\t\t\t}\n\t\t\t\t\t})\n\t\t\t\t\" class=\"flex items-center space-x-2\"><select x-model=\"providerName\" class=\"bg-gray-900 text-white text-xs rounded-md px-3 py-2 w-1/3 border border-gray-700 focus:ring-1 focus:ring-blue-500 outline-none\"><option value=\"\" disabled selected>Provider</option> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div><div class=\"mt-8 pt-6 border-t border-gray-800\" x-data=\"{ providerName: '', keyValue: '', loading: false }\"><form @submit.prevent=\"\n\t\t\t\t\tloading = true;\n\t\t\t\t\tconst params = new URLSearchParams();\n\t\t\t\t\tparams.append('providerName', providerName);\n\t\t\t\t\tparams.append('keyValue', keyValue);\n\t\t\t\t\tfetch('/api/ai/key/add', {\n\t\t\t\t\t\tmethod: 'POST',\n\t\t\t\t\t\theaders: { 'Content-Type': 'application/x-www-form-urlencoded' },\n\t\t\t\t\t\tbody: params\n\t\t\t\t\t}).then(res => {\n\t\t\t\t\t\tloading = false;\n\t\t\t\t\t\tif (res.ok) {\n\t\t\t\t\t\t\t$store.notifications.show('Key injected successfully', 'success');\n\t\t\t\t\t\t\tkeyValue = '';\n\t\t\t\t\t\t\thtmx.trigger('#api-keys-content', 'load');\n\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\t$store.notifications.show('Injection failed', 'error');\n\t\t\t\t\t\t}\n\t\t\t\t\t})\n\t\t\t\t\" class=\"space-y-3\"><div class=\"grid grid-cols-3 gap-2\"><select x-model=\"providerName\" class=\"col-span-1 bg-gray-900 text-white text-[10px] font-bold uppercase rounded-lg px-2 py-2 border border-gray-800 focus:ring-1 focus:ring-blue-500 outline-none cursor-pointer\"><option value=\"\" disabled selected>ENGINE</option> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -138,12 +150,12 @@ func APIKeysPanel(keys []state.APIKeyState, providers []string) templ.Component 
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var5 string
-			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(p)
+			var templ_7745c5c3_Var7 string
+			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(p)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 103, Col: 23}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 90, Col: 24}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -151,12 +163,12 @@ func APIKeysPanel(keys []state.APIKeyState, providers []string) templ.Component 
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var6 string
-			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(p)
+			var templ_7745c5c3_Var8 string
+			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(p)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 103, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 90, Col: 61}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -165,7 +177,7 @@ func APIKeysPanel(keys []state.APIKeyState, providers []string) templ.Component 
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</select> <input x-model=\"keyValue\" type=\"password\" placeholder=\"API Key\" class=\"bg-gray-900 text-white text-xs rounded-md px-3 py-2 w-2/3 border border-gray-700 focus:ring-1 focus:ring-blue-500 outline-none\"> <button :disabled=\"loading || !providerName || !keyValue\" type=\"submit\" class=\"bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-4 rounded disabled:opacity-50 transition-all flex items-center\"><span x-show=\"!loading\">Add</span> <span x-show=\"loading\" class=\"material-icons animate-spin text-xs\">sync</span></button></form></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</select> <input x-model=\"keyValue\" type=\"password\" placeholder=\"API_SECRET_KEY\" class=\"col-span-2 bg-gray-900 text-white text-[10px] font-mono rounded-lg px-3 py-2 border border-gray-800 focus:ring-1 focus:ring-blue-500 outline-none\"></div><button :disabled=\"loading || !providerName || !keyValue\" type=\"submit\" class=\"w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 text-white p-2.5 rounded-lg transition-all font-bold text-[9px] uppercase tracking-widest flex items-center justify-center\"><span x-show=\"!loading\">Inject Access Key</span> <span x-show=\"loading\" class=\"material-icons animate-spin text-xs\">sync</span></button></form></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

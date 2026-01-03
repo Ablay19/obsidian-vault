@@ -29,40 +29,40 @@ func StatsCard(icon, title, value string) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"bg-gray-800 p-4 rounded-lg shadow flex items-center space-x-4 border border-gray-700\"><div class=\"material-icons text-blue-500 text-3xl\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"bg-[#111114] p-4 rounded-xl shadow-lg border border-gray-800 flex items-center space-x-4 transition-all hover:border-blue-500/50 hover:bg-blue-500/[0.02] group\"><div class=\"bg-gray-900 w-10 h-10 rounded-lg flex items-center justify-center border border-gray-800 group-hover:bg-blue-500/10 group-hover:border-blue-500/20 transition-all\"><span class=\"material-icons text-gray-500 group-hover:text-blue-400 text-xl\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(icon)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/stats_card.templ`, Line: 5, Col: 65}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/stats_card.templ`, Line: 6, Col: 95}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div><div><div class=\"text-gray-400 text-xs uppercase tracking-wider font-semibold\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</span></div><div><div class=\"text-gray-500 text-[10px] uppercase font-bold tracking-widest mb-0.5\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var3 string
 		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/stats_card.templ`, Line: 7, Col: 93}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/stats_card.templ`, Line: 9, Col: 101}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div><div class=\"text-white text-lg font-bold truncate max-w-[150px]\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div><div class=\"text-white text-sm font-bold truncate max-w-[120px]\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(value)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/stats_card.templ`, Line: 8, Col: 84}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/stats_card.templ`, Line: 10, Col: 84}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
