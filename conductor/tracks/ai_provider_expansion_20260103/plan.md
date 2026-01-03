@@ -6,11 +6,11 @@
   - [x] Sub-task: Implement GetCompletion and GetCompletionStream methods for Hugging Face 984a7ad
   - [x] Sub-task: Add Hugging Face provider configuration to config.yml (model, API key) 984a7ad
   - [x] Sub-task: Integrate Hugging Face provider into AIService (internal/ai/ai_service.go) 984a7ad
-- [ ] Task: Implement OpenRouter AIProvider
-  - [ ] Sub-task: Define OpenRouter API client (internal/ai/openrouter_provider.go)
-  - [ ] Sub-task: Implement GetCompletion and GetCompletionStream methods for OpenRouter
-  - [ ] Sub-task: Add OpenRouter provider configuration to config.yml (model, API key)
-  - [ ] Sub-task: Integrate OpenRouter provider into AIService (internal/ai/ai_service.go)
+- [x] Task: Implement OpenRouter AIProvider a5397d0
+  - [x] Sub-task: Define OpenRouter API client (internal/ai/openrouter_provider.go) a5397d0
+  - [x] Sub-task: Implement GetCompletion and GetCompletionStream methods for OpenRouter a5397d0
+  - [x] Sub-task: Add OpenRouter provider configuration to config.yml (model, API key) a5397d0
+  - [x] Sub-task: Integrate OpenRouter provider into AIService (internal/ai/ai_service.go) a5397d0
 - [ ] Task: Conductor - User Manual Verification 'Phase 1: AI Provider Integration' (Protocol in workflow.md)
 
 ## Phase 2: Dynamic Provider Selection Enhancement
