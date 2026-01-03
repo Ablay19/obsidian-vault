@@ -2,21 +2,21 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
+	"math"
 	"strings"
 	"sync"
 	"time"
 
-	st "obsidian-automation/internal/state" // Import the state package
+	st "obsidian-automation/internal/state"
 )
 
 // AIService manages multiple AI providers and selects the active one.
 type AIService struct {
-	// providers maps provider name to a map of keyID to AIProvider instance
 	providers map[string]map[string]AIProvider
-	sm        *st.RuntimeConfigManager // Reference to the RuntimeConfigManager
+	sm        *st.RuntimeConfigManager
 	mu        sync.RWMutex
 }
 
@@ -26,25 +26,19 @@ func NewAIService(ctx context.Context, sm *st.RuntimeConfigManager) *AIService {
 		providers: make(map[string]map[string]AIProvider),
 		sm:        sm,
 	}
-
 	s.initializeProviders(ctx)
-
-	// Check if any actual providers were initialized
-	hasInitializedProviders := false
-	for _, keyProviders := range s.providers {
-		if len(keyProviders) > 0 {
-			hasInitializedProviders = true
-			break
-		}
+	
+	// Quick check if any providers loaded
+	count := 0
+	for _, m := range s.providers {
+		count += len(m)
 	}
-
-	if !hasInitializedProviders {
-		slog.Warn("No AI providers could be initialized from RuntimeConfigManager. AI features will be unavailable.")
-		return nil
+	if count == 0 {
+		slog.Warn("No AI providers initialized. AI features unavailable.")
+	} else {
+		slog.Info("AI Service initialized", "provider_count", count)
 	}
-
-	slog.Info("AI Service initialized.", "available_providers", s.GetAvailableProviders())
-
+	
 	return s
 }
 
@@ -53,131 +47,62 @@ func (s *AIService) initializeProviders(ctx context.Context) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.providers = make(map[string]map[string]AIProvider) // Clear existing
+	s.providers = make(map[string]map[string]AIProvider)
+	config := s.sm.GetConfig()
 
-	currentConfig := s.sm.GetConfig()
-
-	for providerName, providerState := range currentConfig.Providers {
+	for providerName, providerState := range config.Providers {
 		if !providerState.Enabled {
-			continue // Skip globally disabled providers
+			continue
 		}
 
 		s.providers[providerName] = make(map[string]AIProvider)
-		for keyID, keyState := range currentConfig.APIKeys {
+		for keyID, keyState := range config.APIKeys {
 			if keyState.Provider == providerName && keyState.Enabled && !keyState.Blocked {
 				if keyState.Value == "" {
-					slog.Warn("Skipping provider key due to empty API key.", "provider", providerName, "key_id_partial", truncateString(keyID, 8))
 					continue
 				}
 
-				var provider AIProvider // This is the interface type
+				var provider AIProvider
 				modelName := providerState.ModelName
-
-				// Use temporary concrete pointers to check for nil correctly
-				var tempGeminiProvider *GeminiProvider
-				var tempGroqProvider *GroqProvider
-				var tempHuggingFaceProvider *HuggingFaceProvider
-				var tempOpenRouterProvider *OpenRouterProvider
 
 				switch providerName {
 				case "Gemini":
-					tempGeminiProvider = NewGeminiProvider(ctx, keyState.Value, modelName)
-					if tempGeminiProvider == nil { // Check concrete type directly
-						slog.Error("Failed to initialize Gemini provider, skipping.", "key_id_partial", truncateString(keyID, 8))
-						continue
-					}
-					provider = tempGeminiProvider
+					provider = NewGeminiProvider(ctx, keyState.Value, modelName)
 				case "Groq":
-					tempGroqProvider = NewGroqProvider(keyState.Value, modelName)
-					if tempGroqProvider == nil { // Check concrete type directly
-						slog.Error("Failed to initialize Groq provider, skipping.", "key_id_partial", truncateString(keyID, 8))
-						continue
-					}
-					provider = tempGroqProvider
-				case "Hugging Face":
-					tempHuggingFaceProvider = NewHuggingFaceProvider(keyState.Value, modelName)
-					if tempHuggingFaceProvider == nil { // Check concrete type directly
-						slog.Error("Failed to initialize Hugging Face provider, skipping.", "key_id_partial", truncateString(keyID, 8))
-						continue
-					}
-					provider = tempHuggingFaceProvider
-				case "OpenRouter":
-					tempOpenRouterProvider = NewOpenRouterProvider(keyState.Value, modelName)
-					if tempOpenRouterProvider == nil { // Check concrete type directly
-						slog.Error("Failed to initialize OpenRouter provider, skipping.", "key_id_partial", truncateString(keyID, 8))
-						continue
-					}
-					provider = tempOpenRouterProvider
+					provider = NewGroqProvider(keyState.Value, modelName)
 				default:
-					slog.Warn("Unknown provider type, skipping.", "provider_type", providerName, "key_id", keyID)
+					slog.Warn("Unknown provider", "name", providerName)
 					continue
 				}
 
-				s.providers[providerName][keyID] = provider // Now 'provider' should genuinely be non-nil if reached here
-				slog.Info("Initialized provider.", "provider", providerName, "key_id_partial", truncateString(keyID, 8))
+				if provider != nil {
+					s.providers[providerName][keyID] = provider
+				}
 			}
 		}
 	}
 }
 
-// truncateString safely truncates a string for logging purposes.
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
-}
-
-// SetProvider changes the active AI provider preference in RuntimeConfig.
+// SetProvider changes the active AI provider preference.
 func (s *AIService) SetProvider(providerName string) error {
-	if err := s.sm.SetActiveProvider(providerName); err != nil {
-		return err
-	}
-	slog.Info("Switched active AI provider preference.", "provider", providerName)
-	return nil
+	return s.sm.SetActiveProvider(providerName)
 }
 
-// GetActiveProviderName returns the name of the currently active provider based on RuntimeConfigManager.
+// GetActiveProviderName returns the name of the currently active provider.
 func (s *AIService) GetActiveProviderName() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	currentConfig := s.sm.GetConfig()
-	if currentConfig.ActiveProvider != "" {
-		return currentConfig.ActiveProvider
+	cfg := s.sm.GetConfig()
+	if cfg.ActiveProvider != "" {
+		return cfg.ActiveProvider
 	}
-	// Fallback to first enabled if none preferred
-	for name, ps := range currentConfig.Providers {
+	// Fallback
+	for name, ps := range cfg.Providers {
 		if ps.Enabled {
 			return name
 		}
 	}
 	return "None"
-}
-
-// GetActiveProvider returns an active AIProvider instance for the currently preferred provider.
-// This method should select an appropriate key based on availability and health.
-func (s *AIService) GetActiveProvider(ctx context.Context) (AIProvider, st.APIKeyState, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	currentConfig := s.sm.GetConfig()
-	preferredProviderName := currentConfig.ActiveProvider
-
-	if preferredProviderName == "" || preferredProviderName == "None" {
-		// Fallback to first enabled if none preferred
-		for name, ps := range currentConfig.Providers {
-			if ps.Enabled {
-				preferredProviderName = name
-				break
-			}
-		}
-	}
-
-	if preferredProviderName == "" {
-		return nil, st.APIKeyState{}, fmt.Errorf("no enabled provider found in runtime config")
-	}
-
-	return s.selectActiveKeyForProvider(ctx, preferredProviderName)
 }
 
 // GetAvailableProviders returns a list of available provider names.
@@ -186,7 +111,7 @@ func (s *AIService) GetAvailableProviders() []string {
 	defer s.mu.RUnlock()
 	keys := make([]string, 0, len(s.providers))
 	for k := range s.providers {
-		if len(s.providers[k]) > 0 { // Only list providers with at least one active key
+		if len(s.providers[k]) > 0 {
 			keys = append(keys, k)
 		}
 	}
@@ -199,229 +124,206 @@ func (s *AIService) GetHealthyProviders(ctx context.Context) []string {
 	defer s.mu.RUnlock()
 
 	var healthy []string
-	var wg sync.WaitGroup
 	var mu sync.Mutex
+	var wg sync.WaitGroup
 
-	for providerName, keyProviders := range s.providers {
-		for _, provider := range keyProviders {
+	for name, keyMap := range s.providers {
+		for _, p := range keyMap {
 			wg.Add(1)
-			go func(name string, p AIProvider) {
+			go func(n string, prov AIProvider) {
 				defer wg.Done()
-				// Use a shorter timeout for health checks
-				healthCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+				tCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 				defer cancel()
-
-				if err := p.CheckHealth(healthCtx); err == nil {
+				if err := prov.CheckHealth(tCtx); err == nil {
 					mu.Lock()
-					// Check if already added
-					alreadyAdded := false
+					found := false
 					for _, h := range healthy {
-						if h == name {
-							alreadyAdded = true
+						if h == n {
+							found = true
 							break
 						}
 					}
-					if !alreadyAdded {
-						healthy = append(healthy, name)
+					if !found {
+						healthy = append(healthy, n)
 					}
 					mu.Unlock()
-				} else {
-					slog.Warn("Provider health check failed", "provider", name, "error", err)
 				}
-			}(providerName, provider)
-			break // Only need to check one provider (key) per provider type for overall health
+			}(name, p)
+			break // Check one key per provider is enough for general "provider health" usually
 		}
 	}
-
 	wg.Wait()
 	return healthy
 }
 
-// GetProvidersInfo returns a list of model information for all available providers and their active keys.
+// GetProvidersInfo returns model info.
 func (s *AIService) GetProvidersInfo() []ModelInfo {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-
 	var infos []ModelInfo
-	for _, keyProviders := range s.providers {
-		for keyID, provider := range keyProviders {
-			info := provider.GetModelInfo()
-			// Add key-specific info
-			if keyState, ok := s.sm.GetConfig().APIKeys[keyID]; ok {
-				info.KeyID = keyID
-				info.Enabled = keyState.Enabled
-				info.Blocked = keyState.Blocked
-				info.BlockedReason = keyState.BlockedReason
-				info.LastUsedAt = keyState.LastUsedAt
-			}
+	for _, keyMap := range s.providers {
+		for id, p := range keyMap {
+			info := p.GetModelInfo()
+			info.KeyID = id
 			infos = append(infos, info)
 		}
 	}
 	return infos
 }
 
-// Process delegates the call to the active provider.
-func (s *AIService) Process(ctx context.Context, w io.Writer, system, prompt string, images []string) error {
-	provider, keyState, err := s.GetActiveProvider(ctx)
+// === Core Logic ===
+
+// selectProvider selects an active provider and key, respecting fallback logic.
+func (s *AIService) selectProvider(ctx context.Context) (AIProvider, st.APIKeyState, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	cfg := s.sm.GetConfig()
+	if !cfg.AIEnabled {
+		return nil, st.APIKeyState{}, fmt.Errorf("AI is globally disabled")
+	}
+
+	preferred := cfg.ActiveProvider
+	
+	// Helper to find valid key for provider
+	findKey := func(provName string) (AIProvider, st.APIKeyState, bool) {
+		ps, ok := cfg.Providers[provName]
+		if !ok || !ps.Enabled || ps.Blocked {
+			return nil, st.APIKeyState{}, false
+		}
+		
+		// Get keys
+		keyMap, ok := s.providers[provName]
+		if !ok {
+			return nil, st.APIKeyState{}, false
+		}
+
+		for id, p := range keyMap {
+			ks, ok := cfg.APIKeys[id]
+			if !ok || !ks.Enabled || ks.Blocked {
+				continue
+			}
+			// Avoid keys recently rate limited? (Simplification: relying on internal state/retry logic mostly)
+			return p, ks, true
+		}
+		return nil, st.APIKeyState{}, false
+	}
+
+	// 1. Try preferred
+	if preferred != "" {
+		if p, k, ok := findKey(preferred); ok {
+			return p, k, nil
+		}
+	}
+
+	// 2. Fallback
+	for name := range s.providers {
+		if name == preferred {
+			continue
+		}
+		if p, k, ok := findKey(name); ok {
+			return p, k, nil
+		}
+	}
+
+	return nil, st.APIKeyState{}, fmt.Errorf("no active AI providers available")
+}
+
+// ExecuteWithRetry handles retries for transient errors.
+func (s *AIService) ExecuteWithRetry(ctx context.Context, op func(AIProvider) error) error {
+	maxRetries := 3
+	backoff := 1 * time.Second
+
+	for i := 0; i < maxRetries; i++ {
+		provider, key, err := s.selectProvider(ctx)
+		if err != nil {
+			return err
+		}
+
+		err = op(provider)
+		if err == nil {
+			return nil
+		}
+
+		if appErr, ok := err.(*AppError); ok && appErr.Retry {
+			slog.Warn("Transient error, retrying", "attempt", i+1, "error", err)
+			
+			// If rate limit, maybe mark key as temporarily exhausted?
+			if appErr.Code == ErrCodeRateLimit {
+				s.sm.UpdateKeyUsage(key.ID, "rate_limit_exceeded", -1)
+			}
+
+			time.Sleep(backoff)
+			backoff = time.Duration(math.Min(float64(backoff)*2, float64(30*time.Second)))
+			continue
+		}
+
+		return err // Non-retryable
+	}
+
+	return fmt.Errorf("max retries exceeded")
+}
+
+// AnalyzeText generates structured JSON data from text.
+func (s *AIService) AnalyzeText(ctx context.Context, text, language string) (*AnalysisResult, error) {
+	prompt := fmt.Sprintf(`Analyze the following text and return ONLY a JSON object.
+Target JSON Structure:
+{
+  "category": "One of [physics, math, chemistry, admin, general]",
+  "topics": ["topic1", "topic2", "topic3"],
+  "questions": ["question1", "question2"]
+}
+Ensure "topics" and "questions" are in %s.
+Text:
+%s`, language, text)
+
+	req := &RequestModel{
+		UserPrompt: prompt,
+		JSONMode:   true,
+		Temperature: 0.2,
+	}
+
+	var resp *ResponseModel
+	err := s.ExecuteWithRetry(ctx, func(p AIProvider) error {
+		var e error
+		resp, e = p.GenerateCompletion(ctx, req)
+		return e
+	})
+
 	if err != nil {
-		return fmt.Errorf("failed to get active provider: %w", err)
+		return nil, err
 	}
 
-	// Enforce RuntimeConfig checks for the selected key
-	if err := s.checkRuntimeConfig(keyState.ID); err != nil {
-		return err
+	// Clean JSON string if necessary (providers might wrap in markdown blocks despite instructions)
+	cleanJSON := strings.TrimSpace(resp.Content)
+	cleanJSON = strings.TrimPrefix(cleanJSON, "```json")
+	cleanJSON = strings.TrimSuffix(cleanJSON, "```")
+	cleanJSON = strings.TrimSpace(cleanJSON)
+
+	var result AnalysisResult
+	if err := json.Unmarshal([]byte(cleanJSON), &result); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON response: %w", err)
 	}
 
-	callErr := provider.Process(ctx, w, system, prompt, images)
-	s.sm.UpdateKeyUsage(keyState.ID, func() string {
-		if callErr != nil {
-			return callErr.Error()
-		}
-		return ""
-	}(), -1) // Update key usage regardless of success or failure. Quota not tracked here.
-
-	if callErr != nil {
-		return fmt.Errorf("provider '%s' (key: %s) Process failed: %w", provider.GetModelInfo().ProviderName, keyState.ID, callErr)
-	}
-	return nil
+	return &result, nil
 }
 
-// GenerateContent delegates the call to the active provider.
-func (s *AIService) GenerateContent(ctx context.Context, prompt string, imageData []byte, modelType string, streamCallback func(string)) (string, error) {
-	provider, keyState, err := s.GetActiveProvider(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to get active provider: %w", err)
-	}
-
-	// Enforce RuntimeConfig checks for the selected key
-	if err := s.checkRuntimeConfig(keyState.ID); err != nil {
-		return "", err
-	}
-
-	content, callErr := provider.GenerateContent(ctx, prompt, imageData, modelType, streamCallback)
-	s.sm.UpdateKeyUsage(keyState.ID, func() string {
-		if callErr != nil {
-			return callErr.Error()
+// Chat streams the response for a conversation.
+func (s *AIService) Chat(ctx context.Context, req *RequestModel, callback func(string)) error {
+	return s.ExecuteWithRetry(ctx, func(p AIProvider) error {
+		stream, err := p.StreamCompletion(ctx, req)
+		if err != nil {
+			return err
 		}
-		return ""
-	}(), -1)
 
-	if callErr != nil {
-		return "", fmt.Errorf("provider '%s' (key: %s) GenerateContent failed: %w", provider.GetModelInfo().ProviderName, keyState.ID, callErr)
-	}
-	return content, nil
-}
-
-// GenerateJSONData delegates the call to the active provider.
-func (s *AIService) GenerateJSONData(ctx context.Context, text, language string) (string, error) {
-	provider, keyState, err := s.GetActiveProvider(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to get active provider: %w", err)
-	}
-
-	// Enforce RuntimeConfig checks for the selected key
-	if err := s.checkRuntimeConfig(keyState.ID); err != nil {
-		return "", err
-	}
-
-	jsonStr, callErr := provider.GenerateJSONData(ctx, text, language)
-	s.sm.UpdateKeyUsage(keyState.ID, func() string {
-		if callErr != nil {
-			return callErr.Error()
-		}
-		return ""
-	}(), -1)
-
-	if callErr != nil {
-		return "", fmt.Errorf("provider '%s' (key: %s) GenerateJSONData failed: %w", provider.GetModelInfo().ProviderName, keyState.ID, callErr)
-	}
-	return jsonStr, nil
-}
-
-// checkRuntimeConfig enforces the rules from the RuntimeConfigManager before allowing an AI call.
-func (s *AIService) checkRuntimeConfig(keyID string) error {
-	currentConfig := s.sm.GetConfig()
-
-	if !currentConfig.AIEnabled {
-		return fmt.Errorf("AI processing is globally disabled by dashboard")
-	}
-
-	keyState, ok := currentConfig.APIKeys[keyID]
-	if !ok {
-		return fmt.Errorf("API key '%s' not found in runtime configuration", keyID)
-	}
-
-	// Check provider state for the key's provider
-	providerState, ok := currentConfig.Providers[keyState.Provider]
-	if !ok {
-		return fmt.Errorf("provider '%s' for key '%s' not found in runtime configuration", keyState.Provider, keyID)
-	}
-	if !providerState.Enabled {
-		return fmt.Errorf("AI provider '%s' (for key '%s') is disabled by dashboard", keyState.Provider, keyID)
-	}
-	if providerState.Paused {
-		return fmt.Errorf("AI provider '%s' (for key '%s') is paused by dashboard", keyState.Provider, keyID)
-	}
-	if providerState.Blocked {
-		return fmt.Errorf("AI provider '%s' (for key '%s') is blocked by dashboard: %s", keyState.Provider, keyID, providerState.BlockedReason)
-	}
-
-	// Check specific key state
-	if !keyState.Enabled {
-		return fmt.Errorf("API key '%s' for provider '%s' is disabled by dashboard", keyID, keyState.Provider)
-	}
-	if keyState.Blocked {
-		return fmt.Errorf("API key '%s' for provider '%s' is blocked by dashboard: %s", keyID, keyState.Provider, keyState.BlockedReason)
-	}
-
-	// Environment check (TODO: implement this more robustly if different environments have different keys)
-	// For now, assume if an API key is selected, it's valid for the active environment.
-	// A more robust check might involve tagging keys with environments.
-
-	return nil
-}
-
-// selectActiveKeyForProvider selects an active, enabled, unblocked key for a given provider.
-// It prioritizes keys that are not blocked by transient errors (like rate limits).
-func (s *AIService) selectActiveKeyForProvider(ctx context.Context, providerName string) (AIProvider, st.APIKeyState, error) {
-	currentConfig := s.sm.GetConfig()
-
-	// Get all eligible keys for the provider
-	var eligibleKeys []st.APIKeyState
-	for _, keyState := range currentConfig.APIKeys {
-		if keyState.Provider == providerName && keyState.Enabled && !keyState.Blocked {
-			eligibleKeys = append(eligibleKeys, keyState)
-		}
-	}
-
-	if len(eligibleKeys) == 0 {
-		return nil, st.APIKeyState{}, fmt.Errorf("no eligible API keys found for provider %s", providerName)
-	}
-
-	// Prioritize keys not currently marked with a rate_limit_exceeded error
-	for _, keyState := range eligibleKeys {
-		if !strings.Contains(keyState.LastError, "rate_limit_exceeded") {
-			if provider, ok := s.providers[providerName][keyState.ID]; ok {
-				return provider, keyState, nil
+		for chunk := range stream {
+			if chunk.Error != nil {
+				return chunk.Error
+			}
+			if chunk.Content != "" {
+				callback(chunk.Content)
 			}
 		}
-	}
-
-	// Fallback to any eligible key if all have rate limit errors or similar
-	for _, keyState := range eligibleKeys {
-		if provider, ok := s.providers[providerName][keyState.ID]; ok {
-			return provider, keyState, nil
-		}
-	}
-
-	return nil, st.APIKeyState{}, fmt.Errorf("could not select an active provider instance for %s", providerName)
-}
-
-// Helper function to get keys from a map.
-func getMapKeys(m map[string]AIProvider) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
+		return nil
+	})
 }

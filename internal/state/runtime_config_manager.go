@@ -61,6 +61,12 @@ func (rcm *RuntimeConfigManager) mergeKeysFromEnv() {
 	rcm.mu.Lock()
 	defer rcm.mu.Unlock()
 
+	// Allow environment variable to override global AI enabled status
+	if viper.IsSet("AI_ENABLED") {
+		rcm.config.AIEnabled = viper.GetBool("AI_ENABLED")
+		slog.Info("AI_ENABLED status overridden by environment variable.", "enabled", rcm.config.AIEnabled)
+	}
+
 	// Re-initialize provider states from env/config to ensure enabled status is correct based on current env
 	rcm.initializeProviderStates()
 
@@ -151,8 +157,11 @@ func (rcm *RuntimeConfigManager) initializeProviderStates() {
 
 // initializeFromEnv populates the state from environment variables (bootstrap only).
 func (rcm *RuntimeConfigManager) initializeFromEnv() {
-	// Global AI enabled (from env or default true)
-	rcm.config.AIEnabled = viper.GetBool("AI_ENABLED")
+	// Global AI enabled (default to true if not explicitly false)
+	rcm.config.AIEnabled = true
+	if viper.IsSet("AI_ENABLED") {
+		rcm.config.AIEnabled = viper.GetBool("AI_ENABLED")
+	}
 
 	// Environment
 	rcm.config.Environment.Mode = viper.GetString("ENVIRONMENT_MODE")

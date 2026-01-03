@@ -73,34 +73,9 @@ templ OverviewPanel(services []status.ServiceStatus, aiProviders struct {
                     <span class="material-icons mr-2 text-green-500 text-sm">analytics</span>
                     System Load / 24h
                 </h2>
-                <div class="relative h-40 w-full" x-data="{
-                    init() {
-                        new Chart(this.$refs.canvas, {
-                            type: 'line',
-                            data: {
-                                labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'],
-                                datasets: [{
-                                    label: 'Processed',
-                                    data: [12, 19, 3, 5, 2, 3, 9],
-                                    borderColor: '#3b82f6',
-                                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                    tension: 0.4,
-                                    fill: true,
-                                    pointRadius: 0
-                                }]
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                plugins: { legend: { display: false } },
-                                scales: {
-                                    y: { display: false },
-                                    x: { grid: { display: false }, ticks: { color: '#4b5563', font: { size: 8 } } }
-                                }
-                            }
-                        });
-                    }
-                }">
+                <!-- Use the new Alpine component for the chart -->
+                <!-- Ideally, the data array should come from the backend, but for now we pass a static example that matches the old one -->
+                <div class="relative h-40 w-full" x-data="systemLoadChart([12, 19, 3, 5, 2, 3, 9])">
                     <canvas x-ref="canvas"></canvas>
                 </div>
             </div>

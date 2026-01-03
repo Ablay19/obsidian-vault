@@ -11,6 +11,7 @@ The bot is designed to be flexible and leverage multiple AI providers for divers
 *   **Google Gemini:** Utilized for advanced content summarization, question answering, and structured data generation, offering robust natural language processing capabilities.
 *   **Groq:** Integrated for high-speed inference, particularly beneficial for real-time streaming responses and minimizing latency in AI interactions.
 *   **Hugging Face:** Included for broad access to a variety of pre-trained models, allowing for potential future expansion into specialized NLP tasks or local AI processing.
+*   **OpenRouter:** Integrated to provide a unified API for accessing a wide array of large language models from different providers, ensuring flexibility and redundancy.
 
 ## 3. Database
 

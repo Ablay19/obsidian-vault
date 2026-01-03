@@ -2,7 +2,6 @@ package bot
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"obsidian-automation/internal/ai"
@@ -28,27 +27,37 @@ type ProcessedContent struct {
 }
 
 func extractTextFromImage(imagePath string) (string, error) {
+	slog.Info("Starting OCR text extraction from image", "path", imagePath)
 	cmd := exec.Command("tesseract", imagePath, "stdout", "-l", "eng+fra+ara")
 	output, err := cmd.Output()
 	if err != nil {
+		slog.Warn("Tesseract failed with multi-language, retrying with default", "path", imagePath, "error", err)
 		cmd = exec.Command("tesseract", imagePath, "stdout")
 		output, err = cmd.Output()
 		if err != nil {
+			slog.Error("Tesseract failed completely", "path", imagePath, "error", err)
 			return "", fmt.Errorf("tesseract failed: %v", err)
 		}
 	}
-	return strings.TrimSpace(string(output)), nil
+	extracted := strings.TrimSpace(string(output))
+	slog.Info("OCR extraction complete", "path", imagePath, "text_len", len(extracted))
+	return extracted, nil
 }
 
 func extractTextFromPDF(pdfPath string) (string, error) {
+	slog.Info("Starting text extraction from PDF", "path", pdfPath)
 	cmd := exec.Command("pdftotext", pdfPath, "-")
 	output, err := cmd.Output()
 	if err == nil && len(output) > 0 {
-		return strings.TrimSpace(string(output)), nil
+		extracted := strings.TrimSpace(string(output))
+		slog.Info("PDF text extraction complete (pdftotext)", "path", pdfPath, "text_len", len(extracted))
+		return extracted, nil
 	}
 
+	slog.Warn("pdftotext failed or empty, falling back to go-pdf", "path", pdfPath, "error", err)
 	f, r, err := pdf.Open(pdfPath)
 	if err != nil {
+		slog.Error("Failed to open PDF for extraction", "path", pdfPath, "error", err)
 		return "", err
 	}
 	defer f.Close()
@@ -63,7 +72,9 @@ func extractTextFromPDF(pdfPath string) (string, error) {
 		text.WriteString(pageText)
 		text.WriteString("\n\n")
 	}
-	return strings.TrimSpace(text.String()), nil
+	extracted := strings.TrimSpace(text.String())
+	slog.Info("PDF text extraction complete (go-pdf fallback)", "path", pdfPath, "text_len", len(extracted))
+	return extracted, nil
 }
 
 func classifyContent(text string) ProcessedContent {
@@ -152,7 +163,7 @@ func processFile(filePath, fileType string) ProcessedContent {
 	return classifyContent(text)
 }
 
-func processFileWithAI(filePath, fileType string, aiService *ai.AIService, streamCallback func(string), language string, updateStatus func(string)) ProcessedContent {
+func processFileWithAI(ctx context.Context, filePath, fileType string, aiService *ai.AIService, streamCallback func(string), language string, updateStatus func(string), additionalContext string) ProcessedContent {
 	// Do basic OCR/extraction first
 	var text string
 	var err error
@@ -194,79 +205,62 @@ func processFileWithAI(filePath, fileType string, aiService *ai.AIService, strea
 
 	if aiService != nil {
 		slog.Info("Using AI for enhancement...")
-		provider, _, err := aiService.GetActiveProvider(context.Background())
-		if err != nil {
-			slog.Error("Error getting active AI provider", "error", err)
-			result.AIProvider = "None" // Fallback
-		} else {
-			result.AIProvider = provider.GetModelInfo().ProviderName
-		}
+		// Use result.AIProvider = aiService.GetActiveProviderName()
+		result.AIProvider = aiService.GetActiveProviderName()
 		updateStatus("🤖 Generating summary...")
-
-		// Determine model to use based on whether image data is present
-		modelProvider, _, err := aiService.GetActiveProvider(context.Background())
-		if err != nil {
-			slog.Error("Error getting active AI provider for model selection", "error", err)
-			return result // Or handle error appropriately
-		}
-		modelToUse := modelProvider.GetModelInfo().ModelName
-		// If image data is present and the active provider is Gemini, we might want to use a vision-capable model
-		// This logic needs to be refined based on actual model capabilities and configuration
-		// For now, we'll just use the default configured model.
 
 		// 1. Get the summary (streaming)
 		var summaryPrompt string
 		if len(fileData) > 0 {
-			summaryPrompt = fmt.Sprintf("Analyze the attached image and summarize its content in %s. If there is text in the image, use it as context. If there are any questions, answer them as part of the summary. Extracted text (if any):\n\n%s",
+			summaryPrompt = fmt.Sprintf("Analyze the attached image and summarize its content in %s. If there is text in the image, use it as context. If there are any questions, answer them as part of the summary. Extracted text (if any):\n\n%s\n\nAdditional User Context:\n%s",
 				language,
 				text,
+				additionalContext,
 			)
 		} else {
-			summaryPrompt = fmt.Sprintf("Summarize the following text in %s. If the text contains any questions, answer them as part of the summary. Text:\n\n%s",
+			summaryPrompt = fmt.Sprintf("Summarize the following text in %s. If the text contains any questions, answer them as part of the summary. Text:\n\n%s\n\nAdditional User Context:\n%s",
 				language,
 				text,
+				additionalContext,
 			)
 		}
 
-		fullSummary, err := aiService.GenerateContent(context.Background(), summaryPrompt, fileData, modelToUse, streamCallback)
-		if err != nil {
-			slog.Error("Error from AI summary service", "error", err)
-			// Fallback to basic classification if summary fails
+		// Prepare Request Model
+		chatReq := &ai.RequestModel{
+			UserPrompt: summaryPrompt,
+			ImageData:  fileData,
+			Temperature: 0.5,
+		}
+
+		var fullSummaryBuilder strings.Builder
+		streamErr := aiService.Chat(ctx, chatReq, func(chunk string) {
+			fullSummaryBuilder.WriteString(chunk)
+			if streamCallback != nil {
+				streamCallback(chunk)
+			}
+		})
+
+		if streamErr != nil {
+			slog.Error("Error from AI summary service", "error", streamErr)
 			updateStatus("⚠️ AI summary failed. Falling back to basic classification.")
 			return classifyContent(text)
 		}
-		result.Summary = fullSummary
+		result.Summary = fullSummaryBuilder.String()
 
 		updateStatus("📊 Generating topics and questions...")
-		// 2. Get the JSON data (non-streaming)
-		jsonStr, err := aiService.GenerateJSONData(context.Background(), text, language)
+		
+		// 2. Get the structured data
+		analysisResult, err := aiService.AnalyzeText(ctx, text, language)
 		if err != nil {
-			slog.Error("Error from AI JSON service", "error", err)
-			// Proceed without JSON data, just use basic classification
+			slog.Error("Error from AI analysis service", "error", err)
 			updateStatus("⚠️ AI analysis failed. Using basic classification.")
 			basicResult := classifyContent(text)
 			result.Category = basicResult.Category
 			result.Tags = basicResult.Tags
-			return result
-		}
-
-		var aiResult struct {
-			Category  string   `json:"category"`
-			Topics    []string `json:"topics"`
-			Questions []string `json:"questions"`
-		}
-
-		if err := json.Unmarshal([]byte(jsonStr), &aiResult); err != nil {
-			slog.Error("Error parsing AI response JSON", "error", err)
-			updateStatus("⚠️ AI response parsing failed. Using basic classification.")
-			// Proceed without JSON data
-			basicResult := classifyContent(text)
-			result.Category = basicResult.Category
-			result.Tags = basicResult.Tags
 		} else {
-			result.Category = aiResult.Category
-			result.Topics = aiResult.Topics
-			result.Questions = aiResult.Questions
+			result.Category = analysisResult.Category
+			result.Topics = analysisResult.Topics
+			result.Questions = analysisResult.Questions
 			result.Tags = append([]string{result.Category}, result.Topics...)
 			result.Confidence = 0.95
 		}

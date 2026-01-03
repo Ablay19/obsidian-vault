@@ -2,7 +2,7 @@
 
 ## Initial Concept
 
-The project is an AI-Powered Obsidian Automation Bot. It is a Go-based Telegram bot designed to serve as a powerful, AI-enhanced assistant for note-taking and knowledge management with Obsidian. The bot can process images and PDFs, extract text, and use Google's Gemini AI to summarize content, answer questions, and generate structured data. It offers an interactive, conversational experience directly within Telegram, including real-time streaming of AI responses. It also features a comprehensive web dashboard for monitoring and management, including panels for bot status, file processing, connected users, and database configuration.
+The project is an AI-Powered Obsidian Automation Bot. It is a Go-based Telegram bot designed to serve as a powerful, AI-enhanced assistant for note-taking and knowledge management with Obsidian. The bot can process images and PDFs, extract text, and leverage multiple AI providers (including Google Gemini, Groq, Hugging Face, and OpenRouter) to summarize content, answer questions, and generate structured data. It offers an interactive, conversational experience directly within Telegram, including real-time streaming of AI responses. It also features a comprehensive web dashboard for monitoring and management, including panels for bot status, file processing, connected users, and database configuration.
 
 ## Primary Goal
 

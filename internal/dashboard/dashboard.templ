@@ -15,83 +15,45 @@ templ App() {
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="//unpkg.com/alpinejs" defer></script>
+    <!-- Defer Alpine to ensure app.js loads first or concurrently but executes after -->
+    <script src="//unpkg.com/alpinejs" defer></script> 
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <link rel="stylesheet" href="/static/style.css">
-    <script>
-        document.addEventListener('alpine:init', () => {
-            Alpine.store('app', {
-                syncInterval: 5,
-                countdown: 5,
-                lastUpdate: new Date(),
-                isPaused: false,
-                
-                init() {
-                    setInterval(() => {
-                        if(!this.isPaused && shouldPoll()) {
-                            this.countdown--;
-                            if(this.countdown < 0) {
-                                this.countdown = this.syncInterval;
-                            }
-                        }
-                    }, 1000);
-                },
-                
-                resetCountdown() {
-                    this.countdown = this.syncInterval;
-                    this.lastUpdate = new Date();
-                },
-                
-                togglePause() {
-                    this.isPaused = !this.isPaused;
-                }
-            });
-
-            Alpine.store('notifications', {
-                show(message, type = 'success') {
-                    Toastify({
-                        text: message,
-                        duration: 3000,
-                        close: true,
-                        gravity: "top",
-                        position: "right",
-                        stopOnFocus: true,
-                        className: "font-mono text-xs",
-                        style: {
-                            background: type === 'success' ? "#059669" : "#dc2626",
-                            boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
-                            borderRadius: "8px",
-                            border: "1px solid rgba(255,255,255,0.1)"
-                        }
-                    }).showToast();
-                }
-            });
-        })
-
-        function shouldPoll() {
-            const active = document.activeElement;
-            const isInput = active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT';
-            return !isInput;
-        }
-    </script>
+    
+    <!-- Load custom app logic -->
+    <script src="/static/app.js"></script>
 </head>
 
-<body class="bg-[#0a0a0c] text-gray-300 font-['JetBrains_Mono'] text-xs selection:bg-blue-500/30">
-<div class="flex min-h-screen">
+<body class="bg-[#0a0a0c] text-gray-300 font-['JetBrains_Mono'] text-xs selection:bg-blue-500/30" x-data>
+<div class="flex min-h-screen relative">
     <!-- Sidebar / Navigation -->
-    <aside class="w-64 bg-[#111114] border-r border-gray-800 hidden lg:flex flex-col sticky top-0 h-screen">
-        <div class="p-6 border-b border-gray-800">
-            <h1 class="text-sm font-bold flex items-center text-white tracking-widest uppercase">
-                <span class="material-icons mr-2 text-blue-500">smart_toy</span>
-                Obsidian Bot
-            </h1>
-            <div class="mt-2 flex items-center space-x-2">
-                <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                <span class="text-[10px] text-gray-500 uppercase font-bold tracking-tighter">System Online</span>
+    <!-- Mobile Sidebar Backdrop -->
+    <div x-show="$store.app.sidebarOpen" 
+         x-transition.opacity 
+         @click="$store.app.toggleSidebar()"
+         class="fixed inset-0 bg-black/50 z-20 lg:hidden backdrop-blur-sm"></div>
+
+    <!-- Sidebar Container -->
+    <aside :class="$store.app.sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+           class="w-64 bg-[#111114] border-r border-gray-800 flex flex-col fixed inset-y-0 left-0 z-30 transition-transform duration-300 ease-in-out lg:static lg:h-screen lg:sticky lg:top-0 shadow-2xl lg:shadow-none">
+        <div class="p-6 border-b border-gray-800 flex justify-between items-center">
+            <div>
+                <h1 class="text-sm font-bold flex items-center text-white tracking-widest uppercase">
+                    <span class="material-icons mr-2 text-blue-500">smart_toy</span>
+                    Obsidian Bot
+                </h1>
+                <div class="mt-2 flex items-center space-x-2">
+                    <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                    <span class="text-[10px] text-gray-500 uppercase font-bold tracking-tighter">System Online</span>
+                </div>
             </div>
+            <!-- Close button for mobile -->
+            <button @click="$store.app.toggleSidebar()" class="lg:hidden text-gray-500 hover:text-white">
+                <span class="material-icons">close</span>
+            </button>
         </div>
         
         <nav class="flex-grow p-4 space-y-1">
@@ -114,26 +76,37 @@ templ App() {
                 <div class="text-[10px] text-gray-500 uppercase font-bold mb-2">Sync Engine</div>
                 <div class="flex justify-between items-center font-mono">
                     <span class="text-gray-400">NEXT:</span>
-                    <span x-data x-text="$store.app.countdown + 's'" class="text-blue-500 font-bold"></span>
+                    <span x-text="$store.app.countdown + 's'" class="text-blue-500 font-bold"></span>
                 </div>
                 <div class="w-full bg-gray-800 h-1 mt-2 rounded-full overflow-hidden">
-                    <div class="bg-blue-500 h-full transition-all duration-1000" x-data :style="'width: ' + (($store.app.countdown / $store.app.syncInterval) * 100) + '%'"></div>
+                    <div class="bg-blue-500 h-full transition-all duration-1000" :style="'width: ' + (($store.app.countdown / $store.app.syncInterval) * 100) + '%'"></div>
                 </div>
             </div>
         </div>
     </aside>
 
     <!-- Main Content -->
-    <main class="flex-grow overflow-y-auto">
-        <header class="bg-[#111114]/80 backdrop-blur-md sticky top-0 z-10 px-8 py-4 border-b border-gray-800 flex justify-between items-center lg:hidden">
+    <main class="flex-grow overflow-y-auto w-full">
+        <!-- Mobile Header -->
+        <header class="bg-[#111114]/80 backdrop-blur-md sticky top-0 z-10 px-4 py-3 border-b border-gray-800 flex justify-between items-center lg:hidden">
+            <button @click="$store.app.toggleSidebar()" class="text-gray-400 hover:text-white">
+                <span class="material-icons">menu</span>
+            </button>
              <h1 class="text-xs font-bold flex items-center text-white tracking-widest uppercase">
-                <span class="material-icons mr-2 text-blue-500">smart_toy</span>
+                <span class="material-icons mr-2 text-blue-500 text-sm">smart_toy</span>
                 BOT
             </h1>
-            <div x-data class="text-[10px] font-mono text-blue-500">
+            <div class="text-[10px] font-mono text-blue-500">
                 SYNC: <span x-text="$store.app.countdown"></span>s
             </div>
         </header>
+
+        <!-- Breadcrumbs / Top Bar (Desktop) -->
+        <div class="hidden lg:flex items-center px-8 py-4 border-b border-gray-800 bg-[#0a0a0c] text-gray-500 text-[10px] uppercase tracking-wider sticky top-0 z-10">
+            <span class="text-gray-600">Home</span>
+            <span class="mx-2 text-gray-700">/</span>
+            <span class="text-blue-500 font-bold">Control Center</span>
+        </div>
 
         <div class="p-4 lg:p-8 space-y-6 max-w-7xl mx-auto">
             <!-- Top Stats -->
@@ -197,6 +170,13 @@ templ App() {
         </footer>
     </main>
 </div>
+<script>
+    // Global helper for HTMX polling logic, bridging to Alpine store
+    function shouldPoll() {
+        if (!Alpine || !Alpine.store('app')) return true;
+        return Alpine.store('app').shouldPoll();
+    }
+</script>
 </body>
 </html>
 }

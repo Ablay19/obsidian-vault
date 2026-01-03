@@ -3,7 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
-	"log/slog"
+	"obsidian-automation/internal/logger"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -21,7 +21,7 @@ func OpenDB() *sql.DB {
 	token := os.Getenv("TURSO_AUTH_TOKEN")
 
 	if url == "" || token == "" {
-		slog.Error("TURSO_DATABASE_URL or TURSO_AUTH_TOKEN is missing")
+		logger.GetDBLogger().Error("TURSO_DATABASE_URL or TURSO_AUTH_TOKEN is missing")
 		os.Exit(1)
 	}
 
@@ -29,7 +29,7 @@ func OpenDB() *sql.DB {
 
 	db, err := sql.Open("libsql", dsn)
 	if err != nil {
-		slog.Error("Failed to open database", "error", err)
+		logger.GetDBLogger().Error("Failed to open database", "error", err)
 		os.Exit(1)
 	}
 	DB = db
@@ -38,7 +38,7 @@ func OpenDB() *sql.DB {
 
 // RunMigrations applies database migrations using a custom runner.
 func RunMigrations(db *sql.DB) {
-	slog.Info("Applying database migrations...")
+	logger.GetDBLogger().Info("Applying database migrations...")
 
 	// Create schema_migrations table if it doesn't exist
 	createMigrationsTableSQL := `
@@ -48,7 +48,7 @@ func RunMigrations(db *sql.DB) {
 		applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);`
 	if _, err := db.Exec(createMigrationsTableSQL); err != nil {
-		slog.Error("Failed to create schema_migrations table", "error", err)
+		logger.GetDBLogger().Error("Failed to create schema_migrations table", "error", err)
 		os.Exit(1)
 	}
 
@@ -56,7 +56,7 @@ func RunMigrations(db *sql.DB) {
 	var migrationPaths []string
 	files, err := os.ReadDir("./internal/database/migrations")
 	if err != nil {
-		slog.Error("Failed to read migration directory", "error", err)
+		logger.GetDBLogger().Error("Failed to read migration directory", "error", err)
 		os.Exit(1)
 	}
 
@@ -76,35 +76,35 @@ func RunMigrations(db *sql.DB) {
 		var count int
 		err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE name = ?", migrationName).Scan(&count)
 		if err != nil {
-			slog.Error("Failed to check migration status", "migration", migrationName, "error", err)
+			logger.GetDBLogger().Error("Failed to check migration status", "migration", migrationName, "error", err)
 			os.Exit(1)
 		}
 		if count > 0 {
-			slog.Info("Migration already applied, skipping.", "migration", migrationName)
+			logger.GetDBLogger().Info("Migration already applied, skipping.", "migration", migrationName)
 			continue
 		}
 
 		// Apply migration
 		sqlContent, err := os.ReadFile(path)
 		if err != nil {
-			slog.Error("Failed to read migration file", "migration", migrationName, "error", err)
+			logger.GetDBLogger().Error("Failed to read migration file", "migration", migrationName, "error", err)
 			os.Exit(1)
 		}
 
 		if err := executeSQL(db, string(sqlContent)); err != nil {
-			slog.Error("Failed to apply migration", "migration", migrationName, "error", err)
+			logger.GetDBLogger().Error("Failed to apply migration", "migration", migrationName, "error", err)
 			os.Exit(1)
 		}
 
 		// Record migration as applied
 		if _, err := db.Exec("INSERT INTO schema_migrations (name) VALUES (?)", migrationName); err != nil {
-			slog.Error("Failed to record migration", "migration", migrationName, "error", err)
+			logger.GetDBLogger().Error("Failed to record migration", "migration", migrationName, "error", err)
 			os.Exit(1)
 		}
-		slog.Info("Migration applied successfully.", "migration", migrationName)
+		logger.GetDBLogger().Info("Migration applied successfully.", "migration", migrationName)
 	}
 
-	slog.Info("Database migrations applied successfully.")
+	logger.GetDBLogger().Info("Database migrations applied successfully.")
 }
 
 // columnExists checks if a column exists in a given table.
@@ -155,7 +155,7 @@ func executeSQL(db *sql.DB, sqlContent string) error {
 				return fmt.Errorf("failed to check column existence for %s.%s: %w", tableName, columnName, err)
 			}
 			if exists {
-				slog.Info("Column already exists in table, skipping ALTER TABLE ADD COLUMN statement.", "column", columnName, "table", tableName)
+				logger.GetDBLogger().Info("Column already exists in table, skipping ALTER TABLE ADD COLUMN statement.", "column", columnName, "table", tableName)
 				continue
 			}
 		}

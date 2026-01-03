@@ -10,6 +10,7 @@ import (
 	"obsidian-automation/internal/config"
 	"obsidian-automation/internal/dashboard"
 	"obsidian-automation/internal/database"
+	"obsidian-automation/internal/logger"
 	"obsidian-automation/internal/state" // Import the new state package
 	"os"
 	"os/signal"
@@ -18,8 +19,7 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	slog.SetDefault(logger)
+	logger.Setup()
 
 	config.LoadConfig() // Still load config for initial setup of things like dashboard port etc.
 
