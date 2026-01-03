@@ -81,7 +81,13 @@ func (d *Dashboard) handleAPIKeysPanel(w http.ResponseWriter, r *http.Request) {
 	for _, key := range config.APIKeys {
 		apiKeysSlice = append(apiKeysSlice, key)
 	}
-	APIKeysPanel(apiKeysSlice).Render(r.Context(), w)
+
+	var providers []string
+	for name := range config.Providers {
+		providers = append(providers, name)
+	}
+
+	APIKeysPanel(apiKeysSlice, providers).Render(r.Context(), w)
 }
 
 // handleDashboard serves the main dashboard HTML page.
@@ -345,14 +351,38 @@ func (d *Dashboard) handleAddAPIKey(w http.ResponseWriter, r *http.Request) {
 		KeyValue     string `json:"keyValue"`
 		Enabled      bool   `json:"enabled"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+
+	contentType := r.Header.Get("Content-Type")
+	if contentType == "application/json" {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+	} else {
+		// Assume form data
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Failed to parse form", http.StatusBadRequest)
+			return
+		}
+		req.ProviderName = r.FormValue("providerName")
+		req.KeyValue = r.FormValue("keyValue")
+		req.Enabled = true // Default to enabled for form submissions
+	}
+
+	if req.ProviderName == "" || req.KeyValue == "" {
+		http.Error(w, "Provider name and API key are required", http.StatusBadRequest)
 		return
 	}
 
 	keyID, err := d.rcm.AddAPIKey(req.ProviderName, req.KeyValue, req.Enabled)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// If it's an HTMX request, we might want to return the updated panel instead of JSON
+	if r.Header.Get("HX-Request") == "true" {
+		d.handleAPIKeysPanel(w, r)
 		return
 	}
 
@@ -370,14 +400,36 @@ func (d *Dashboard) handleRemoveAPIKey(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		KeyID string `json:"keyID"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+
+	contentType := r.Header.Get("Content-Type")
+	if contentType == "application/json" {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+	} else {
+		// Assume form data
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Failed to parse form", http.StatusBadRequest)
+			return
+		}
+		req.KeyID = r.FormValue("keyID")
+	}
+
+	if req.KeyID == "" {
+		http.Error(w, "Key ID is required", http.StatusBadRequest)
 		return
 	}
 
 	err := d.rcm.RemoveAPIKey(req.KeyID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// If it's an HTMX request, we might want to return the updated panel instead of JSON
+	if r.Header.Get("HX-Request") == "true" {
+		d.handleAPIKeysPanel(w, r)
 		return
 	}
 

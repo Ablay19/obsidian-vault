@@ -102,6 +102,9 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 
 	// Hugging Face
 	huggingFaceAPIKey := viper.GetString("HUGGINGFACE_API_KEY")
+	if huggingFaceAPIKey == "" {
+		huggingFaceAPIKey = viper.GetString("HF_TOKEN")
+	}
 	if huggingFaceAPIKey != "" {
 		rcm.config.Providers["Hugging Face"] = ProviderState{
 			Name:      "Hugging Face",
