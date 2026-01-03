@@ -14,7 +14,7 @@ import (
 	"obsidian-automation/internal/gcp"
 	"obsidian-automation/internal/state" // Import the state package
 	"obsidian-automation/internal/status"
-	"os" // New import
+	"os"
 	"strings"
 	"time"
 )
@@ -54,6 +54,7 @@ func (d *Dashboard) RegisterRoutes(router *http.ServeMux) {
 	// Auth routes (unprotected)
 	router.HandleFunc("/auth/login", d.handleLoginPage)
 	router.HandleFunc("/auth/google/login", d.handleGoogleLogin)
+	router.HandleFunc("/auth/dev/login", d.handleDevLogin)
 	router.HandleFunc("/auth/google/callback", d.handleGoogleCallback)
 	router.HandleFunc("/auth/logout", d.handleLogout)
 
@@ -677,6 +678,23 @@ func (d *Dashboard) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 func (d *Dashboard) handleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 	url := d.authService.GetLoginURL("state-token") // TODO: secure state
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
+}
+
+func (d *Dashboard) handleDevLogin(w http.ResponseWriter, r *http.Request) {
+	if os.Getenv("ENVIRONMENT_MODE") != "dev" {
+		http.Error(w, "Dev login only available in dev mode", http.StatusForbidden)
+		return
+	}
+
+	session, _ := d.authService.CreateDevSession()
+	cookie, err := d.authService.CreateSessionCookie(session)
+	if err != nil {
+		http.Error(w, "Failed to create dev session", http.StatusInternalServerError)
+		return
+	}
+
+	http.SetCookie(w, cookie)
+	http.Redirect(w, r, "/", http.StatusFound)
 }
 
 func (d *Dashboard) handleGoogleCallback(w http.ResponseWriter, r *http.Request) {

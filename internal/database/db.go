@@ -21,6 +21,7 @@ func OpenDB() *sql.DB {
 	token := os.Getenv("TURSO_AUTH_TOKEN")
 
 	if url == "" || token == "" {
+		fmt.Fprintf(os.Stderr, "FATAL: TURSO_DATABASE_URL or TURSO_AUTH_TOKEN is missing. Please check your environment or .env file.\n")
 		logger.GetDBLogger().Error("TURSO_DATABASE_URL or TURSO_AUTH_TOKEN is missing")
 		os.Exit(1)
 	}
@@ -127,7 +128,8 @@ func columnExists(db *sql.DB, tableName, columnName string) (bool, error) {
 		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt_val, &pk); err != nil {
 			return false, fmt.Errorf("failed to scan table info row: %w", err)
 		}
-		if name == columnName {
+		logger.GetDBLogger().Info("Found column in table", "table", tableName, "column", name)
+		if strings.EqualFold(name, columnName) {
 			return true, nil
 		}
 	}
@@ -136,20 +138,31 @@ func columnExists(db *sql.DB, tableName, columnName string) (bool, error) {
 
 // executeSQL executes SQL content, handling ALTER TABLE ADD COLUMN idempotently.
 func executeSQL(db *sql.DB, sqlContent string) error {
-	alterColumnRegex := regexp.MustCompile(`(?i)ALTER\s+TABLE\s+(\S+)\s+ADD\s+COLUMN\s+(\S+)\s+.*`)
-
-	newVar := strings.Split
-	statements := newVar(sqlContent, ";")
+	statements := strings.Split(sqlContent, ";")
 	for _, stmt := range statements {
 		trimmedStmt := strings.TrimSpace(stmt)
 		if trimmedStmt == "" {
 			continue
 		}
 
-		matches := alterColumnRegex.FindStringSubmatch(trimmedStmt)
+		// Remove comments for regex matching
+		lines := strings.Split(trimmedStmt, "\n")
+		var cleanStmtLines []string
+		for _, line := range lines {
+			trimmedLine := strings.TrimSpace(line)
+			if trimmedLine != "" && !strings.HasPrefix(trimmedLine, "--") {
+				cleanStmtLines = append(cleanStmtLines, trimmedLine)
+			}
+		}
+		cleanStmt := strings.Join(cleanStmtLines, " ")
+
+		// Simplified regex to just get the table and column name from ADD [COLUMN]
+		re := regexp.MustCompile(`(?i)ALTER\s+TABLE\s+(\S+)\s+ADD\s+(?:COLUMN\s+)?(\S+)`)
+		matches := re.FindStringSubmatch(cleanStmt)
 		if len(matches) == 3 {
 			tableName := matches[1]
 			columnName := matches[2]
+			logger.GetDBLogger().Info("Checking for column existence before migration", "table", tableName, "column", columnName)
 			exists, err := columnExists(db, tableName, columnName)
 			if err != nil {
 				return fmt.Errorf("failed to check column existence for %s.%s: %w", tableName, columnName, err)

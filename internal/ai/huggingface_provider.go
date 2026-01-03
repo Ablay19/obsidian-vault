@@ -9,9 +9,10 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 	"time"
+
+	"github.com/spf13/viper"
 )
 
 // HuggingFaceProvider implements the AIProvider interface for Hugging Face Router (OpenAI-compatible).
@@ -197,7 +198,7 @@ func (p *HuggingFaceProvider) StreamCompletion(ctx context.Context, req *Request
 }
 
 func (p *HuggingFaceProvider) getBaseURL() string {
-	baseURL := os.Getenv("HUGGINGFACE_BASE_URL")
+	baseURL := viper.GetString("HUGGINGFACE_BASE_URL")
 	if baseURL == "" {
 		baseURL = "https://router.huggingface.co/v1"
 	}

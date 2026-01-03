@@ -32,7 +32,7 @@ func APIKeysPanel(keys []state.APIKeyState, providers []string) templ.Component 
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"bg-[#111114] p-6 rounded-xl shadow-2xl border border-gray-800\"><h2 class=\"text-[10px] font-bold mb-6 flex items-center uppercase tracking-[0.2em] text-gray-500\"><span class=\"material-icons mr-2 text-yellow-500 text-sm\">vpn_key</span> Vault Access Keys</h2><div class=\"space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"bg-[#111114] p-6 rounded-xl shadow-2xl border border-gray-800\"><h2 class=\"text-[10px] font-bold mb-6 flex items-center uppercase tracking-[0.2em] text-gray-500\"><span class=\"material-icons mr-2 text-yellow-500 text-sm\">vpn_key</span> Vault Access Keys</h2><div class=\"mb-6\" x-data=\"{ \n\t\t\tdiscoveryOpen: false, \n\t\t\tprojects: [], \n\t\t\tkeys: [], \n\t\t\tloading: false,\n\t\t\tselectedProject: '',\n\t\t\tasync fetchProjects() {\n\t\t\t\tthis.loading = true;\n\t\t\t\ttry {\n\t\t\t\t\tconst res = await fetch('/api/auth/google/list-projects');\n\t\t\t\t\tthis.projects = await res.json();\n\t\t\t\t} catch(e) { console.error(e); }\n\t\t\t\tthis.loading = false;\n\t\t\t},\n\t\t\tasync fetchKeys(projId) {\n\t\t\t\tthis.selectedProject = projId;\n\t\t\t\tthis.loading = true;\n\t\t\t\ttry {\n\t\t\t\t\tconst res = await fetch('/api/auth/google/list-keys?projectId=' + projId);\n\t\t\t\t\tthis.keys = await res.json();\n\t\t\t\t} catch(e) { console.error(e); }\n\t\t\t\tthis.loading = false;\n\t\t\t}\n\t\t}\"><button @click=\"discoveryOpen = !discoveryOpen; if(discoveryOpen) fetchProjects()\" class=\"w-full bg-gray-800 hover:bg-gray-700 text-blue-400 text-[9px] font-bold uppercase py-2 px-4 rounded-lg border border-blue-500/20 flex items-center justify-center transition-all\"><span class=\"material-icons text-sm mr-2\">search</span> Discover Keys from Google Cloud</button><div x-show=\"discoveryOpen\" x-transition class=\"mt-4 p-4 bg-black/40 rounded-xl border border-gray-800 space-y-4\"><div x-show=\"loading\" class=\"flex justify-center py-4\"><span class=\"material-icons animate-spin text-blue-500\">sync</span></div><!-- Project Selection --><div x-show=\"!loading && !selectedProject\"><p class=\"text-[8px] text-gray-500 uppercase font-bold mb-2\">Select GCP Project</p><div class=\"space-y-1 max-h-40 overflow-y-auto pr-2 custom-scrollbar\"><template x-for=\"p in projects\"><button @click=\"fetchKeys(p.projectId)\" class=\"w-full text-left p-2 hover:bg-white/5 rounded text-[10px] text-gray-300 flex justify-between\"><span x-text=\"p.name\"></span> <span x-text=\"p.projectId\" class=\"opacity-40\"></span></button></template></div></div><!-- Key Selection --><div x-show=\"!loading && selectedProject\"><div class=\"flex justify-between items-center mb-2\"><p class=\"text-[8px] text-gray-500 uppercase font-bold\">Available Keys</p><button @click=\"selectedProject = ''\" class=\"text-[8px] text-blue-500 font-bold uppercase underline\">Back to projects</button></div><div class=\"space-y-1 max-h-40 overflow-y-auto pr-2 custom-scrollbar\"><template x-for=\"k in keys\"><button @click=\"\n\t\t\t\t\t\t\t\tconst params = new URLSearchParams();\n\t\t\t\t\t\t\t\tparams.append('providerName', 'Gemini');\n\t\t\t\t\t\t\t\tparams.append('keyValue', k.keyString);\n\t\t\t\t\t\t\t\tfetch('/api/ai/key/add', {\n\t\t\t\t\t\t\t\t\tmethod: 'POST',\n\t\t\t\t\t\t\t\t\theaders: { 'Content-Type': 'application/x-www-form-urlencoded' },\n\t\t\t\t\t\t\t\t\tbody: params\n\t\t\t\t\t\t\t\t}).then(res => {\n\t\t\t\t\t\t\t\t\tif (res.ok) {\n\t\t\t\t\t\t\t\t\t\t$store.notifications.show('Key imported successfully', 'success');\n\t\t\t\t\t\t\t\t\t\tdiscoveryOpen = false;\n\t\t\t\t\t\t\t\t\t\thtmx.trigger('#api-keys-content', 'load');\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t\" class=\"w-full text-left p-2 hover:bg-blue-500/10 rounded text-[10px] text-white flex justify-between border border-transparent hover:border-blue-500/30 transition-all\"><span x-text=\"k.displayName || 'Unnamed Key'\"></span> <span class=\"material-icons text-sm text-blue-500\">file_download</span></button></template><template x-if=\"keys.length === 0\"><div class=\"text-center py-4 text-[9px] text-gray-600\">No keys found in this project</div></template></div></div></div></div><div class=\"space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -72,7 +72,7 @@ func APIKeysPanel(keys []state.APIKeyState, providers []string) templ.Component 
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(key.Provider)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 23, Col: 94}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 105, Col: 94}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
@@ -86,7 +86,7 @@ func APIKeysPanel(keys []state.APIKeyState, providers []string) templ.Component 
 				var templ_7745c5c3_Var5 string
 				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(partialKey(key.Value))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 26, Col: 32}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 108, Col: 32}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 				if templ_7745c5c3_Err != nil {
@@ -130,7 +130,7 @@ func APIKeysPanel(keys []state.APIKeyState, providers []string) templ.Component 
 									})
 								}`)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 53, Col: 10}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 135, Col: 10}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -153,7 +153,7 @@ func APIKeysPanel(keys []state.APIKeyState, providers []string) templ.Component 
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(p)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 90, Col: 24}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 172, Col: 24}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -166,7 +166,7 @@ func APIKeysPanel(keys []state.APIKeyState, providers []string) templ.Component 
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(p)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 90, Col: 61}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/api_keys_panel.templ`, Line: 172, Col: 61}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {
