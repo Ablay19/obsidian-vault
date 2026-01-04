@@ -9,13 +9,15 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
+	"obsidian-automation/internal/auth"
+	"obsidian-automation/internal/dashboard/components"
 	"obsidian-automation/internal/status"
 )
 
 func OverviewPanel(services []status.ServiceStatus, aiProviders struct {
 	Available []string `json:"available"`
 	Active    string   `json:"active"`
-}) templ.Component {
+}, session *auth.UserSession) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -40,91 +42,108 @@ func OverviewPanel(services []status.ServiceStatus, aiProviders struct {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = StatsCard("bolt", "System", getBotStatus(services)).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.StatsCard("bolt", "System", getBotStatus(services)).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = StatsCard("schedule", "Uptime", getUptime(services)).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.StatsCard("schedule", "Uptime", getUptime(services)).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = StatsCard("smart_toy", "AI_CORE", aiProviders.Active).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.StatsCard("smart_toy", "AI_CORE", aiProviders.Active).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = StatsCard("history", "Activity", getLastActivity(services)).Render(ctx, templ_7745c5c3_Buffer)
+		if session != nil && isTelegramLinked(session.Email) {
+			templ_7745c5c3_Err = components.StatsCard("link", "Telegram", "Linked").Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		} else {
+			templ_7745c5c3_Err = components.StatsCard("link_off", "Telegram", "Not Linked").Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div><div class=\"grid grid-cols-1 lg:grid-cols-3 gap-6\"><!-- AI Control Panel --><div class=\"bg-[#111114] p-6 rounded-xl shadow-2xl border border-gray-800 flex flex-col justify-between\"><div><h2 class=\"text-[10px] font-bold mb-6 flex items-center uppercase tracking-[0.2em] text-gray-500\"><span class=\"material-icons mr-2 text-blue-500 text-sm\">settings_input_component</span> AI Engine Selection</h2><div x-data=\"")
+		if session != nil && !isTelegramLinked(session.Email) {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div class=\"bg-blue-900/20 border border-blue-500/30 p-4 rounded-xl mb-6 flex items-center justify-between\"><div class=\"flex items-center\"><span class=\"material-icons text-blue-400 mr-3\">info</span> <span class=\"text-xs text-blue-100\">Your accounts are not linked. Type <code class=\"bg-black/30 px-1 rounded\">/link</code> in your Telegram bot to sync data.</span></div></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"grid grid-cols-1 lg:grid-cols-3 gap-6\"><!-- AI Control Panel --><div class=\"bg-[#111114] p-6 rounded-xl shadow-2xl border border-gray-800 flex flex-col justify-between\"><div><h2 class=\"text-[10px] font-bold mb-6 flex items-center uppercase tracking-[0.2em] text-gray-500\"><span class=\"material-icons mr-2 text-blue-500 text-sm\">settings_input_component</span> AI Engine Selection</h2><div x-data=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs("{ selectedProvider: '" + aiProviders.Active + "', loading: false }")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 27, Col: 102}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 42, Col: 102}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" class=\"space-y-4\"><div class=\"relative\"><select x-model=\"selectedProvider\" class=\"w-full appearance-none p-3 bg-gray-900 border border-gray-800 rounded-lg text-white text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all cursor-pointer\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" class=\"space-y-4\"><div class=\"relative\"><select x-model=\"selectedProvider\" class=\"w-full appearance-none p-3 bg-gray-900 border border-gray-800 rounded-lg text-white text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all cursor-pointer\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if len(aiProviders.Available) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<option value=\"\" disabled selected>No engines found</option> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<option value=\"\" disabled selected>No engines found</option> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		for _, provider := range aiProviders.Available {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<option value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<option value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(provider)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 34, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 49, Col: 60}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\" selected=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\" selected=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(provider == aiProviders.Active)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 34, Col: 104}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 49, Col: 104}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(provider)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 34, Col: 117}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/overview_panel.templ`, Line: 49, Col: 117}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</option>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</option>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</select><div class=\"absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-600\"><span class=\"material-icons text-sm\">expand_more</span></div></div><button @click=\"\n                                loading = true;\n                                fetch('/api/ai/provider/set', {\n                                    method: 'POST',\n                                    headers: { 'Content-Type': 'application/json' },\n                                    body: JSON.stringify({ provider: selectedProvider })\n                                }).then(res => res.json()).then(data => {\n                                    loading = false;\n                                    if (data.status === 'success') {\n                                        $store.notifications.show(data.message, 'success');\n                                    } else {\n                                        $store.notifications.show(data.message || 'Error', 'error');\n                                    }\n                                    htmx.trigger('#main-content', 'refresh');\n                                }).catch(err => {\n                                    loading = false;\n                                    $store.notifications.show('Network error', 'error');\n                                })\n                            \" :disabled=\"loading || !selectedProvider || selectedProvider === 'None'\" class=\"w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 text-white p-3 rounded-lg transition-all font-bold text-[10px] uppercase tracking-widest flex items-center justify-center shadow-lg shadow-blue-900/20\"><span x-show=\"!loading\">Switch Engine</span> <span x-show=\"loading\" class=\"material-icons animate-spin text-sm\">sync</span></button></div></div></div><!-- Activity Chart --><div class=\"lg:col-span-2 bg-[#111114] p-6 rounded-xl shadow-2xl border border-gray-800 h-64\"><h2 class=\"text-[10px] font-bold mb-4 flex items-center uppercase tracking-[0.2em] text-gray-500\"><span class=\"material-icons mr-2 text-green-500 text-sm\">analytics</span> System Load / 24h</h2><!-- Use the new Alpine component for the chart --><!-- Ideally, the data array should come from the backend, but for now we pass a static example that matches the old one --><div class=\"relative h-40 w-full\" x-data=\"systemLoadChart([12, 19, 3, 5, 2, 3, 9])\"><canvas x-ref=\"canvas\"></canvas></div></div></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</select><div class=\"absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-600\"><span class=\"material-icons text-sm\">expand_more</span></div></div><button @click=\"\n                                loading = true;\n                                fetch('/api/ai/provider/set', {\n                                    method: 'POST',\n                                    headers: { 'Content-Type': 'application/json' },\n                                    body: JSON.stringify({ provider: selectedProvider })\n                                }).then(res => res.json()).then(data => {\n                                    loading = false;\n                                    if (data.status === 'success') {\n                                        $store.notifications.show(data.message, 'success');\n                                    } else {\n                                        $store.notifications.show(data.message || 'Error', 'error');\n                                    }\n                                    $store.app.syncUI();\n                                }).catch(err => {\n                                    loading = false;\n                                    $store.notifications.show('Network error', 'error');\n                                })\n                            \" :disabled=\"loading || !selectedProvider || selectedProvider === 'None'\" class=\"w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 text-white p-3 rounded-lg transition-all font-bold text-[10px] uppercase tracking-widest flex items-center justify-center shadow-lg shadow-blue-900/20\"><span x-show=\"!loading\">Switch Engine</span> <span x-show=\"loading\" class=\"material-icons animate-spin text-sm\">sync</span></button></div></div></div><!-- Activity Chart --><div class=\"lg:col-span-2 bg-[#111114] p-6 rounded-xl shadow-2xl border border-gray-800 h-64\"><h2 class=\"text-[10px] font-bold mb-4 flex items-center uppercase tracking-[0.2em] text-gray-500\"><span class=\"material-icons mr-2 text-green-500 text-sm\">analytics</span> System Load / 24h</h2><!-- Use the new Alpine component for the chart --><!-- Ideally, the data array should come from the backend, but for now we pass a static example that matches the old one --><div class=\"relative h-40 w-full\" x-data=\"systemLoadChart([12, 19, 3, 5, 2, 3, 9])\"><canvas x-ref=\"canvas\"></canvas></div></div></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

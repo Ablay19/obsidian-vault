@@ -72,6 +72,11 @@ func (p *Pipeline) Submit(job Job) error {
 	}
 }
 
+// GetJobChan returns the channel for submitting jobs.
+func (p *Pipeline) GetJobChan() chan<- Job {
+	return p.jobChan
+}
+
 func (p *Pipeline) worker(ctx context.Context, id int) {
 	defer p.wg.Done()
 	for {

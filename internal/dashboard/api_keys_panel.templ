@@ -75,7 +75,11 @@ templ APIKeysPanel(keys []state.APIKeyState, providers []string) {
 									if (res.ok) {
 										$store.notifications.show('Key imported successfully', 'success');
 										discoveryOpen = false;
-										htmx.trigger('#api-keys-content', 'load');
+										if (window.Alpine && Alpine.store('app')) {
+                                            Alpine.store('app').syncUI();
+                                        } else {
+                                            htmx.trigger('#main-content', 'refresh');
+                                        }
 									}
 								})
 							" class="w-full text-left p-2 hover:bg-blue-500/10 rounded text-[10px] text-white flex justify-between border border-transparent hover:border-blue-500/30 transition-all">
@@ -127,7 +131,11 @@ templ APIKeysPanel(keys []state.APIKeyState, providers []string) {
 									}).then(res => {
 										if (res.ok) {
 											$store.notifications.show('Key revoked', 'success');
-											htmx.trigger('#api-keys-content', 'load');
+											if (window.Alpine && Alpine.store('app')) {
+                                                Alpine.store('app').syncUI();
+                                            } else {
+                                                htmx.trigger('#main-content', 'refresh');
+                                            }
 										} else {
 											$store.notifications.show('Revocation failed', 'error');
 										}
@@ -157,7 +165,11 @@ templ APIKeysPanel(keys []state.APIKeyState, providers []string) {
 						if (res.ok) {
 							$store.notifications.show('Key injected successfully', 'success');
 							keyValue = '';
-							htmx.trigger('#api-keys-content', 'load');
+							if (window.Alpine && Alpine.store('app')) {
+                                Alpine.store('app').syncUI();
+                            } else {
+                                htmx.trigger('#main-content', 'refresh');
+                            }
 						} else {
 							$store.notifications.show('Injection failed', 'error');
 						}

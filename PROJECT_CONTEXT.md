@@ -9,11 +9,13 @@ primary_technologies:
   - "Google Gemini"
   - "Groq"
   - "Hugging Face"
+  - "OpenRouter"
   - "Tesseract OCR"
   - "Poppler utils"
   - "sqlc"
   - "Templ"
   - "HTMX"
+  - "Alpine.js"
 entrypoint: "cmd/bot/main.go"
 documentation:
   - "GEMINI.md"
@@ -25,33 +27,37 @@ documentation:
 
 ## 1. Project Purpose
 
-This project is a Go-based Telegram bot that automates note-taking in Obsidian. It processes images and PDFs, extracts text using OCR, and leverages AI models (Gemini, Groq) to generate summaries and categorize content. It is designed to be a "digital assistant" for knowledge management, featuring a real-time web dashboard for monitoring.
+This project is a Go-based automation system that bridges the gap between messaging apps (Telegram, WhatsApp) and Obsidian. It acts as an intelligent ingestion engine that processes documents, extracts knowledge using OCR and multi-provider AI, and maintains a synchronized, version-controlled vault.
 
 ## 2. Core Functionality
 
--   **Input**: Receives images, PDFs, and text messages from a Telegram user.
--   **Processing**:
-    -   Extracts text from images using Tesseract OCR.
-    -   Extracts text from PDFs using `pdftotext` (from Poppler utils).
-        - Uses AI (Gemini, Groq or Hugging Face) to analyze the text, generate a summary, and categorize the content based on keywords.
--   **Output**:
-    -   Streams the AI-generated summary back to the user in real-time.
-    -   Creates a new Markdown note in the user's Obsidian vault.
-    -   Provides a web dashboard to monitor bot status and manage AI providers.
+-   **Multi-Source Ingestion**: Receives content from Telegram, Google Drive (stub), and WhatsApp (planned).
+-   **Asynchronous Pipeline**: Uses a worker pool to process files in the background, improving scalability and responsiveness.
+-   **AI Knowledge Extraction**:
+    *   Extracts text using Tesseract (images) and Poppler (PDFs).
+    *   Uses AI (Gemini, Groq, HF, OpenRouter) to generate summaries and answer questions within documents.
+    *   **Failover**: Automatically rotates through providers (Round-Robin) on transient failures (429, 5xx).
+-   **Security**: Implements AES-256-GCM encryption for API keys at rest and redacts sensitive data in the UI.
+-   **Output & Synchronization**:
+    *   Creates Markdown notes and high-fidelity PDFs (default).
+    *   **Git Sync**: Automatically commits and pushes new notes to a Git repository.
+    *   **Real-time Dashboard**: HTMX-powered SPA for management, featuring real-time chat history and provider control.
 
 ## 3. Key Files and Directories
 
--   `cmd/bot/main.go`: The main application entrypoint.
--   `internal/bot/`: Contains the core bot logic, including message handlers and file processing orchestration.
--   `internal/ai/`: Manages the AI providers (Gemini, Groq) and the `AIProvider` interface.
--   `internal/database/`: Manages the Turso database connection, schema, and migrations. Uses `sqlc` to generate type-safe Go code from SQL queries.
--   `internal/dashboard/`: Contains the web dashboard implementation using `Templ` and `HTMX`.
-    -   `dashboard.go`: The backend handler for the dashboard.
-    -   `dashboard.templ`: The `Templ` file defining the UI components.
--   `Dockerfile`: A single-stage Dockerfile for building a minimal runtime image.
--   `Makefile`: Contains commands for building, running, and managing the bot container.
--   `config.yml`: Configuration for AI models and classification patterns.
--   `.env`: Configuration file for API keys and other secrets (not checked into git).
+-   `internal/pipeline/`: The core ingestion engine and worker pool logic.
+-   `internal/git/`: Robust Git automation manager.
+-   `internal/security/`: Encryption, validation, and rate limiting utilities.
+-   `internal/bot/`: Telegram specific logic and pipeline adapters.
+-   `internal/ai/`: Multi-provider AI service with failover logic.
+-   `internal/dashboard/`: UI components using Templ, HTMX, and Alpine.js.
+
+## 4. Roadmap & Next Steps
+
+-   **WhatsApp Integration**: Implement a production-ready connector for WhatsApp using Meta Cloud API or a local gateway.
+-   **Bidirectional Sync**: Enhance the account linking protocol to allow dashboard-to-telegram command triggers.
+-   **Advanced Search**: Add vector-based search for the Obsidian vault within the dashboard.
+-   **Local AI Fallback**: Integrate Ollama for offline processing.
 
 ## 4. Key Commands
 

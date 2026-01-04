@@ -1,0 +1,90 @@
+package components
+
+import (
+	"obsidian-automation/internal/auth"
+	"context"
+)
+
+// Helper to get session from context (duplicated for now, or could be in a shared utils pkg)
+func getSessionUser(ctx context.Context) *auth.UserSession {
+    val := ctx.Value("session")
+    if val == nil {
+        return nil
+    }
+    return val.(*auth.UserSession)
+}
+
+templ Layout(initialTab string, content templ.Component) {
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Obsidian Bot Dashboard</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Defer Alpine to ensure app.js loads first or concurrently but executes after -->
+    <script src="//unpkg.com/alpinejs" defer></script> 
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+    
+    <!-- Load custom app logic -->
+    <script src="/static/app.js"></script>
+    <script>
+        // Inject server-side initial state
+        window.initialTab = "{ initialTab }";
+    </script>
+</head>
+
+<body class="bg-[#0a0a0c] text-gray-300 font-['JetBrains_Mono'] text-xs selection:bg-blue-500/30" x-data>
+<div class="flex min-h-screen relative">
+    <!-- Mobile Sidebar Backdrop -->
+    <div x-show="$store.app.sidebarOpen" 
+         x-transition.opacity 
+         @click="$store.app.toggleSidebar()"
+         class="fixed inset-0 bg-black/50 z-20 lg:hidden backdrop-blur-sm"></div>
+
+    <!-- Sidebar Component -->
+    @Sidebar(getSessionUser(ctx))
+
+    <!-- Main Content -->
+    <main class="flex-grow overflow-y-auto w-full">
+        @Header()
+
+        <div id="main-content" 
+             class="p-4 lg:p-8 space-y-6 max-w-7xl mx-auto"
+             hx-trigger="refresh"
+             x-init="$store.app.syncUI()">
+             
+             <!-- Content Injection -->
+             @content
+        </div>
+
+        <footer class="px-8 py-12 border-t border-gray-800 text-center space-y-2">
+            <div class="text-gray-600 font-bold uppercase tracking-[0.3em] text-[10px]">Obsidian Bot Dashboard © 2026</div>
+            <div class="flex justify-center items-center space-x-4 text-[10px] text-gray-500">
+                <a href="/api/services/status" target="_blank" class="hover:text-blue-400 transition-colors">SYSTEM_STATUS</a>
+                <span class="text-gray-800">/</span>
+                <a href="https://github.com/yourusername/obsidian-bot" target="_blank" class="hover:text-blue-400 transition-colors">SOURCE_CODE</a>
+            </div>
+        </footer>
+    </main>
+</div>
+<script>
+    // Global helper for HTMX polling logic, bridging to Alpine store
+    function shouldPoll() {
+        if (!Alpine || !Alpine.store('app')) return true;
+        return Alpine.store('app').shouldPoll();
+    }
+</script>
+</body>
+</html>
+}

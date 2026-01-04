@@ -95,6 +95,7 @@ func LoadConfig() {
 	viper.BindEnv("BACKEND_HOST")
 	viper.BindEnv("ENVIRONMENT_ISOLATION_ENABLED")
 	viper.BindEnv("AI_ENABLED")
+	viper.BindEnv("DASHBOARD_URL")
 	viper.BindEnv("auth.google_client_id", "GOOGLE_CLIENT_ID")
 	viper.BindEnv("auth.google_client_secret", "GOOGLE_CLIENT_SECRET")
 	viper.BindEnv("auth.google_redirect_url", "GOOGLE_REDIRECT_URL")

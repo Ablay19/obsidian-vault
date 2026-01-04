@@ -8,9 +8,9 @@ providers:
   openrouter:
     model: "openai/gpt-3.5-turbo"
   onnx:
-    model_path: "./models/model.onnx"
-    vocab_path: "./models/vocab.txt"
-    enabled: true
+#    model_path: "./models/model.onnx"
+#    vocab_path: "./models/vocab.txt"
+    enabled: false
 
 classification:
   patterns:

@@ -2,16 +2,28 @@ package bot
 
 import (
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"io"
-	"log/slog"
-	"obsidian-automation/internal/database"
 	"os"
+	"obsidian-automation/internal/database"
 	"strings"
 )
 
-var processedHashes = make(map[string]string)
+// getFileHash computes the SHA256 hash of a file.
+func getFileHash(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
 
 func SaveProcessed(hash, category, text, summary string, topics []string, questions []string, ai_provider string, userID int64) error {
 	_, err := database.DB.Exec(
@@ -20,50 +32,4 @@ func SaveProcessed(hash, category, text, summary string, topics []string, questi
 		hash, category, text, summary, strings.Join(topics, ", "), strings.Join(questions, ", "), ai_provider, userID,
 	)
 	return err
-}
-func getFileHash(filePath string) (string, error) {
-	f, err := os.Open(filePath)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	h := sha256.New()
-	io.Copy(h, f)
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
-func IsProcessed(hash string) (bool, error) {
-	row := database.DB.QueryRow(
-		"SELECT 1 FROM processed_files WHERE hash = ? LIMIT 1",
-		hash,
-	)
-
-	var tmp int
-	err := row.Scan(&tmp)
-	if err == sql.ErrNoRows {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return true, nil
-}
-func IsDuplicate(filePath string) bool {
-	hash, err := getFileHash(filePath)
-	if err != nil {
-		return false
-	}
-	// The `IsProcessed` function will now use the global `database.DB`
-	isDup, err := IsProcessed(hash)
-	if err != nil {
-		// Log the error but proceed as if not a duplicate to avoid blocking
-		// if the DB check fails for some reason.
-		slog.Error("Error checking if hash is processed", "error", err)
-		return false
-	}
-	if isDup {
-		return true
-	}
-
-	processedHashes[hash] = filePath
-	return false
 }

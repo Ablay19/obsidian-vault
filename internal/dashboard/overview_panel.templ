@@ -2,19 +2,34 @@ package dashboard
 
 import (
 	"obsidian-automation/internal/status"
+	"obsidian-automation/internal/auth"
+    "obsidian-automation/internal/dashboard/components"
 )
 
 templ OverviewPanel(services []status.ServiceStatus, aiProviders struct {
 	Available []string `json:"available"`
 	Active    string   `json:"active"`
-}) {
+}, session *auth.UserSession) {
 	<div id="overview-panel">
 		<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-			@StatsCard("bolt", "System", getBotStatus(services))
-			@StatsCard("schedule", "Uptime", getUptime(services))
-			@StatsCard("smart_toy", "AI_CORE", aiProviders.Active)
-			@StatsCard("history", "Activity", getLastActivity(services))
+			@components.StatsCard("bolt", "System", getBotStatus(services))
+			@components.StatsCard("schedule", "Uptime", getUptime(services))
+			@components.StatsCard("smart_toy", "AI_CORE", aiProviders.Active)
+            if session != nil && isTelegramLinked(session.Email) {
+			    @components.StatsCard("link", "Telegram", "Linked")
+            } else {
+                @components.StatsCard("link_off", "Telegram", "Not Linked")
+            }
 		</div>
+
+        if session != nil && !isTelegramLinked(session.Email) {
+            <div class="bg-blue-900/20 border border-blue-500/30 p-4 rounded-xl mb-6 flex items-center justify-between">
+                <div class="flex items-center">
+                    <span class="material-icons text-blue-400 mr-3">info</span>
+                    <span class="text-xs text-blue-100">Your accounts are not linked. Type <code class="bg-black/30 px-1 rounded">/link</code> in your Telegram bot to sync data.</span>
+                </div>
+            </div>
+        }
 
 		<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <!-- AI Control Panel -->
@@ -52,7 +67,7 @@ templ OverviewPanel(services []status.ServiceStatus, aiProviders struct {
                                     } else {
                                         $store.notifications.show(data.message || 'Error', 'error');
                                     }
-                                    htmx.trigger('#main-content', 'refresh');
+                                    $store.app.syncUI();
                                 }).catch(err => {
                                     loading = false;
                                     $store.notifications.show('Network error', 'error');

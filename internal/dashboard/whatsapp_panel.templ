@@ -1,0 +1,97 @@
+package dashboard
+
+templ WhatsAppPanel() {
+	<div class="bg-[#111114] p-6 rounded-xl shadow-2xl border border-gray-800" x-data="whatsappLinker()">
+		<h2 class="text-[10px] font-bold mb-6 flex items-center uppercase tracking-[0.2em] text-gray-500">
+			<span class="material-icons mr-2 text-green-500 text-sm">whatsapp</span>
+			WhatsApp Integration
+		</h2>
+
+		<div class="space-y-6">
+			<!-- Connection Status -->
+			<div class="flex items-center justify-between bg-gray-900/50 p-4 rounded-lg border border-gray-800">
+				<div>
+					<p class="text-[8px] text-gray-500 uppercase font-bold mb-1">Status</p>
+					<div class="flex items-center">
+						<div :class="connected ? 'bg-green-500' : 'bg-yellow-500'" class="w-2 h-2 rounded-full mr-2"></div>
+						<span class="text-xs font-bold text-white" x-text="connected ? 'CONNECTED' : 'DISCONNECTED / LINKING'"></span>
+					</div>
+				</div>
+				<button @click="reconnect()" x-show="!connected" class="text-[9px] bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded uppercase font-bold transition-all">
+					Sync Now
+				</button>
+			</div>
+
+			<!-- QR Code Section -->
+			<div x-show="!connected" class="flex flex-col items-center justify-center p-8 bg-white/5 rounded-xl border border-dashed border-gray-700">
+				<div x-show="qrCode" class="bg-white p-4 rounded-lg shadow-xl mb-4">
+					<!-- We use a simple QR code generator or just display the raw code if needed -->
+					<!-- For now, we'll use a placeholder and instructions -->
+					<div id="qrcode-container" class="w-48 h-48 flex items-center justify-center text-black font-bold text-center text-[10px]">
+						<canvas id="qr-canvas"></canvas>
+					</div>
+				</div>
+				
+				<div x-show="!qrCode" class="text-center py-8">
+					<span class="material-icons text-4xl text-gray-600 animate-pulse mb-4">qr_code_2</span>
+					<p class="text-[10px] text-gray-400">Waiting for session initialization...</p>
+				</div>
+
+				<div x-show="qrCode" class="text-center">
+					<p class="text-[11px] text-white font-bold mb-2 uppercase tracking-widest">Scan with WhatsApp</p>
+					<p class="text-[9px] text-gray-500 max-w-[200px]">Go to WhatsApp > Settings > Linked Devices > Link a Device</p>
+				</div>
+			</div>
+
+			<!-- Linked Info -->
+			<div x-show="connected" class="py-12 text-center">
+				<span class="material-icons text-5xl text-green-500/20 mb-4">verified_user</span>
+				<p class="text-xs text-gray-400">Your WhatsApp account is successfully linked to the ingestion pipeline.</p>
+			</div>
+		</div>
+	</div>
+
+	<!-- QR Code Library -->
+	<script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+	
+	<script>
+		function whatsappLinker() {
+			return {
+				connected: false,
+				qrCode: '',
+				qrDrawer: null,
+
+				init() {
+					// Listen for WebSocket events from app.js bridge
+					window.addEventListener('ws:whatsapp_qr', (e) => {
+						this.qrCode = e.detail.code;
+						this.connected = false;
+						this.renderQR();
+					});
+
+					window.addEventListener('ws:whatsapp_connected', (e) => {
+						this.connected = true;
+						this.qrCode = '';
+					});
+				},
+
+				renderQR() {
+					if (!this.qrCode) return;
+					this.$nextTick(() => {
+						new QRious({
+							element: document.getElementById('qr-canvas'),
+							value: this.qrCode,
+							size: 200,
+							level: 'H'
+						});
+					});
+				},
+
+				reconnect() {
+					// Implementation to trigger backend re-auth
+					$store.notifications.show('Re-initializing WhatsApp session...', 'info');
+				}
+			}
+		}
+	</script>
+}
