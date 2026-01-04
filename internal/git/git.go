@@ -2,10 +2,11 @@ package git
 
 import (
 	"fmt"
-	"log/slog"
 	"os/exec"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // Manager handles Git operations for a specific repository path.
@@ -31,7 +32,7 @@ func (m *Manager) RunCommand(args ...string) (string, error) {
 
 // ConfigureUser sets local git user config.
 func (m *Manager) ConfigureUser(name, email string) error {
-	slog.Info("Configuring Git user", "name", name, "email", email)
+	zap.S().Info("Configuring Git user", "name", name, "email", email)
 	if _, err := m.RunCommand("config", "--local", "user.name", name); err != nil {
 		return err
 	}
@@ -43,7 +44,7 @@ func (m *Manager) ConfigureUser(name, email string) error {
 
 // SyncAutoCommit adds, commits and pushes changes.
 func (m *Manager) SyncAutoCommit(message string) error {
-	slog.Info("Starting Git sync", "message", message)
+	zap.S().Info("Starting Git sync", "message", message)
 
 	// 1. Add
 	if _, err := m.RunCommand("add", "."); err != nil {
@@ -56,7 +57,7 @@ func (m *Manager) SyncAutoCommit(message string) error {
 		return err
 	}
 	if strings.TrimSpace(status) == "" {
-		slog.Info("No changes to commit")
+		zap.S().Info("No changes to commit")
 		return nil
 	}
 
@@ -77,20 +78,20 @@ func (m *Manager) PushWithRetry(maxRetries int) error {
 	}
 
 	for i := 0; i < maxRetries; i++ {
-		slog.Info("Attempting Git push", "branch", branch, "attempt", i+1)
+		zap.S().Info("Attempting Git push", "branch", branch, "attempt", i+1)
 		
 		// Try standard push first
 		_, err := m.RunCommand("push", "origin", branch)
 		if err == nil {
-			slog.Info("Git push successful")
+			zap.S().Info("Git push successful")
 			return nil
 		}
 
-		slog.Warn("Git push failed, attempting pull/rebase", "error", err)
+		zap.S().Warn("Git push failed, attempting pull/rebase", "error", err)
 		
 		// If push failed, try to pull/rebase to resolve potential conflicts
 		if _, err := m.RunCommand("pull", "--rebase", "origin", branch); err != nil {
-			slog.Error("Git pull --rebase failed", "error", err)
+			zap.S().Error("Git pull --rebase failed", "error", err)
 			// If rebase fails, we might need to abort it
 			m.RunCommand("rebase", "--abort")
 		} else {
@@ -100,7 +101,7 @@ func (m *Manager) PushWithRetry(maxRetries int) error {
 
 		// As a last resort, try force-with-lease on the last attempt
 		if i == maxRetries-1 {
-			slog.Warn("Attempting force-with-lease push as last resort")
+			zap.S().Warn("Attempting force-with-lease push as last resort")
 			_, err = m.RunCommand("push", "--force-with-lease", "origin", branch)
 			return err
 		}
@@ -124,7 +125,7 @@ func (m *Manager) GetCurrentBranch() (string, error) {
 func (m *Manager) EnsureRemote(url string) error {
 	_, err := m.RunCommand("remote", "get-url", "origin")
 	if err != nil {
-		slog.Info("Adding missing origin remote", "url", url)
+		zap.S().Info("Adding missing origin remote", "url", url)
 		_, err = m.RunCommand("remote", "add", "origin", url)
 		return err
 	}

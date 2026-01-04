@@ -3,7 +3,8 @@ package util
 import (
 	"fmt"
 	"os/exec"
-	"log/slog"
+
+	"go.uber.org/zap"
 )
 
 // CheckExternalBinaries verifies that required external binaries are available in the system's PATH.
@@ -22,6 +23,6 @@ func CheckExternalBinaries() error {
 		return fmt.Errorf("missing required external binaries: %v. Please install them and ensure they are in your system's PATH", missingBinaries)
 	}
 
-	slog.Info("All required external binaries found.")
+	zap.S().Info("All required external binaries found.")
 	return nil
 }

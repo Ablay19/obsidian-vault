@@ -7,12 +7,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
 // HuggingFaceProvider implements the AIProvider interface for Hugging Face Router (OpenAI-compatible).
@@ -231,7 +231,7 @@ func (p *HuggingFaceProvider) Process(ctx context.Context, w io.Writer, system, 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+p.apiKey)
 
-	slog.Info("HF Router Request (Stream)", "url", url, "model", p.modelName)
+	zap.S().Info("HF Router Request (Stream)", "url", url, "model", p.modelName)
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
@@ -300,7 +300,7 @@ func (p *HuggingFaceProvider) GenerateContent(ctx context.Context, prompt string
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+p.apiKey)
 
-	slog.Info("HF Router Request", "url", url, "model", p.modelName)
+	zap.S().Info("HF Router Request", "url", url, "model", p.modelName)
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {

@@ -2,9 +2,10 @@ package sources
 
 import (
 	"context"
-	"log/slog"
 	"obsidian-automation/internal/pipeline"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // GoogleDriveSource is a connector for Google Drive.
@@ -26,7 +27,7 @@ func (s *GoogleDriveSource) Name() string {
 }
 
 func (s *GoogleDriveSource) Start(ctx context.Context, jobChan chan<- pipeline.Job) error {
-	slog.Info("Starting Google Drive Source", "folder_id", s.folderID)
+	zap.S().Info("Starting Google Drive Source", "folder_id", s.folderID)
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 
@@ -48,5 +49,5 @@ func (s *GoogleDriveSource) poll(ctx context.Context, jobChan chan<- pipeline.Jo
 	// 3. Download file content.
 	// 4. Create pipeline.Job.
 	// 5. jobChan <- job
-	slog.Debug("Polling Google Drive (stub)")
+	zap.S().Debug("Polling Google Drive (stub)")
 }

@@ -3,7 +3,6 @@ package bot
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/config"
 	"obsidian-automation/internal/pipeline"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ledongthuc/pdf"
+	"go.uber.org/zap"
 )
 
 // Processor interface for the processing pipeline.
@@ -35,10 +35,10 @@ func NewBotProcessor(aiService ai.AIServiceInterface) Processor {
 // Process implements the Processor interface for botProcessor.
 func (p *botProcessor) Process(ctx context.Context, job pipeline.Job) (pipeline.Result, error) {
 	streamCallback := func(chunk string) {
-		slog.Debug("Stream chunk", "chunk", chunk)
+		zap.S().Debug("Stream chunk", "chunk", chunk)
 	}
 	updateStatus := func(statusMsg string) {
-		slog.Info("Processing status", "status", statusMsg)
+		zap.S().Info("Processing status", "status", statusMsg)
 	}
 
 	caption, _ := job.Metadata["caption"].(string)
@@ -87,37 +87,37 @@ type ProcessedContent struct {
 var execCommand = exec.Command
 
 func extractTextFromImage(imagePath string) (string, error) {
-	slog.Info("Starting OCR text extraction from image", "path", imagePath)
+	zap.S().Info("Starting OCR text extraction from image", "path", imagePath)
 	cmd := execCommand("tesseract", imagePath, "stdout", "-l", "eng+fra+ara")
 	output, err := cmd.Output()
 	if err != nil {
-		slog.Warn("Tesseract failed with multi-language, retrying with default", "path", imagePath, "error", err)
+		zap.S().Warn("Tesseract failed with multi-language, retrying with default", "path", imagePath, "error", err)
 		cmd = execCommand("tesseract", imagePath, "stdout")
 		output, err = cmd.Output()
 		if err != nil {
-			slog.Error("Tesseract failed completely", "path", imagePath, "error", err)
+			zap.S().Error("Tesseract failed completely", "path", imagePath, "error", err)
 			return "", fmt.Errorf("tesseract failed: %v", err)
 		}
 	}
 	extracted := strings.TrimSpace(string(output))
-	slog.Info("OCR extraction complete", "path", imagePath, "text_len", len(extracted))
+	zap.S().Info("OCR extraction complete", "path", imagePath, "text_len", len(extracted))
 	return extracted, nil
 }
 
 func extractTextFromPDF(pdfPath string) (string, error) {
-	slog.Info("Starting text extraction from PDF", "path", pdfPath)
+	zap.S().Info("Starting text extraction from PDF", "path", pdfPath)
 	cmd := execCommand("pdftotext", pdfPath, "-")
 	output, err := cmd.Output()
 	if err == nil && len(output) > 0 {
 		extracted := strings.TrimSpace(string(output))
-		slog.Info("PDF text extraction complete (pdftotext)", "path", pdfPath, "text_len", len(extracted))
+		zap.S().Info("PDF text extraction complete (pdftotext)", "path", pdfPath, "text_len", len(extracted))
 		return extracted, nil
 	}
 
-	slog.Warn("pdftotext failed or empty, falling back to go-pdf", "path", pdfPath, "error", err)
+	zap.S().Warn("pdftotext failed or empty, falling back to go-pdf", "path", pdfPath, "error", err)
 	f, r, err := pdf.Open(pdfPath)
 	if err != nil {
-		slog.Error("Failed to open PDF for extraction", "path", pdfPath, "error", err)
+		zap.S().Error("Failed to open PDF for extraction", "path", pdfPath, "error", err)
 		return "", err
 	}
 	defer f.Close()
@@ -133,7 +133,7 @@ func extractTextFromPDF(pdfPath string) (string, error) {
 		text.WriteString("\n\n")
 	}
 	extracted := strings.TrimSpace(text.String())
-	slog.Info("PDF text extraction complete (go-pdf fallback)", "path", pdfPath, "text_len", len(extracted))
+	zap.S().Info("PDF text extraction complete (go-pdf fallback)", "path", pdfPath, "text_len", len(extracted))
 	return extracted, nil
 }
 
@@ -203,7 +203,7 @@ func processFile(filePath, fileType string) ProcessedContent {
 	var text string
 	var err error
 
-	slog.Info("Processing file", "type", fileType, "path", filePath)
+	zap.S().Info("Processing file", "type", fileType, "path", filePath)
 
 	if fileType == "image" {
 		text, err = extractTextFromImage(filePath)
@@ -212,7 +212,7 @@ func processFile(filePath, fileType string) ProcessedContent {
 	}
 
 	if err != nil {
-		slog.Error("Error processing file", "error", err)
+		zap.S().Error("Error processing file", "error", err)
 		return ProcessedContent{Category: "unprocessed", Tags: []string{"error"}}
 	}
 
@@ -229,18 +229,18 @@ func processFileWithAI(ctx context.Context, filePath, fileType string, aiService
 	var err error
 	var fileData []byte
 
-	slog.Info("Processing file with AI", "type", fileType, "path", filePath)
+	zap.S().Info("Processing file with AI", "type", fileType, "path", filePath)
 	updateStatus("🔍 Extracting text...")
 
 	if fileType == "image" {
 		text, err = extractTextFromImage(filePath)
 		if err != nil {
-			slog.Error("Error extracting text from image", "error", err)
+			zap.S().Error("Error extracting text from image", "error", err)
 			// Continue with image data only if text extraction fails
 		}
 		fileData, err = os.ReadFile(filePath)
 		if err != nil {
-			slog.Error("Error reading image file", "error", err)
+			zap.S().Error("Error reading image file", "error", err)
 			updateStatus("⚠️ Could not read image file.")
 			return ProcessedContent{Category: "unprocessed", Tags: []string{"error", "read-error"}}
 		}
@@ -256,7 +256,7 @@ func processFileWithAI(ctx context.Context, filePath, fileType string, aiService
 	}
 
 	if err != nil || len(text) < 10 {
-		slog.Warn("Text extraction issue", "error", err)
+		zap.S().Warn("Text extraction issue", "error", err)
 		result.Category = "unprocessed"
 		result.Tags = []string{"error"}
 		updateStatus("⚠️ Text extraction failed.")
@@ -264,7 +264,7 @@ func processFileWithAI(ctx context.Context, filePath, fileType string, aiService
 	}
 
 	if aiService != nil {
-		slog.Info("Using AI for enhancement...")
+		zap.S().Info("Using AI for enhancement...")
 		// Use result.AIProvider = aiService.GetActiveProviderName()
 		result.AIProvider = aiService.GetActiveProviderName()
 		updateStatus("🤖 Generating summary...")
@@ -301,7 +301,7 @@ func processFileWithAI(ctx context.Context, filePath, fileType string, aiService
 		})
 
 		if streamErr != nil {
-			slog.Error("Error from AI summary service", "error", streamErr)
+			zap.S().Error("Error from AI summary service", "error", streamErr)
 			updateStatus("⚠️ AI summary failed. Falling back to basic classification.")
 			return classifyContent(text)
 		}
@@ -312,7 +312,7 @@ func processFileWithAI(ctx context.Context, filePath, fileType string, aiService
 		// 2. Get the structured data
 		analysisResult, err := aiService.AnalyzeTextWithParams(ctx, text, language, len(text), 1, 0.01)
 		if err != nil {
-			slog.Error("Error from AI analysis service", "error", err)
+			zap.S().Error("Error from AI analysis service", "error", err)
 			updateStatus("⚠️ AI analysis failed. Using basic classification.")
 			basicResult := classifyContent(text)
 			result.Category = basicResult.Category
@@ -326,7 +326,7 @@ func processFileWithAI(ctx context.Context, filePath, fileType string, aiService
 		}
 
 	} else {
-		slog.Info("AI service unavailable, using basic classification")
+		zap.S().Info("AI service unavailable, using basic classification")
 		updateStatus("⚠️ AI service unavailable. Using basic classification.")
 		result = classifyContent(text)
 	}

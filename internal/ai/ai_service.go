@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"math"
 	"strings"
 	"sync"
@@ -12,6 +11,7 @@ import (
 
 	"obsidian-automation/internal/config"
 	st "obsidian-automation/internal/state"
+	"go.uber.org/zap"
 )
 
 type AIService struct {
@@ -38,9 +38,9 @@ func NewAIService(ctx context.Context, sm *st.RuntimeConfigManager, providerConf
 	}
 
 	if count == 0 {
-		slog.Warn("No AI providers initialized. AI features unavailable.")
+		zap.S().Warn("No AI providers initialized. AI features unavailable.")
 	} else {
-		slog.Info("AI Service initialized", "provider_count", count)
+		zap.S().Info("AI Service initialized", "provider_count", count)
 	}
 
 	return s
@@ -78,7 +78,7 @@ func (s *AIService) InitializeProviders(ctx context.Context) {
 				case "OpenRouter":
 					provider = NewOpenRouterProvider(keyState.Value, modelName, nil)
 				default:
-					slog.Warn("Unknown provider", "name", providerName)
+					zap.S().Warn("Unknown provider", "name", providerName)
 					continue
 				}
 
@@ -192,7 +192,7 @@ func (s *AIService) selectProvider(ctx context.Context, task_tokens int, task_de
 	}
 
 	providerName := select_provider(task_tokens, task_depth, max_cost, s.providerConfigs, s.switchingRules)
-	slog.Info("Selected provider", "provider", providerName)
+	zap.S().Info("Selected provider", "provider", providerName)
 
 	isExcluded := func(id string) bool {
 		for _, ex := range excludeKeyIDs {
@@ -230,7 +230,7 @@ func (s *AIService) selectProvider(ctx context.Context, task_tokens int, task_de
 	}
 
 	if p, k, ok := findKey(providerName); ok {
-		slog.Debug("Selected AI provider", "provider", providerName, "key_id", k.ID)
+		zap.S().Debug("Selected AI provider", "provider", providerName, "key_id", k.ID)
 		return p, k, nil
 	}
 
@@ -264,7 +264,7 @@ func (s *AIService) ExecuteWithRetry(ctx context.Context, task_tokens int, task_
 			triedProviders = append(triedProviders, providerName)
 
 			// Log failover event
-			slog.Warn("AI Provider failover triggered",
+			zap.S().Warn("AI Provider failover triggered",
 				"attempt", i+1,
 				"failed_provider", providerName,
 				"error_code", appErr.Code,
@@ -273,7 +273,7 @@ func (s *AIService) ExecuteWithRetry(ctx context.Context, task_tokens int, task_
 
 			// If it's a serious permanent error, block the key globally
 			if appErr.Code == ErrCodeUnauthorized || appErr.Code == ErrCodeInvalidRequest {
-				slog.Error("Blocking failing key permanently (invalid/unauthorized)", "key_id", key.ID, "error", appErr.Message)
+				zap.S().Error("Blocking failing key permanently (invalid/unauthorized)", "key_id", key.ID, "error", appErr.Message)
 				s.sm.UpdateKeyUsage(key.ID, appErr.Message, -1)
 			}
 
@@ -285,7 +285,7 @@ func (s *AIService) ExecuteWithRetry(ctx context.Context, task_tokens int, task_
 		} else {
 			failedKeys = append(failedKeys, key.ID)
 			if i < maxRetries-1 {
-				slog.Warn("System error, retrying with different provider/key", "attempt", i+1, "error", err)
+				zap.S().Warn("System error, retrying with different provider/key", "attempt", i+1, "error", err)
 				continue
 			}
 		}

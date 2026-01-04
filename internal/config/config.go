@@ -1,11 +1,11 @@
 package config
 
 import (
-	"log/slog"
 	"os"
 
 	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
 // SwitchingRules defines the criteria for dynamic provider selection.
@@ -76,9 +76,9 @@ var AppConfig Config
 func LoadConfig() {
 	// 1. Load .env file using godotenv (actually sets OS environment variables)
 	if err := godotenv.Load(); err != nil {
-		slog.Debug("No .env file found or error loading it", "error", err)
+		zap.S().Debug("No .env file found or error loading it", "error", err)
 	} else {
-		slog.Info(".env file loaded into environment successfully")
+		zap.S().Info(".env file loaded into environment successfully")
 	}
 
 	// 2. Set Defaults
@@ -138,15 +138,15 @@ func LoadConfig() {
 	viper.AddConfigPath(".")
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			slog.Info("config.yaml not found, using defaults")
+			zap.S().Info("config.yaml not found, using defaults")
 		} else {
-			slog.Error("Error reading config.yaml", "error", err)
+			zap.S().Error("Error reading config.yaml", "error", err)
 		}
 	}
 
 	// 5. Unmarshal into AppConfig struct
 	if err := viper.Unmarshal(&AppConfig); err != nil {
-		slog.Error("Unable to decode into struct", "error", err)
+		zap.S().Error("Unable to decode into struct", "error", err)
 		os.Exit(1)
 	}
 }

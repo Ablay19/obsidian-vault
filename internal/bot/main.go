@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"regexp"
 	"obsidian-automation/internal/ai"
@@ -22,6 +21,7 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"go.uber.org/zap"
 )
 
 // Package-level variables for dependencies
@@ -100,11 +100,11 @@ func Run(database *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *stat
 	gitCfg := config.AppConfig.Git
 	gitManager = git.NewManager(gitCfg.VaultPath)
 	if err := gitManager.ConfigureUser(gitCfg.UserName, gitCfg.UserEmail); err != nil {
-		slog.Warn("Failed to configure Git user", "error", err)
+		zap.S().Warn("Failed to configure Git user", "error", err)
 	}
 	if gitCfg.RemoteURL != "" {
 		if err := gitManager.EnsureRemote(gitCfg.RemoteURL); err != nil {
-			slog.Warn("Failed to ensure Git remote", "error", err)
+			zap.S().Warn("Failed to ensure Git remote", "error", err)
 		}
 	}
 
@@ -140,21 +140,21 @@ func Run(database *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *stat
 		{Command: "process", Description: "Process staged file"},
 	}
 	if _, err := bot.Request(tgbotapi.NewSetMyCommands(commands...)); err != nil {
-		slog.Error("Error setting bot commands", "error", err)
+		zap.S().Error("Error setting bot commands", "error", err)
 	}
 
-	slog.Info("Authorized on account", "username", bot.Self.UserName)
+	zap.S().Info("Authorized on account", "username", bot.Self.UserName)
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 	updates := bot.GetUpdatesChan(u)
-	slog.Info("Bot is running...")
+	zap.S().Info("Bot is running...")
 
 	for update := range updates {
 		if status.IsPaused() {
 			time.Sleep(1 * time.Second)
 			continue
 		}
-		slog.Debug("Received update", "update_id", update.UpdateID)
+		zap.S().Debug("Received update", "update_id", update.UpdateID)
 		go handleUpdate(bot, &update, token, commandRouter)
 	}
 	return nil
@@ -163,7 +163,7 @@ func Run(database *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *stat
 // handleUpdate processes incoming Telegram updates.
 func handleUpdate(bot Bot, update *tgbotapi.Update, token string, commandRouter map[string]CommandHandler) {
 	if update.CallbackQuery != nil {
-		slog.Info("Handling callback query", "chat_id", update.CallbackQuery.Message.Chat.ID, "data", update.CallbackQuery.Data)
+		zap.S().Info("Handling callback query", "chat_id", update.CallbackQuery.Message.Chat.ID, "data", update.CallbackQuery.Data)
 		handleCallbackQuery(bot, update.CallbackQuery, commandRouter)
 		return
 	}
@@ -177,13 +177,13 @@ func handleUpdate(bot Bot, update *tgbotapi.Update, token string, commandRouter 
 	if !update.Message.IsCommand() {
 		userID := update.Message.From.ID
 		if _, loaded := userLocks.LoadOrStore(userID, true); loaded {
-			slog.Warn("User is already being processed, skipping duplicate content update", "user_id", userID)
+			zap.S().Warn("User is already being processed, skipping duplicate content update", "user_id", userID)
 			return
 		}
 		defer userLocks.Delete(userID)
 	}
 
-	slog.Info("Handling message", "chat_id", update.Message.Chat.ID, "user", update.Message.From.UserName, "text", update.Message.Text)
+	zap.S().Info("Handling message", "chat_id", update.Message.Chat.ID, "user", update.Message.From.UserName, "text", update.Message.Text)
 
 	// Save incoming message to history
 	contentType := "text"
@@ -199,10 +199,10 @@ func handleUpdate(bot Bot, update *tgbotapi.Update, token string, commandRouter 
 	emailRegex := regexp.MustCompile(`[a-z0-9._%+\-]+@[a-z0-9.-]+\.[a-z]{2,}`)
 	email := emailRegex.FindString(strings.ToLower(update.Message.Text))
 	if email != "" {
-		slog.Info("Attempting to map user via email", "email", email, "telegram_id", update.Message.From.ID)
+		zap.S().Info("Attempting to map user via email", "email", email, "telegram_id", update.Message.From.ID)
 		err := database.LinkTelegramToEmail(update.Message.From.ID, email)
 		if err != nil {
-			slog.Error("Failed to link user", "error", err)
+			zap.S().Error("Failed to link user", "error", err)
 		} else {
 			bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "✅ Your Telegram account has been linked to your Dashboard account ("+email+")."))
 		}
@@ -245,7 +245,7 @@ func handleCallbackQuery(bot Bot, callback *tgbotapi.CallbackQuery, commandRoute
 
 // handleCommand processes text messages and commands.
 func handleCommand(bot Bot, message *tgbotapi.Message, commandRouter map[string]CommandHandler) {
-	slog.Info("Processing command/text", "chat_id", message.Chat.ID, "text", message.Text)
+	zap.S().Info("Processing command/text", "chat_id", message.Chat.ID, "text", message.Text)
 	database.UpsertUser(message.From)
 	state := getUserState(message.From.ID) // Get user state for language
 
@@ -260,7 +260,7 @@ func handleCommand(bot Bot, message *tgbotapi.Message, commandRouter map[string]
 			return
 		}
 
-		slog.Info("Handling non-command text as AI prompt", "chat_id", message.Chat.ID, "text_len", len(message.Text))
+		zap.S().Info("Handling non-command text as AI prompt", "chat_id", message.Chat.ID, "text_len", len(message.Text))
 		// Handle non-command text messages as a general AI prompt
 		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Thinking..."))
 
@@ -364,7 +364,7 @@ func handleDocument(bot Bot, message *tgbotapi.Message, token string) {
 func downloadFile(bot Bot, fileID, ext, token string) string {
 	file, err := bot.GetFile(tgbotapi.FileConfig{FileID: fileID})
 	if err != nil {
-		slog.Error("GetFile error", "error", err)
+		zap.S().Error("GetFile error", "error", err)
 		return ""
 	}
 
@@ -372,13 +372,13 @@ func downloadFile(bot Bot, fileID, ext, token string) string {
 
 	resp, err := http.Get(fileURL)
 	if err != nil {
-		slog.Error("HTTP error downloading file", "error", err)
+		zap.S().Error("HTTP error downloading file", "error", err)
 		return ""
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		slog.Error("Bad response status", "status", resp.StatusCode)
+		zap.S().Error("Bad response status", "status", resp.StatusCode)
 		return ""
 	}
 
@@ -388,17 +388,17 @@ func downloadFile(bot Bot, fileID, ext, token string) string {
 	filename := fmt.Sprintf("attachments/%s.%s", time.Now().Format("20060102_150405"), ext)
 	out, err := os.Create(filename)
 	if err != nil {
-		slog.Error("Create file error", "error", err)
+		zap.S().Error("Create file error", "error", err)
 		return ""
 	}
 	defer out.Close()
 
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {
-		slog.Error("Write file error", "error", err)
+		zap.S().Error("Write file error", "error", err)
 		return ""
 	}
 
-	slog.Info("File downloaded", "path", filename)
+	zap.S().Info("File downloaded", "path", filename)
 	return filename
 }

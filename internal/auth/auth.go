@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"obsidian-automation/internal/config"
 	"obsidian-automation/internal/database"
@@ -15,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
@@ -32,7 +32,7 @@ type UserSession struct {
 }
 
 func NewAuthService(cfg config.Config) *AuthService {
-	slog.Info("Initializing Auth Service", "redirect_url", cfg.Auth.GoogleRedirectURL)
+	zap.S().Info("Initializing Auth Service", "redirect_url", cfg.Auth.GoogleRedirectURL)
 	return &AuthService{
 		oauthConfig: &oauth2.Config{
 			ClientID:     cfg.Auth.GoogleClientID,
@@ -180,7 +180,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 			// If we are in dev mode and have no session, we'll allow a "dev-session"
 			_, err := s.VerifySession(r)
 			if err != nil {
-				slog.Info("Dev mode detected: Bypassing real OAuth")
+				zap.S().Info("Dev mode detected: Bypassing real OAuth")
 				devSession, _ := s.CreateDevSession()
 				ctx := context.WithValue(r.Context(), "session", devSession)
 				next.ServeHTTP(w, r.WithContext(ctx))

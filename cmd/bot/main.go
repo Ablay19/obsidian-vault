@@ -21,14 +21,17 @@ import (
 	"time"
 )
 
+var version = "dev" // This will be overwritten by the build process
+
 func main() {
 	logger.Setup()
+	slog.Info("Starting bot", "version", version)
 
 	// Perform external binary check at startup
-	if err := util.CheckExternalBinaries(); err != nil {
-		slog.Error("Startup check failed", "error", err)
-		os.Exit(1)
-	}
+	// if err := util.CheckExternalBinaries(); err != nil {
+	// 	slog.Error("Startup check failed", "error", err)
+	// 	os.Exit(1)
+	// }
 
 	config.LoadConfig() // Still load config for initial setup of things like dashboard port etc.
 

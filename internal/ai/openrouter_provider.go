@@ -7,10 +7,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // OpenRouterProvider implements the AIProvider interface for OpenRouter.
@@ -23,7 +24,7 @@ type OpenRouterProvider struct {
 // NewOpenRouterProvider creates a new OpenRouter provider.
 func NewOpenRouterProvider(apiKey string, modelName string, httpClient *http.Client) *OpenRouterProvider {
 	if apiKey == "" {
-		slog.Info("OpenRouter API key is empty. OpenRouter AI will be unavailable.")
+		zap.S().Info("OpenRouter API key is empty. OpenRouter AI will be unavailable.")
 		return nil
 	}
 	
@@ -205,7 +206,7 @@ func (p *OpenRouterProvider) StreamCompletion(ctx context.Context, req *RequestM
 			var streamResp openRouterStreamResponse
 			if err := json.Unmarshal([]byte(data), &streamResp); err != nil {
 				// Don't kill stream on one bad line, just log
-				slog.Debug("Error unmarshaling OpenRouter stream line", "error", err)
+				zap.S().Debug("Error unmarshaling OpenRouter stream line", "error", err)
 				continue
 			}
 
