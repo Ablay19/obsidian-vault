@@ -14,6 +14,11 @@ const (
 	ContentTypeText  ContentType = "text"
 )
 
+// String returns the string representation of the ContentType.
+func (ct ContentType) String() string {
+	return string(ct)
+}
+
 // Job represents a single ingestion task.
 type Job struct {
 	ID            string
@@ -21,6 +26,7 @@ type Job struct {
 	SourceID      string      // e.g., Message ID or File ID
 	ContentType   ContentType
 	Data          []byte      // Or a path/URL
+	FileLocalPath string      // New field: Local path to the downloaded file
 	Metadata      map[string]interface{}
 	ReceivedAt    time.Time
 	RetryCount    int
@@ -28,6 +34,7 @@ type Job struct {
 	UserContext   UserContext // Info about the user (auth, preferences)
 	OutputFormat  string      // e.g., "md", "pdf"
 	GitCommit     bool        // Whether to commit/push
+	ProcessedContent interface{} // New field: To store the processed content result
 }
 
 type UserContext struct {

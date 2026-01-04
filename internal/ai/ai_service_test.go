@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"errors"
+	"obsidian-automation/internal/config"
 	"testing"
 
 	st "obsidian-automation/internal/state"
@@ -65,8 +66,20 @@ func TestAIService_SelectProvider_Logic(t *testing.T) {
 	// Reset to clear Env vars
 	rcm.ResetState()
 	
+	providerConfigs := map[string]config.ProviderConfig{
+		"Gemini": {
+			ProviderName: "Gemini",
+		},
+		"Groq": {
+			ProviderName: "Groq",
+		},
+	}
+	switchingRules := config.SwitchingRules{
+		DefaultProvider: "Gemini",
+	}
+
 	ctx := context.Background()
-	service := NewAIService(ctx, rcm)
+	service := NewAIService(ctx, rcm, providerConfigs, switchingRules)
 
 	// Inject Mocks directly into service.providers
 	// We need to setup RCM state to match these keys so selectProvider finds them valid
@@ -85,10 +98,6 @@ func TestAIService_SelectProvider_Logic(t *testing.T) {
 	g1ID, err := rcm.AddAPIKey("Groq", "mock-groq-key-1", true)
 	if err != nil { t.Fatalf("AddKey failed: %v", err) }
 
-	// Ensure providers are enabled in config
-	rcm.SetProviderState("Gemini", true, false, false, "")
-	rcm.SetProviderState("Groq", true, false, false, "")
-
 	// Manually inject mocks (bypassing RefreshProviders which would overwrite them)
 	service.mu.Lock()
 	service.providers = make(map[string]map[string]AIProvider)
@@ -104,19 +113,10 @@ func TestAIService_SelectProvider_Logic(t *testing.T) {
 	service.providers["Groq"][g1ID] = mockGroq1
 	service.mu.Unlock()
 
-	// Debug Config
-	cfg := rcm.GetConfig()
-	t.Logf("Config AIEnabled: %v", cfg.AIEnabled)
-	t.Logf("Config ActiveProvider: %v", cfg.ActiveProvider)
-	t.Logf("Config Gemini Enabled: %v", cfg.Providers["Gemini"].Enabled)
-	t.Logf("Config Key k1ID Enabled: %v", cfg.APIKeys[k1ID].Enabled)
-	t.Logf("Config Key k1ID Value: %v", cfg.APIKeys[k1ID].Value)
-
 	// Test 1: Preferred Provider Selection
 	service.SetProvider("Gemini")
 	
-	// We can't easily call selectProvider directly as it's private, but we can call ExecuteWithRetry
-	err = service.ExecuteWithRetry(ctx, func(p AIProvider) error {
+	err = service.ExecuteWithRetry(ctx, 100, 1, 0.01, func(p AIProvider) error {
 		info := p.GetModelInfo()
 		if info.ProviderName != "Gemini" {
 			t.Errorf("Expected Gemini, got %s", info.ProviderName)
@@ -128,34 +128,15 @@ func TestAIService_SelectProvider_Logic(t *testing.T) {
 	}
 
 	// Test 2: Fallback Logic
-	// Make Gemini 1 and 2 fail with transient errors?
-	// The rotation logic in ExecuteWithRetry tries different keys.
-	
-	// Reset mocks to fail
 	mockGemini1.ShouldFail = true
 	mockGemini1.FailError = NewError(ErrCodeRateLimit, "rate limited", errors.New("429")) // Retryable
 	
-	// We expect it to try Gemini 1, fail, then try Gemini 2 (since it's same provider) OR fallback?
-	// selectProvider logic:
-	// 1. Try preferred (Gemini).
-	// 2. Fallback (Gemini is first in fallback list too).
-	
-	// ExecuteWithRetry loops.
-	// Iteration 0: selectProvider returns Gemini Key 1 (assuming iteration order). Op fails. Key 1 added to failedKeys.
-	// Iteration 1: selectProvider called with failedKeys=[k1]. It should pick Gemini Key 2.
-	
-	err = service.ExecuteWithRetry(ctx, func(p AIProvider) error {
+	err = service.ExecuteWithRetry(ctx, 100, 1, 0.01, func(p AIProvider) error {
 		resp, err := p.GenerateCompletion(ctx, &RequestModel{})
 		if err != nil {
 			return err
 		}
 		if resp.Content != "Response from G2" {
-			// It might have picked Groq if G2 wasn't selected?
-			// But G2 is valid and same provider.
-			// However, map iteration order is random.
-			// If it picked G2 first (success), we are good.
-			// If it picked G1 first (fail), it retries.
-			// We want to ensure it eventually succeeds.
 			return nil
 		}
 		return nil
@@ -166,12 +147,10 @@ func TestAIService_SelectProvider_Logic(t *testing.T) {
 	}
 	
 	// Test 3: Cross-Provider Fallback
-	// Fail ALL Gemini keys
 	mockGemini2.ShouldFail = true
 	mockGemini2.FailError = NewError(ErrCodeRateLimit, "rate limited", errors.New("429"))
 
-	// Should fall back to Groq
-	err = service.ExecuteWithRetry(ctx, func(p AIProvider) error {
+	err = service.ExecuteWithRetry(ctx, 100, 1, 0.01, func(p AIProvider) error {
 		resp, _ := p.GenerateCompletion(ctx, &RequestModel{})
 		if resp == nil {
 			return errors.New("nil response")
@@ -191,9 +170,9 @@ func TestAIService_NoKeys(t *testing.T) {
 	defer db.Close()
 	rcm, _ := st.NewRuntimeConfigManager(db)
 	rcm.ResetState()
-	service := NewAIService(context.Background(), rcm) // Empty
+	service := NewAIService(context.Background(), rcm, nil, config.SwitchingRules{}) // Empty
 
-	err := service.ExecuteWithRetry(context.Background(), func(p AIProvider) error {
+	err := service.ExecuteWithRetry(context.Background(), 100, 1, 0.01, func(p AIProvider) error {
 		return nil
 	})
 
@@ -209,8 +188,17 @@ func TestAIService_AnalyzeText(t *testing.T) {
 	rcm, _ := st.NewRuntimeConfigManager(db)
 	rcm.ResetState()
 
+	providerConfigs := map[string]config.ProviderConfig{
+		"Gemini": {
+			ProviderName: "Gemini",
+		},
+	}
+	switchingRules := config.SwitchingRules{
+		DefaultProvider: "Gemini",
+	}
+
 	ctx := context.Background()
-	service := NewAIService(ctx, rcm)
+	service := NewAIService(ctx, rcm, providerConfigs, switchingRules)
 
 	// Setup a mock provider using a real provider name
 	rcm.SetProviderState("Gemini", true, false, false, "")
@@ -228,23 +216,6 @@ func TestAIService_AnalyzeText(t *testing.T) {
 	service.providers["Gemini"][keyID] = mockProvider
 	service.mu.Unlock()
 	service.SetProvider("Gemini")
-
-	// Debugging logs
-	cfg := rcm.GetConfig()
-	t.Logf("--- TestAIService_AnalyzeText Debug ---")
-	t.Logf("Active Provider in RCM: %s", cfg.ActiveProvider)
-	t.Logf("Mock Provider State in RCM: %+v", cfg.Providers["Mock"])
-	keyState, ok := cfg.APIKeys[keyID]
-	if !ok {
-		t.Logf("KeyID %s not found in RCM APIKeys", keyID)
-	} else {
-		t.Logf("Key State in RCM: %+v", keyState)
-	}
-	service.mu.RLock()
-	t.Logf("Providers map in service: %+v", service.providers)
-	service.mu.RUnlock()
-	t.Logf("--- End Debug ---")
-
 
 	// Test 1: Successful analysis
 	result, err := service.AnalyzeText(ctx, "some text", "english")
@@ -281,8 +252,17 @@ func TestAIService_Chat(t *testing.T) {
 	rcm, _ := st.NewRuntimeConfigManager(db)
 	rcm.ResetState()
 
+	providerConfigs := map[string]config.ProviderConfig{
+		"Gemini": {
+			ProviderName: "Gemini",
+		},
+	}
+	switchingRules := config.SwitchingRules{
+		DefaultProvider: "Gemini",
+	}
+
 	ctx := context.Background()
-	service := NewAIService(ctx, rcm)
+	service := NewAIService(ctx, rcm, providerConfigs, switchingRules)
 
 	// Setup a mock provider
 	rcm.SetProviderState("Gemini", true, false, false, "")

@@ -3,18 +3,14 @@ package bot
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
 	"obsidian-automation/internal/ai"
-	"obsidian-automation/internal/config"
 	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/git"
 	"obsidian-automation/internal/pipeline"
@@ -138,15 +134,14 @@ func (h *setProviderCommandHandler) Handle(bot Bot, message *tgbotapi.Message, s
 			label = "✅ " + p
 		}
 		
-		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(label, "setprovider:" + p),
-		))
-	}
-
-	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("🔄 Refresh Status", "refresh_providers"),
-	))
-
+		    rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+		            tgbotapi.NewInlineKeyboardButtonData(label, "setprovider:" + p),
+		        ))
+		    }
+		
+		    rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+		        tgbotapi.NewInlineKeyboardButtonData("🔄 Refresh Status", "refresh_providers"),
+		    ))
 	msg := tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("Current AI provider: *%s*\n\nSelect a provider below (🟢=Healthy, ❌=Error/Expired):", currentProviderName))
 	msg.ParseMode = "Markdown"
 	msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(rows...)
@@ -413,25 +408,6 @@ func (h *processCommandHandler) Handle(bot Bot, message *tgbotapi.Message, state
 	state.IsStaging = false
 	state.PendingFile = ""
 	state.PendingContext = ""
-}
-
-// formatTime formats a time.Time object into a human-readable string.
-func formatTime(t time.Time) string {
-	if t.IsZero() {
-		return "--"
-	}
-	diff := time.Since(t)
-
-	if diff < time.Minute {
-		return fmt.Sprintf("%ds ago", int(diff.Seconds()))
-	}
-	if diff < time.Hour {
-		return fmt.Sprintf("%dm ago", int(diff.Minutes()))
-	}
-	if diff < 24*time.Hour {
-		return fmt.Sprintf("%dh ago", int(diff.Hours()))
-	}
-	return t.Format("Jan 02, 2006 15:04 MST")
 }
 
 // formatTime formats a time.Time object into a human-readable string.

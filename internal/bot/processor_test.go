@@ -12,9 +12,14 @@ import (
 
 // MockAIService is a mock implementation of the AIService for testing.
 type MockAIService struct {
-	ChatFunc        func(ctx context.Context, req *ai.RequestModel, callback func(string)) error
-	AnalyzeTextFunc func(ctx context.Context, text, language string) (*ai.AnalysisResult, error)
+	ChatFunc                  func(ctx context.Context, req *ai.RequestModel, callback func(string)) error
+	AnalyzeTextFunc           func(ctx context.Context, text, language string) (*ai.AnalysisResult, error)
+	AnalyzeTextWithParamsFunc func(ctx context.Context, text, language string, task_tokens int, task_depth int, max_cost float64) (*ai.AnalysisResult, error)
 	GetActiveProviderNameFunc func() string
+	SetProviderFunc           func(providerName string) error
+	GetAvailableProvidersFunc func() []string
+	GetHealthyProvidersFunc   func(ctx context.Context) []string
+	GetProvidersInfoFunc      func() []ai.ModelInfo
 }
 
 func (m *MockAIService) Chat(ctx context.Context, req *ai.RequestModel, callback func(string)) error {
@@ -31,11 +36,46 @@ func (m *MockAIService) AnalyzeText(ctx context.Context, text, language string) 
 	return nil, errors.New("AnalyzeTextFunc not implemented")
 }
 
+func (m *MockAIService) AnalyzeTextWithParams(ctx context.Context, text, language string, task_tokens int, task_depth int, max_cost float64) (*ai.AnalysisResult, error) {
+	if m.AnalyzeTextWithParamsFunc != nil {
+		return m.AnalyzeTextWithParamsFunc(ctx, text, language, task_tokens, task_depth, max_cost)
+	}
+	return nil, errors.New("AnalyzeTextWithParamsFunc not implemented")
+}
+
 func (m *MockAIService) GetActiveProviderName() string {
 	if m.GetActiveProviderNameFunc != nil {
 		return m.GetActiveProviderNameFunc()
 	}
 	return "mock"
+}
+
+func (m *MockAIService) SetProvider(providerName string) error {
+	if m.SetProviderFunc != nil {
+		return m.SetProviderFunc(providerName)
+	}
+	return errors.New("SetProviderFunc not implemented")
+}
+
+func (m *MockAIService) GetAvailableProviders() []string {
+	if m.GetAvailableProvidersFunc != nil {
+		return m.GetAvailableProvidersFunc()
+	}
+	return []string{"mock"}
+}
+
+func (m *MockAIService) GetHealthyProviders(ctx context.Context) []string {
+	if m.GetHealthyProvidersFunc != nil {
+		return m.GetHealthyProvidersFunc(ctx)
+	}
+	return []string{"mock"}
+}
+
+func (m *MockAIService) GetProvidersInfo() []ai.ModelInfo {
+	if m.GetProvidersInfoFunc != nil {
+		return m.GetProvidersInfoFunc()
+	}
+	return []ai.ModelInfo{{ProviderName: "mock", ModelName: "mock-model"}}
 }
 
 func TestProcessFileWithAI_Success(t *testing.T) {
@@ -48,7 +88,7 @@ func TestProcessFileWithAI_Success(t *testing.T) {
 			callback("This is a summary.")
 			return nil
 		},
-		AnalyzeTextFunc: func(ctx context.Context, text, language string) (*ai.AnalysisResult, error) {
+		AnalyzeTextWithParamsFunc: func(ctx context.Context, text, language string, task_tokens int, task_depth int, max_cost float64) (*ai.AnalysisResult, error) {
 			return &ai.AnalysisResult{
 				Category: "tech",
 				Topics:   []string{"golang", "testing"},

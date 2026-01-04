@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"database/sql"
+	"obsidian-automation/internal/config"
 	"testing"
 
 	st "obsidian-automation/internal/state"
@@ -41,8 +42,17 @@ func TestAIIntegration_RefreshProviders(t *testing.T) {
 	// Clear any Env-loaded keys for clean test
 	rcm.ResetState()
 
+	providerConfigs := map[string]config.ProviderConfig{
+		"Gemini": {
+			ProviderName: "Gemini",
+		},
+	}
+	switchingRules := config.SwitchingRules{
+		DefaultProvider: "Gemini",
+	}
+
 	ctx := context.Background()
-	aiService := NewAIService(ctx, rcm)
+	aiService := NewAIService(ctx, rcm, providerConfigs, switchingRules)
 
 	// Initially, no providers should be available (since no keys)
 	available := aiService.GetAvailableProviders()

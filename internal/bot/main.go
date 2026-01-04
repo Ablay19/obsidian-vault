@@ -18,8 +18,6 @@ import (
 	"obsidian-automation/internal/status"
 	"obsidian-automation/internal/config" // Import app config
 	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -30,8 +28,8 @@ import (
 // Package-level variables for dependencies
 var (
 	db         *sql.DB
-	aiService  *ai.AIService
-	rcm        *state.RuntimeConfigManager // Add package-level RCM
+	aiService  ai.AIServiceInterface
+	rcm        *state.RuntimeConfigManager
 	ingestionPipeline *pipeline.Pipeline
 	gitManager *git.Manager
 	wsManager  *ws.Manager
@@ -81,7 +79,7 @@ func (t *TelegramBot) GetFile(config tgbotapi.FileConfig) (tgbotapi.File, error)
 }
 
 // Run initializes and starts the bot.
-func Run(database *sql.DB, ais *ai.AIService, runtimeConfigManager *state.RuntimeConfigManager, wsm *ws.Manager) error {
+func Run(database *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.RuntimeConfigManager, wsm *ws.Manager) error {
 	db = database
 	aiService = ais
 	rcm = runtimeConfigManager // Assign to package-level variable
@@ -126,6 +124,14 @@ func Run(database *sql.DB, ais *ai.AIService, runtimeConfigManager *state.Runtim
 		}
 	}()
 
+	// Initialize Command Router
+	commandRouter := NewCommandRouter(CommandDependencies{
+		AIService:         aiService,
+		RCM:               rcm,
+		IngestionPipeline: ingestionPipeline,
+		GitManager:        gitManager,
+	})
+
 	commands := []tgbotapi.BotCommand{
 		{Command: "start", Description: "Start the bot"},
 		{Command: "help", Description: "Show help message"},
@@ -139,6 +145,8 @@ func Run(database *sql.DB, ais *ai.AIService, runtimeConfigManager *state.Runtim
 		{Command: "service_status", Description: "Show service status"},
 		{Command: "pause_bot", Description: "Pause the bot"},
 		{Command: "resume_bot", Description: "Resume the bot"},
+		{Command: "modelinfo", Description: "Show AI model information"},
+		{Command: "process", Description: "Process staged file"},
 	}
 	if _, err := bot.Request(tgbotapi.NewSetMyCommands(commands...)); err != nil {
 		slog.Error("Error setting bot commands", "error", err)
@@ -156,15 +164,16 @@ func Run(database *sql.DB, ais *ai.AIService, runtimeConfigManager *state.Runtim
 			continue
 		}
 		slog.Debug("Received update", "update_id", update.UpdateID)
-		go handleUpdate(bot, &update, token)
+		go handleUpdate(bot, &update, token, commandRouter)
 	}
 	return nil
 }
 
-func handleUpdate(bot Bot, update *tgbotapi.Update, token string) {
+// handleUpdate processes incoming Telegram updates.
+func handleUpdate(bot Bot, update *tgbotapi.Update, token string, commandRouter map[string]CommandHandler) {
 	if update.CallbackQuery != nil {
 		slog.Info("Handling callback query", "chat_id", update.CallbackQuery.Message.Chat.ID, "data", update.CallbackQuery.Data)
-		handleCallbackQuery(bot, update.CallbackQuery)
+		handleCallbackQuery(bot, update.CallbackQuery, commandRouter)
 		return
 	}
 
@@ -172,7 +181,7 @@ func handleUpdate(bot Bot, update *tgbotapi.Update, token string) {
 		return
 	}
 
-	// For messages, we only lock if it's NOT a command. 
+	// For messages, we only lock if it's NOT a command.
 	// Commands like /setprovider should always be allowed.
 	if !update.Message.IsCommand() {
 		userID := update.Message.From.ID
@@ -213,11 +222,11 @@ func handleUpdate(bot Bot, update *tgbotapi.Update, token string) {
 	} else if update.Message.Document != nil {
 		handleDocument(bot, update.Message, token)
 	} else if update.Message.IsCommand() || update.Message.Text != "" {
-		handleCommand(bot, update.Message)
+		handleCommand(bot, update.Message, commandRouter)
 	}
 }
 
-func handleCallbackQuery(bot Bot, callback *tgbotapi.CallbackQuery) {
+func handleCallbackQuery(bot Bot, callback *tgbotapi.CallbackQuery, commandRouter map[string]CommandHandler) {
 	// Always answer the callback query to stop the loading spinner
 	defer bot.Request(tgbotapi.NewCallback(callback.ID, ""))
 
@@ -303,4 +312,102 @@ func handleCommand(bot Bot, message *tgbotapi.Message, commandRouter map[string]
 	}
 }
 
+// handlePhoto processes incoming photos.
+func handlePhoto(bot Bot, message *tgbotapi.Message, token string) {
+	database.UpsertUser(message.From)
+	status.UpdateActivity()
 
+	photo := message.Photo[len(message.Photo)-1]
+	filename := downloadFile(bot, photo.FileID, "jpg", token)
+	if filename == "" {
+		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "❌ Failed to download image."))
+		return
+	}
+
+	state := getUserState(message.From.ID)
+	state.PendingFile = filename
+	state.PendingFileType = "image"
+	state.IsStaging = true
+	state.PendingContext = ""
+
+	// Check for caption and add it as initial context
+	if message.Caption != "" {
+		state.PendingContext = message.Caption
+	}
+
+	bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🖼️ Image staged. Send additional text context, or type /process to analyze."))
+}
+
+// handleDocument processes incoming documents.
+func handleDocument(bot Bot, message *tgbotapi.Message, token string) {
+	database.UpsertUser(message.From)
+	status.UpdateActivity()
+
+	doc := message.Document
+	// Basic check for PDF
+	if doc.MimeType != "application/pdf" && !strings.HasSuffix(strings.ToLower(doc.FileName), ".pdf") {
+		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "⚠️ Only PDFs are currently supported for documents."))
+		return
+	}
+
+	filename := downloadFile(bot, doc.FileID, "pdf", token)
+	if filename == "" {
+		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "❌ Failed to download document."))
+		return
+	}
+
+	state := getUserState(message.From.ID)
+	state.PendingFile = filename
+	state.PendingFileType = "pdf"
+	state.IsStaging = true
+	state.PendingContext = ""
+
+	if message.Caption != "" {
+		state.PendingContext = message.Caption
+	}
+
+	bot.Send(tgbotapi.NewMessage(message.Chat.ID, "📄 PDF staged. Send additional text context, or type /process to analyze."))
+}
+
+// downloadFile downloads a file from Telegram.
+func downloadFile(bot Bot, fileID, ext, token string) string {
+	file, err := bot.GetFile(tgbotapi.FileConfig{FileID: fileID})
+	if err != nil {
+		slog.Error("GetFile error", "error", err)
+		return ""
+	}
+
+	fileURL := file.Link(token)
+
+	resp, err := http.Get(fileURL)
+	if err != nil {
+		slog.Error("HTTP error downloading file", "error", err)
+		return ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		slog.Error("Bad response status", "status", resp.StatusCode)
+		return ""
+	}
+
+	// Create 'attachments' directory if not exists
+	os.MkdirAll("attachments", 0755)
+
+	filename := fmt.Sprintf("attachments/%s.%s", time.Now().Format("20060102_150405"), ext)
+	out, err := os.Create(filename)
+	if err != nil {
+		slog.Error("Create file error", "error", err)
+		return ""
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		slog.Error("Write file error", "error", err)
+		return ""
+	}
+
+	slog.Info("File downloaded", "path", filename)
+	return filename
+}
