@@ -13,7 +13,8 @@ import (
 	"obsidian-automation/internal/dashboard/ws"
 	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/gcp"
-	"obsidian-automation/internal/state" // Import the state package
+	"obsidian-automation/internal/security" // New import
+	"obsidian-automation/internal/state" 
 	"obsidian-automation/internal/status"
 	"os"
 	"strconv"
@@ -40,6 +41,7 @@ type Dashboard struct {
 	db          *sql.DB
 	authService *auth.AuthService
 	wsManager   *ws.Manager
+	rateLimiter *security.RateLimiter
 }
 
 // NewDashboard creates a new Dashboard instance.
@@ -50,6 +52,7 @@ func NewDashboard(aiService *ai.AIService, rcm *state.RuntimeConfigManager, db *
 		db:          db,
 		authService: authService,
 		wsManager:   wsManager,
+		rateLimiter: security.NewRateLimiter(100, time.Minute), // 100 req/min default
 	}
 }
 
@@ -63,11 +66,11 @@ func (d *Dashboard) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("/auth/logout", d.handleLogout)
 
 	// GCP Discovery routes
-	router.HandleFunc("/api/auth/google/list-projects", d.handleGCPListProjects)
-	router.HandleFunc("/api/auth/google/list-keys", d.handleGCPListKeys)
+	router.Handle("/api/auth/google/list-projects", d.rateLimiter.Middleware(http.HandlerFunc(d.handleGCPListProjects)))
+	router.Handle("/api/auth/google/list-keys", d.rateLimiter.Middleware(http.HandlerFunc(d.handleGCPListKeys)))
 
 	// Telegram Auth Webhook
-	router.HandleFunc("/api/v1/auth/telegram/webhook", d.handleTelegramWebhook)
+	router.Handle("/api/v1/auth/telegram/webhook", d.rateLimiter.Middleware(http.HandlerFunc(d.handleTelegramWebhook)))
 
 	// Protected routes
 	router.HandleFunc("/", d.handleDashboardRedirect)
@@ -81,24 +84,24 @@ func (d *Dashboard) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("/dashboard/env", func(w http.ResponseWriter, r *http.Request) { d.renderDashboardPage(w, r, "env") })
 
 	router.HandleFunc("/ws", d.wsManager.HandleWebSocket)
-	router.HandleFunc("/api/services/status", d.handleServicesStatus)
+	router.Handle("/api/services/status", d.rateLimiter.Middleware(http.HandlerFunc(d.handleServicesStatus)))
 
 	// New routes for provider management
-	router.HandleFunc("/api/ai/providers", d.handleGetAIProviders)             // GET all provider info
-	router.HandleFunc("/api/ai/provider/config", d.handleGetProviderConfig)    // GET specific provider config
-	router.HandleFunc("/api/ai/provider/set", d.handleSetAIProvider)           // POST set active provider (may be redundant with new config)
-	router.HandleFunc("/api/ai/provider/toggle", d.handleToggleProviderStatus) // POST enable/disable/pause provider
+	router.Handle("/api/ai/providers", d.rateLimiter.Middleware(http.HandlerFunc(d.handleGetAIProviders)))             // GET all provider info
+	router.Handle("/api/ai/provider/config", d.rateLimiter.Middleware(http.HandlerFunc(d.handleGetProviderConfig)))    // GET specific provider config
+	router.Handle("/api/ai/provider/set", d.rateLimiter.Middleware(http.HandlerFunc(d.handleSetAIProvider)))           // POST set active provider (may be redundant with new config)
+	router.Handle("/api/ai/provider/toggle", d.rateLimiter.Middleware(http.HandlerFunc(d.handleToggleProviderStatus))) // POST enable/disable/pause provider
 
 	// New routes for API key management
-	router.HandleFunc("/api/ai/keys", d.handleGetAPIKeys)               // GET all API keys for a provider
-	router.HandleFunc("/api/ai/key/add", d.handleAddAPIKey)             // POST add new API key
-	router.HandleFunc("/api/ai/key/remove", d.handleRemoveAPIKey)       // POST remove API key
-	router.HandleFunc("/api/ai/key/toggle", d.handleToggleAPIKeyStatus) // POST enable/disable/block API key
-	router.HandleFunc("/api/ai/key/rotate", d.handleRotateAPIKey)       // POST rotate API key
+	router.Handle("/api/ai/keys", d.rateLimiter.Middleware(http.HandlerFunc(d.handleGetAPIKeys)))               // GET all API keys for a provider
+	router.Handle("/api/ai/key/add", d.rateLimiter.Middleware(http.HandlerFunc(d.handleAddAPIKey)))             // POST add new API key
+	router.Handle("/api/ai/key/remove", d.rateLimiter.Middleware(http.HandlerFunc(d.handleRemoveAPIKey)))       // POST remove API key
+	router.Handle("/api/ai/key/toggle", d.rateLimiter.Middleware(http.HandlerFunc(d.handleToggleAPIKeyStatus))) // POST enable/disable/block API key
+	router.Handle("/api/ai/key/rotate", d.rateLimiter.Middleware(http.HandlerFunc(d.handleRotateAPIKey)))       // POST rotate API key
 
 	// New routes for environment control
-	router.HandleFunc("/api/env", d.handleGetEnvironmentState)     // GET current environment state
-	router.HandleFunc("/api/env/set", d.handleSetEnvironmentState) // POST set environment state
+	router.Handle("/api/env", d.rateLimiter.Middleware(http.HandlerFunc(d.handleGetEnvironmentState)))     // GET current environment state
+	router.Handle("/api/env/set", d.rateLimiter.Middleware(http.HandlerFunc(d.handleSetEnvironmentState))) // POST set environment state
 
 	// Serve static files (CSS, JS)
 	router.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("internal/dashboard/static"))))
@@ -116,7 +119,7 @@ func (d *Dashboard) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("/dashboard/panels/environment", d.handleEnvironmentPanel)
 	router.HandleFunc("/dashboard/panels/whatsapp", d.handleWhatsAppPanel)
 	router.HandleFunc("/dashboard/panels/qa_console", d.handleQAConsolePanel)
-	router.HandleFunc("/api/qa", d.handleQA)
+	router.Handle("/api/qa", d.rateLimiter.Middleware(http.HandlerFunc(d.handleQA)))
 }
 
 // handleQA handles the Q&A requests from the dashboard console.
