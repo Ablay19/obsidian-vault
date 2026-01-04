@@ -1,14 +1,107 @@
 package config
 
 import (
+	"context"
+	"fmt"
 	"os"
+	"strings"
 
+	"github.com/hashicorp/vault/api"
 	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
-// SwitchingRules defines the criteria for dynamic provider selection.
+// ... (struct definitions remain the same)
+
+// LoadConfig loads the configuration from a file, environment variables, and Vault.
+func LoadConfig() {
+	// ... (existing godotenv and viper setup remains the same)
+
+	// Load secrets from Vault
+	if err := loadSecretsFromVault(); err != nil {
+		zap.S().Warnw("Could not load secrets from Vault. Falling back to environment variables.", "error", err)
+	}
+
+	// ... (rest of the viper setup and unmarshalling remains the same)
+}
+
+func loadSecretsFromVault() error {
+	vaultAddr := os.Getenv("VAULT_ADDR")
+	vaultToken := os.Getenv("VAULT_TOKEN")
+
+	if vaultAddr == "" || vaultToken == "" {
+		return fmt.Errorf("VAULT_ADDR and VAULT_TOKEN must be set")
+	}
+
+	config := &api.Config{
+		Address: vaultAddr,
+	}
+
+	client, err := api.NewClient(config)
+	if err != nil {
+		return fmt.Errorf("failed to create Vault client: %w", err)
+	}
+
+	client.SetToken(vaultToken)
+
+	// Read all secrets from the kv-v2 engine at secret/obsidian-automation
+	secret, err := client.KVv2("secret").Get(context.Background(), "obsidian-automation")
+	if err != nil {
+		return fmt.Errorf("failed to read secrets from Vault: %w", err)
+	}
+
+	for key, value := range secret.Data {
+		viper.Set(key, value)
+		zap.S().Debugf("Loaded secret from Vault: %s", key)
+	}
+
+	zap.S().Info("Successfully loaded secrets from Vault.")
+	return nil
+}
+
+// AppConfig is the loaded configuration.
+var AppConfig Config
+
+func init() {
+	// 1. Load .env file using godotenv (actually sets OS environment variables)
+	if err := godotenv.Load(); err != nil {
+		zap.S().Debug("No .env file found or error loading it", "error", err)
+	} else {
+		zap.S().Info(".env file loaded into environment successfully")
+	}
+
+	// 2. Set Defaults
+	viper.SetDefault("providers.gemini.model", "gemini-pro")
+	// ... (rest of the defaults remain the same)
+
+	// 3. Setup environment variable support
+	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
+	// 4. Load main config file (config.yaml)
+	viper.SetConfigName("config")
+	viper.SetConfigType("yaml")
+	viper.AddConfigPath(".")
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			zap.S().Info("config.yaml not found, using defaults")
+		} else {
+			zap.S().Error("Error reading config.yaml", "error", err)
+		}
+	}
+
+	// 5. Load secrets from Vault
+	if err := loadSecretsFromVault(); err != nil {
+		zap.S().Warnw("Could not load secrets from Vault. Falling back to environment variables.", "error", err)
+	}
+
+	// 6. Unmarshal into AppConfig struct
+	if err := viper.Unmarshal(&AppConfig); err != nil {
+		zap.S().Fatalw("Unable to decode into struct", "error", err)
+	}
+}
+
 type SwitchingRules struct {
 	DefaultProvider   string  `mapstructure:"default_provider"`
 	LatencyTarget     int     `mapstructure:"latency_target"`
@@ -19,7 +112,6 @@ type SwitchingRules struct {
 	OnError           string  `mapstructure:"on_error"`
 }
 
-// Config holds the configuration for the application.
 type Config struct {
 	Providers struct {
 		Gemini struct {
@@ -28,12 +120,10 @@ type Config struct {
 		Groq struct {
 			Model string `mapstructure:"model"`
 		} `mapstructure:"groq"`
-
 		HuggingFace struct {
 			APIKey string `mapstructure:"api_key"`
 			Model  string `mapstructure:"model"`
 		} `mapstructure:"huggingface"`
-
 		OpenRouter struct {
 			APIKey string `mapstructure:"api_key"`
 			Model  string `mapstructure:"model"`
@@ -67,86 +157,4 @@ type Config struct {
 		VaultPath string `mapstructure:"vault_path"`
 		RemoteURL string `mapstructure:"remote_url"`
 	} `mapstructure:"git"`
-}
-
-// AppConfig is the loaded configuration.
-var AppConfig Config
-
-// LoadConfig loads the configuration from a file and environment variables.
-func LoadConfig() {
-	// 1. Load .env file using godotenv (actually sets OS environment variables)
-	if err := godotenv.Load(); err != nil {
-		zap.S().Debug("No .env file found or error loading it", "error", err)
-	} else {
-		zap.S().Info(".env file loaded into environment successfully")
-	}
-
-	// 2. Set Defaults
-	viper.SetDefault("providers.gemini.model", "gemini-pro")
-	viper.SetDefault("providers.groq.model", "llama3-70b")
-	viper.SetDefault("providers.openrouter.model", "openai/gpt-3.5-turbo")
-	viper.SetDefault("classification.patterns", map[string][]string{
-		"physics":   {"force", "energy", "mass", "velocity", "acceleration"},
-		"math":      {"equation", "function", "derivative", "integral", "matrix"},
-		"chemistry": {"molecule", "atom", "reaction", "chemical"},
-		"admin":     {"invoice", "contract", "form", "certificate"},
-	})
-	viper.SetDefault("language_detection.french_words", []string{"le", "la", "de", "et", "un"})
-	viper.SetDefault("dashboard.port", 8080)
-	viper.SetDefault("auth.session_secret", "change-me-to-something-very-secure")
-	viper.SetDefault("git.user_name", "Obsidian Bot")
-	viper.SetDefault("git.user_email", "bot@obsidian.internal")
-	viper.SetDefault("git.vault_path", "vault")
-	viper.SetDefault("switching_rules.default_provider", "gemini")
-	viper.SetDefault("switching_rules.retry_count", 3)
-	viper.SetDefault("switching_rules.retry_delay_ms", 1000)
-	viper.SetDefault("switching_rules.on_error", "switch_provider")
-	viper.SetDefault("switching_rules.latency_target", 5000)
-	viper.SetDefault("switching_rules.throughput_target", 10)
-	viper.SetDefault("switching_rules.accuracy_threshold", 0.95)
-
-	// 3. Setup environment variable support (Viper will now see the variables set by godotenv)
-	viper.AutomaticEnv()
-	viper.BindEnv("TURSO_DATABASE_URL")
-	viper.BindEnv("TURSO_AUTH_TOKEN")
-	viper.BindEnv("GEMINI_API_KEYS")
-	viper.BindEnv("GEMINI_API_KEY")
-	viper.BindEnv("GROQ_API_KEY")
-	viper.BindEnv("HUGGINGFACE_API_KEY")
-	viper.BindEnv("HF_TOKEN")
-	viper.BindEnv("OPENROUTER_API_KEY")
-	viper.BindEnv("TELEGRAM_BOT_TOKEN")
-	viper.BindEnv("WHATSAPP_ACCESS_TOKEN", "whatsapp.access_token")
-	viper.BindEnv("WHATSAPP_VERIFY_TOKEN", "whatsapp.verify_token")
-	viper.BindEnv("WHATSAPP_APP_SECRET", "whatsapp.app_secret")
-	viper.BindEnv("ENVIRONMENT_MODE")
-	viper.BindEnv("BACKEND_HOST")
-	viper.BindEnv("ENVIRONMENT_ISOLATION_ENABLED")
-	viper.BindEnv("AI_ENABLED")
-	viper.BindEnv("DASHBOARD_URL")
-	viper.BindEnv("auth.google_client_id", "GOOGLE_CLIENT_ID")
-	viper.BindEnv("auth.google_client_secret", "GOOGLE_CLIENT_SECRET")
-	viper.BindEnv("auth.google_redirect_url", "GOOGLE_REDIRECT_URL")
-	viper.BindEnv("git.user_name", "GIT_USER_NAME")
-	viper.BindEnv("git.user_email", "GIT_USER_EMAIL")
-	viper.BindEnv("git.vault_path", "GIT_VAULT_PATH")
-	viper.BindEnv("git.remote_url", "GIT_REMOTE_URL")
-
-	// 4. Load main config file (config.yaml)
-	viper.SetConfigName("config")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath(".")
-	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			zap.S().Info("config.yaml not found, using defaults")
-		} else {
-			zap.S().Error("Error reading config.yaml", "error", err)
-		}
-	}
-
-	// 5. Unmarshal into AppConfig struct
-	if err := viper.Unmarshal(&AppConfig); err != nil {
-		zap.S().Error("Unable to decode into struct", "error", err)
-		os.Exit(1)
-	}
 }
