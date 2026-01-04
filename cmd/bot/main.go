@@ -13,7 +13,7 @@ import (
 	"obsidian-automation/internal/dashboard/ws"
 	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/logger"
-	"obsidian-automation/internal/state" // Import the new state package
+	"obsidian-automation/internal/state"
 	"os"
 	"os/signal"
 	"syscall"
@@ -29,7 +29,7 @@ func main() {
 	defer db.Close()
 
 	database.RunMigrations(db)
-
+	
 	for {
 		if err := database.CheckExistingInstance(db); err != nil {
 			slog.Info("Another instance is running, retrying in 15 seconds...", "error", err)
