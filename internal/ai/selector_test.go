@@ -28,9 +28,9 @@ func TestSelectProvider(t *testing.T) {
 	}
 
 	rules := config.SwitchingRules{
-		DefaultProvider:     "gemini",
-		LatencyTarget:       1000,
-		AccuracyThreshold:   0.92,
+		DefaultProvider:   "gemini",
+		LatencyTarget:     1000,
+		AccuracyThreshold: 0.92,
 	}
 
 	// Test case 1: Groq is cheaper and meets latency/accuracy

@@ -8,10 +8,10 @@ import (
 // select_provider selects the best AI provider based on task complexity and cost constraints.
 func select_provider(task_tokens int, task_depth int, max_cost float64, profiles map[string]config.ProviderConfig, rules config.SwitchingRules) string {
 	type candidate struct {
-		name        string
-		cost        float64
-		latency     int
-		accuracy    float64
+		name     string
+		cost     float64
+		latency  int
+		accuracy float64
 	}
 
 	var candidates []candidate
@@ -35,10 +35,10 @@ func select_provider(task_tokens int, task_depth int, max_cost float64, profiles
 		}
 
 		candidates = append(candidates, candidate{
-			name:        name,
-			cost:        estimated_cost,
-			latency:     profile.LatencyMsThreshold,
-			accuracy:    profile.AccuracyPctThreshold,
+			name:     name,
+			cost:     estimated_cost,
+			latency:  profile.LatencyMsThreshold,
+			accuracy: profile.AccuracyPctThreshold,
 		})
 	}
 

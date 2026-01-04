@@ -23,8 +23,8 @@ type Event struct {
 }
 
 type Manager struct {
-	clients map[*Client]bool
-	mu      sync.RWMutex
+	clients   map[*Client]bool
+	mu        sync.RWMutex
 	broadcast chan Event
 }
 
@@ -101,7 +101,7 @@ func (c *Client) readPump() {
 			}
 			break
 		}
-		
+
 		var event Event
 		if err := json.Unmarshal(message, &event); err != nil {
 			slog.Warn("WebSocket received invalid JSON", "error", err)

@@ -203,13 +203,13 @@ func LinkTelegramToEmail(telegramID int64, email string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	// Also update the record where ID is telegramID if it doesn't have an email
 	_, err = DB.Exec(`
 		UPDATE users 
 		SET email = ? 
 		WHERE id = ? AND email IS NULL
 	`, email, telegramID)
-	
+
 	return err
 }

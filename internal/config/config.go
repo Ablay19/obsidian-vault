@@ -10,13 +10,13 @@ import (
 
 // SwitchingRules defines the criteria for dynamic provider selection.
 type SwitchingRules struct {
-	DefaultProvider     string  `mapstructure:"default_provider"`
-	LatencyTarget       int     `mapstructure:"latency_target"`
-	ThroughputTarget    int     `mapstructure:"throughput_target"`
-	AccuracyThreshold   float64 `mapstructure:"accuracy_threshold"`
-	RetryCount          int     `mapstructure:"retry_count"`
-	RetryDelayMs        int     `mapstructure:"retry_delay_ms"`
-	OnError             string  `mapstructure:"on_error"`
+	DefaultProvider   string  `mapstructure:"default_provider"`
+	LatencyTarget     int     `mapstructure:"latency_target"`
+	ThroughputTarget  int     `mapstructure:"throughput_target"`
+	AccuracyThreshold float64 `mapstructure:"accuracy_threshold"`
+	RetryCount        int     `mapstructure:"retry_count"`
+	RetryDelayMs      int     `mapstructure:"retry_delay_ms"`
+	OnError           string  `mapstructure:"on_error"`
 }
 
 // Config holds the configuration for the application.
@@ -39,9 +39,9 @@ type Config struct {
 			Model  string `mapstructure:"model"`
 		} `mapstructure:"openrouter"`
 	} `mapstructure:"providers"`
-	ProviderProfiles  map[string]ProviderConfig `mapstructure:"provider_profiles"`
-	SwitchingRules    SwitchingRules                 `mapstructure:"switching_rules"`
-	WhatsApp          struct {
+	ProviderProfiles map[string]ProviderConfig `mapstructure:"provider_profiles"`
+	SwitchingRules   SwitchingRules            `mapstructure:"switching_rules"`
+	WhatsApp         struct {
 		AccessToken string `mapstructure:"access_token"`
 		VerifyToken string `mapstructure:"verify_token"`
 		AppSecret   string `mapstructure:"app_secret"`

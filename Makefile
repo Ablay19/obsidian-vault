@@ -1,6 +1,6 @@
 # Makefile for Obsidian Automation Bot
 
-.PHONY: all build up down logs status restart help 
+.PHONY: all build build-ssh up ssh-up down ssh-down logs ssh-logs status ssh-status restart ssh-restart run-local sqlc-generate help 
 
 # Variables
 IMAGE_NAME      ?= obsidian-bot
@@ -9,17 +9,28 @@ ENV_FILE        ?= .env
 DOCKERFILE      ?= Dockerfile
 DASHBOARD_PORT  ?= 8080
 
+SSH_IMAGE_NAME      ?= obsidian-ssh-server
+SSH_CONTAINER_NAME  ?= obsidian-ssh-server
+SSH_DOCKERFILE      ?= Dockerfile.ssh
+SSH_PORT            ?= 2222
+SSH_API_PORT        ?= 8081
+
 # Default target: show help.
 all: help
 
-# Build the Docker image.
-build: ## Build the Docker image.
-	@echo "🔨 Building Docker image using $(DOCKERFILE)..."
+# Build the main bot Docker image.
+build: ## Build the main bot Docker image.
+	@echo "🔨 Building Docker image for main bot using $(DOCKERFILE)..."
 	@docker build -f $(DOCKERFILE) -t $(IMAGE_NAME) .
 
-# Run the application.
-up: build ## Build and start the container.
-	@echo "🚀 Starting container $(CONTAINER_NAME)..."
+# Build the SSH server Docker image.
+build-ssh: ## Build the SSH server Docker image.
+	@echo "🔨 Building Docker image for SSH server using $(SSH_DOCKERFILE)..."
+	@docker build -f $(SSH_DOCKERFILE) -t $(SSH_IMAGE_NAME) .
+
+# Run the main bot application.
+up: build ## Build and start the main bot container.
+	@echo "🚀 Starting main bot container $(CONTAINER_NAME)..."
 	@if [ ! -f "$(ENV_FILE)" ]; then \
 		echo "ERROR: $(ENV_FILE) file not found!"; \
 		echo "Please create a .env file with TELEGRAM_BOT_TOKEN, TURSO_DATABASE_URL, and TURSO_AUTH_TOKEN."; \
@@ -37,26 +48,68 @@ up: build ## Build and start the container.
 	  -v "./pdfs:/app/pdfs" \
 	  -p $(DASHBOARD_PORT):8080 \
 	  $(IMAGE_NAME)
-	@echo "✅ Bot $(CONTAINER_NAME) started successfully!"
+	@echo "✅ Main bot $(CONTAINER_NAME) started successfully!"
 	@echo "🖥️  Dashboard available at http://localhost:$(DASHBOARD_PORT)"
 
-# Stop and remove the container.
-down: ## Stop and remove the container.
-	@echo "🛑 Stopping and removing container $(CONTAINER_NAME)..."
+# Run the SSH server application.
+ssh-up: build-ssh ## Build and start the SSH server container.
+	@echo "🚀 Starting SSH server container $(SSH_CONTAINER_NAME)..."
+	@if [ ! -f "$(ENV_FILE)" ]; then \
+		echo "ERROR: $(ENV_FILE) file not found!"; \
+		echo "Please create a .env file with relevant SSH server environment variables."; \
+		exit 1; \
+	fi
+	@docker stop $(SSH_CONTAINER_NAME) >/dev/null 2>&1 || true
+	@docker rm $(SSH_CONTAINER_NAME) >/dev/null 2>&1 || true
+	@docker run -d \
+	  --name $(SSH_CONTAINER_NAME) \
+	  --restart unless-stopped \
+	  --env-file $(ENV_FILE) \
+	  -v "./data:/data" \
+	  -v "./id_rsa:/app/id_rsa:ro" \
+	  -v "./id_rsa.pub:/app/id_rsa.pub:ro" \
+	  -p $(SSH_PORT):2222 \
+	  -p $(SSH_API_PORT):8081 \
+	  $(SSH_IMAGE_NAME)
+	@echo "✅ SSH server $(SSH_CONTAINER_NAME) started successfully!"
+	@echo "🔑 SSH server available on port $(SSH_PORT)"
+	@echo "API available at http://localhost:$(SSH_API_PORT)"
+
+# Stop and remove the main bot container.
+down: ## Stop and remove the main bot container.
+	@echo "🛑 Stopping and removing main bot container $(CONTAINER_NAME)..."
 	@docker stop $(CONTAINER_NAME) >/dev/null 2>&1 || true
 	@docker rm $(CONTAINER_NAME) >/dev/null 2>&1 || true
-	@echo "✅ Bot $(CONTAINER_NAME) stopped and container removed."
+	@echo "✅ Main bot $(CONTAINER_NAME) stopped and container removed."
 
-# View container logs.
-logs: ## View container logs.
+# Stop and remove the SSH server container.
+ssh-down: ## Stop and remove the SSH server container.
+	@echo "🛑 Stopping and removing SSH server container $(SSH_CONTAINER_NAME)..."
+	@docker stop $(SSH_CONTAINER_NAME) >/dev/null 2>&1 || true
+	@docker rm $(SSH_CONTAINER_NAME) >/dev/null 2>&1 || true
+	@echo "✅ SSH server $(SSH_CONTAINER_NAME) stopped and container removed."
+
+# View main bot container logs.
+logs: ## View main bot container logs.
 	@docker logs -f $(CONTAINER_NAME)
 
-# Show container status.
-status: ## Show container status.
+# View SSH server container logs.
+ssh-logs: ## View SSH server container logs.
+	@docker logs -f $(SSH_CONTAINER_NAME)
+
+# Show main bot container status.
+status: ## Show main bot container status.
 	@docker ps --filter "name=^/$(CONTAINER_NAME)$$"
 
-# Restart the container.
-restart: down up ## Restart the container.
+# Show SSH server container status.
+ssh-status: ## Show SSH server container status.
+	@docker ps --filter "name=^/$(SSH_CONTAINER_NAME)$$"
+
+# Restart the main bot container.
+restart: down up ## Restart the main bot container.
+
+# Restart the SSH server container.
+ssh-restart: ssh-down ssh-up ## Restart the SSH server container.
 
 # Run locally (clearing CGO flags to avoid onnxruntime issues)
 run-local: ## Run the bot locally.
@@ -83,3 +136,5 @@ help: ## Show this help message.
 	@echo ""
 	@echo "Optional Variables:"
 	@echo "  DASHBOARD_PORT        Port for the web dashboard (default: 8080)."
+	@echo "  SSH_PORT              Port for the SSH server (default: 2222)."
+	@echo "  SSH_API_PORT          Port for the SSH server's API (default: 8081)."

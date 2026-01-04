@@ -28,11 +28,11 @@ type ProviderState struct {
 // APIKeyState defines the state for an individual API key.
 type APIKeyState struct {
 	ID             string    `json:"id"`
-	Provider       string    `json:"provider"` // Which provider this key belongs to
-	Value          string    `json:"-"`        // The actual API key (sensitive, plain text in memory)
+	Provider       string    `json:"provider"`                  // Which provider this key belongs to
+	Value          string    `json:"-"`                         // The actual API key (sensitive, plain text in memory)
 	EncryptedValue string    `json:"encrypted_value,omitempty"` // For storage
-	Enabled        bool      `json:"enabled"`  // Enable/disable individual key
-	Blocked        bool      `json:"blocked"`  // If the key itself is blocked (e.g., invalid, quota)
+	Enabled        bool      `json:"enabled"`                   // Enable/disable individual key
+	Blocked        bool      `json:"blocked"`                   // If the key itself is blocked (e.g., invalid, quota)
 	BlockedReason  string    `json:"blocked_reason"`
 	LastError      string    `json:"last_error"`
 	QuotaRemaining int       `json:"quota_remaining"` // Estimated quota (if available)

@@ -106,9 +106,9 @@ func TestAuthService_GetLoginURL(t *testing.T) {
 	cfg := config.Config{}
 	cfg.Auth.GoogleClientID = "test-client-id"
 	cfg.Auth.GoogleRedirectURL = "http://localhost:8080/callback"
-	
+
 	authService := NewAuthService(cfg)
-	
+
 	url := authService.GetLoginURL("test-state")
 	if url == "" {
 		t.Error("Expected login URL, got empty string")

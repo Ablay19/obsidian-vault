@@ -3,11 +3,11 @@ package bot
 import (
 	"context"
 	"errors"
+	"obsidian-automation/internal/ai"
 	"os"
 	"os/exec"
 	"reflect"
 	"testing"
-	"obsidian-automation/internal/ai"
 )
 
 // MockAIService is a mock implementation of the AIService for testing.
@@ -90,8 +90,8 @@ func TestProcessFileWithAI_Success(t *testing.T) {
 		},
 		AnalyzeTextWithParamsFunc: func(ctx context.Context, text, language string, task_tokens int, task_depth int, max_cost float64) (*ai.AnalysisResult, error) {
 			return &ai.AnalysisResult{
-				Category: "tech",
-				Topics:   []string{"golang", "testing"},
+				Category:  "tech",
+				Topics:    []string{"golang", "testing"},
 				Questions: []string{"Is this a test?"},
 			}, nil
 		},
@@ -113,7 +113,6 @@ func TestProcessFileWithAI_Success(t *testing.T) {
 	}
 	defer os.Remove(tmpfile.Name())
 	filePath := tmpfile.Name()
-
 
 	// 4. Call the function
 	ctx := context.Background()

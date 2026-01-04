@@ -27,7 +27,7 @@ func NewOpenRouterProvider(apiKey string, modelName string, httpClient *http.Cli
 		zap.S().Info("OpenRouter API key is empty. OpenRouter AI will be unavailable.")
 		return nil
 	}
-	
+
 	if httpClient == nil {
 		httpClient = &http.Client{
 			Timeout: 60 * time.Second,

@@ -80,7 +80,7 @@ func validateSignature(signature string, payload []byte) bool {
 		return false
 	}
 	actualSignature := strings.TrimPrefix(signature, "sha256=")
-	
+
 	mac := hmac.New(sha256.New, []byte(config.AppConfig.WhatsApp.AppSecret))
 	mac.Write(payload)
 	expectedSignature := hex.EncodeToString(mac.Sum(nil))
@@ -137,11 +137,11 @@ type WhatsAppMetadata struct {
 }
 
 type WhatsAppMessage struct {
-	From      string         `json:"from"`
-	ID        string         `json:"id"`
-	Timestamp string         `json:"timestamp"`
-	Text      WhatsAppText   `json:"text"`
-	Type      string         `json:"type"`
+	From      string       `json:"from"`
+	ID        string       `json:"id"`
+	Timestamp string       `json:"timestamp"`
+	Text      WhatsAppText `json:"text"`
+	Type      string       `json:"type"`
 }
 
 type WhatsAppText struct {

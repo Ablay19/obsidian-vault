@@ -9,13 +9,13 @@ import (
 type AIProvider interface {
 	// GenerateCompletion sends a request to the AI service and returns a complete response.
 	GenerateCompletion(ctx context.Context, req *RequestModel) (*ResponseModel, error)
-	
+
 	// StreamCompletion streams the response from the AI service.
 	StreamCompletion(ctx context.Context, req *RequestModel) (<-chan StreamResponse, error)
-	
+
 	// GetModelInfo returns information about the model.
 	GetModelInfo() ModelInfo
-	
+
 	// CheckHealth verifies if the provider is currently operational.
 	CheckHealth(ctx context.Context) error
 }

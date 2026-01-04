@@ -38,9 +38,9 @@ func (m *Metrics) GetStats() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"submitted": atomic.LoadUint64(&m.SubmittedCount),
-		"processed": processed,
-		"dropped":   atomic.LoadUint64(&m.DroppedCount),
+		"submitted":      atomic.LoadUint64(&m.SubmittedCount),
+		"processed":      processed,
+		"dropped":        atomic.LoadUint64(&m.DroppedCount),
 		"avg_latency_ms": avg,
 	}
 }

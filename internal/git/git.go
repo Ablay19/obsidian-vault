@@ -79,7 +79,7 @@ func (m *Manager) PushWithRetry(maxRetries int) error {
 
 	for i := 0; i < maxRetries; i++ {
 		zap.S().Info("Attempting Git push", "branch", branch, "attempt", i+1)
-		
+
 		// Try standard push first
 		_, err := m.RunCommand("push", "origin", branch)
 		if err == nil {
@@ -88,7 +88,7 @@ func (m *Manager) PushWithRetry(maxRetries int) error {
 		}
 
 		zap.S().Warn("Git push failed, attempting pull/rebase", "error", err)
-		
+
 		// If push failed, try to pull/rebase to resolve potential conflicts
 		if _, err := m.RunCommand("pull", "--rebase", "origin", branch); err != nil {
 			zap.S().Error("Git pull --rebase failed", "error", err)

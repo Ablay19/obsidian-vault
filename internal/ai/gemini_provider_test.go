@@ -89,7 +89,7 @@ func TestGeminiProvider_GenerateCompletion_Error(t *testing.T) {
 func TestGeminiProvider_GetModelInfo(t *testing.T) {
 	ctx := context.Background()
 	provider := NewGeminiProvider(ctx, "fake-key", "gemini-pro")
-	
+
 	info := provider.GetModelInfo()
 	if info.ProviderName != "Gemini" {
 		t.Errorf("Expected ProviderName 'Gemini', got '%s'", info.ProviderName)

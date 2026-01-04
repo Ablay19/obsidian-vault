@@ -88,7 +88,7 @@ func (s *AuthService) HandleCallback(ctx context.Context, code string) (*UserSes
 			refresh_token = excluded.refresh_token,
 			token_expiry = excluded.token_expiry
 	`, profile.Sub[0:10], profile.Name, profile.Sub, profile.Email, profile.Picture, token.AccessToken, token.RefreshToken, token.Expiry)
-	
+
 	if err != nil {
 		// Log error but continue
 	}
@@ -255,4 +255,3 @@ func (s *AuthService) GetClientForUser(ctx context.Context, googleID string) (*h
 	}
 	return s.oauthConfig.Client(ctx, token), nil
 }
-
