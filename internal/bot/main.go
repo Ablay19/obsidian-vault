@@ -12,7 +12,6 @@ import (
 	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/git"
 	"obsidian-automation/internal/pipeline"
-	"obsidian-automation/internal/pipeline/sources"
 	"obsidian-automation/internal/dashboard/ws"
 	"obsidian-automation/internal/state" // Import the new state package
 	"obsidian-automation/internal/status"
@@ -115,14 +114,6 @@ func Run(database *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *stat
 	ingestionPipeline = pipeline.NewPipeline(3, 100, processor, sink) // 3 workers, buffer 100
 	ingestionPipeline.Start(context.Background())
 	defer ingestionPipeline.Stop()
-
-	// Initialize WhatsApp Source
-	waSource := sources.NewWhatsAppSource(wsManager)
-	go func() {
-		if err := waSource.Start(context.Background(), ingestionPipeline.GetJobChan()); err != nil {
-			slog.Error("WhatsApp source failed to start", "error", err)
-		}
-	}()
 
 	// Initialize Command Router
 	commandRouter := NewCommandRouter(CommandDependencies{

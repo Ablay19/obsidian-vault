@@ -41,6 +41,11 @@ type Config struct {
 	} `mapstructure:"providers"`
 	ProviderProfiles  map[string]ProviderConfig `mapstructure:"provider_profiles"`
 	SwitchingRules    SwitchingRules                 `mapstructure:"switching_rules"`
+	WhatsApp          struct {
+		AccessToken string `mapstructure:"access_token"`
+		VerifyToken string `mapstructure:"verify_token"`
+		AppSecret   string `mapstructure:"app_secret"`
+	} `mapstructure:"whatsapp"`
 	Classification struct {
 		Patterns map[string][]string `mapstructure:"patterns"`
 	} `mapstructure:"classification"`
@@ -111,6 +116,9 @@ func LoadConfig() {
 	viper.BindEnv("HF_TOKEN")
 	viper.BindEnv("OPENROUTER_API_KEY")
 	viper.BindEnv("TELEGRAM_BOT_TOKEN")
+	viper.BindEnv("WHATSAPP_ACCESS_TOKEN", "whatsapp.access_token")
+	viper.BindEnv("WHATSAPP_VERIFY_TOKEN", "whatsapp.verify_token")
+	viper.BindEnv("WHATSAPP_APP_SECRET", "whatsapp.app_secret")
 	viper.BindEnv("ENVIRONMENT_MODE")
 	viper.BindEnv("BACKEND_HOST")
 	viper.BindEnv("ENVIRONMENT_ISOLATION_ENABLED")

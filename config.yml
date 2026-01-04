@@ -12,6 +12,11 @@ providers:
 #    vocab_path: "./models/vocab.txt"
     enabled: false
 
+whatsapp:
+  access_token: ""
+  verify_token: ""
+  app_secret: ""
+
 classification:
   patterns:
     physics:
