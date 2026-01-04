@@ -1,13 +1,23 @@
 package dashboard
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"obsidian-automation/internal/auth"
 	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/status"
 	"regexp"
 	"time"
 )
+
+func getSessionUser(ctx context.Context) *auth.UserSession {
+	val := ctx.Value("session")
+	if val == nil {
+		return nil
+	}
+	return val.(*auth.UserSession)
+}
 
 func getBotStatus(services []status.ServiceStatus) string {
 	for _, s := range services {
