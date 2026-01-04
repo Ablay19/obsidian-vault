@@ -81,6 +81,7 @@ func main() {
 	go wsManager.Start()
 
 	router := http.NewServeMux()
+	router.HandleFunc("/api/v1/whatsapp/webhook", bot.WhatsAppWebhookHandler)
 	// Pass aiService to StartHealthServer
 	bot.StartHealthServer(router)
 	// Pass aiService, db, and wsManager
