@@ -1,6 +1,6 @@
 # Makefile for Obsidian Automation Bot
 
-.PHONY: all build build-ssh up ssh-up down ssh-down logs ssh-logs status ssh-status restart ssh-restart run-local sqlc-generate help 
+.PHONY: all build build-ssh docker-build-all docker-push-all up ssh-up down ssh-down logs ssh-logs status ssh-status restart ssh-restart run-local sqlc-generate k8s-apply k8s-delete help
 
 # Variables
 IMAGE_NAME      ?= obsidian-bot
@@ -8,6 +8,7 @@ CONTAINER_NAME  ?= obsidian-bot
 ENV_FILE        ?= .env
 DOCKERFILE      ?= Dockerfile
 DASHBOARD_PORT  ?= 8080
+DOCKER_REGISTRY ?= your-docker-registry # Default registry, e.g., ghcr.io/your-org
 
 SSH_IMAGE_NAME      ?= obsidian-ssh-server
 SSH_CONTAINER_NAME  ?= obsidian-ssh-server
@@ -27,6 +28,17 @@ build: ## Build the main bot Docker image.
 build-ssh: ## Build the SSH server Docker image.
 	@echo "🔨 Building Docker image for SSH server using $(SSH_DOCKERFILE)..."
 	@docker build -f $(SSH_DOCKERFILE) -t $(SSH_IMAGE_NAME) .
+
+docker-build-all: build build-ssh ## Build all Docker images.
+
+docker-push-all: ## Push all Docker images to registry.
+	@echo "📤 Pushing $(IMAGE_NAME) to $(DOCKER_REGISTRY)"
+	@docker tag $(IMAGE_NAME) $(DOCKER_REGISTRY)/$(IMAGE_NAME):latest
+	@docker push $(DOCKER_REGISTRY)/$(IMAGE_NAME):latest
+	@echo "📤 Pushing $(SSH_IMAGE_NAME) to $(DOCKER_REGISTRY)"
+	@docker tag $(SSH_IMAGE_NAME) $(DOCKER_REGISTRY)/$(SSH_IMAGE_NAME):latest
+	@docker push $(DOCKER_REGISTRY)/$(SSH_IMAGE_NAME):latest
+	@echo "✅ All images pushed."
 
 # Run the main bot application.
 up: build ## Build and start the main bot container.
@@ -111,6 +123,18 @@ restart: down up ## Restart the main bot container.
 # Restart the SSH server container.
 ssh-restart: ssh-down ssh-up ## Restart the SSH server container.
 
+# Apply Kubernetes manifests.
+k8s-apply: ## Apply Kubernetes manifests.
+	@echo "🚀 Applying Kubernetes manifests from k8s/ directory..."
+	@kubectl apply -f k8s/
+	@echo "✅ Kubernetes manifests applied."
+
+# Delete Kubernetes manifests.
+k8s-delete: ## Delete Kubernetes manifests.
+	@echo "🔥 Deleting Kubernetes manifests from k8s/ directory..."
+	@kubectl delete -f k8s/
+	@echo "✅ Kubernetes manifests deleted."
+
 # Run locally (clearing CGO flags to avoid onnxruntime issues)
 run-local: ## Run the bot locally.
 	@CGO_LDFLAGS="" CGO_CFLAGS="" go run ./cmd/bot/main.go
@@ -138,3 +162,4 @@ help: ## Show this help message.
 	@echo "  DASHBOARD_PORT        Port for the web dashboard (default: 8080)."
 	@echo "  SSH_PORT              Port for the SSH server (default: 2222)."
 	@echo "  SSH_API_PORT          Port for the SSH server's API (default: 8081)."
+	@echo "  DOCKER_REGISTRY       Docker registry to push images to (default: your-docker-registry)."
