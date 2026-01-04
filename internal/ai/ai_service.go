@@ -24,45 +24,28 @@ func NewAIService(ctx context.Context, sm *st.RuntimeConfigManager) *AIService {
 		providers: make(map[string]map[string]AIProvider),
 		sm:        sm,
 	}
-	s.RefreshProviders(ctx)
-	
-	// Quick check if any providers loaded
+
+	s.InitializeProviders(ctx)
+
 	count := 0
 	for _, m := range s.providers {
 		count += len(m)
-
-	s.initializeProviders(ctx)
-
-	hasInitializedProviders := false
-	for _, keyProviders := range s.providers {
-		if len(keyProviders) > 0 {
-			hasInitializedProviders = true
-			break
-		}
 	}
+
 	if count == 0 {
 		slog.Warn("No AI providers initialized. AI features unavailable.")
 	} else {
 		slog.Info("AI Service initialized", "provider_count", count)
 	}
-	
-	return s
-}
-
-// RefreshProviders populates the providers map based on the current RuntimeConfig.
-func (s *AIService) RefreshProviders(ctx context.Context) {
-	config := s.sm.GetConfig()
-
-=======
-	log.Printf("AI Service initialized. Available providers: %v", s.GetAvailableProviders())
 
 	return s
 }
 
-func (s *AIService) initializeProviders(ctx context.Context) {
+func (s *AIService) InitializeProviders(ctx context.Context) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	config := s.sm.GetConfig()
 	s.providers = make(map[string]map[string]AIProvider)
 
 	for providerName, providerState := range config.Providers {
@@ -112,32 +95,12 @@ func (s *AIService) GetActiveProviderName() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	cfg := s.sm.GetConfig()
-	if cfg.ActiveProvider != "" {
+	if cfg.ActiveProvider != "" && cfg.ActiveProvider != "None" {
 		return cfg.ActiveProvider
 	}
-	// Fallback
+
+	// Fallback to first available
 	for name, ps := range cfg.Providers {
-=======
-	currentConfig := s.sm.GetConfig()
-	// TODO: Implement storing active provider preference in RuntimeConfig. For now, use first enabled.
-	for name, ps := range currentConfig.Providers {
-		if ps.Enabled { // Arbitrarily pick first enabled
-			return name
-		}
-	}
-	return "None"
-}
-
-// GetActiveProvider returns an active AIProvider instance for the currently preferred provider.
-// This method should select an appropriate key based on availability and health.
-func (s *AIService) GetActiveProvider(ctx context.Context) (AIProvider, st.APIKeyState, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	currentConfig := s.sm.GetConfig()
-	// TODO: Get preferred active provider from RuntimeConfig. For now, use first enabled.
-	var preferredProviderName string
-	for name, ps := range currentConfig.Providers {
 		if ps.Enabled {
 			return name
 		}
@@ -217,14 +180,14 @@ func (s *AIService) GetProvidersInfo() []ModelInfo {
 func (s *AIService) selectProvider(ctx context.Context, excludeKeyIDs []string) (AIProvider, st.APIKeyState, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	cfg := s.sm.GetConfig()
 	if !cfg.AIEnabled {
 		return nil, st.APIKeyState{}, fmt.Errorf("AI is globally disabled")
 	}
 
 	preferred := cfg.ActiveProvider
-	
+
 	isExcluded := func(id string) bool {
 		for _, ex := range excludeKeyIDs {
 			if ex == id {
@@ -240,7 +203,7 @@ func (s *AIService) selectProvider(ctx context.Context, excludeKeyIDs []string) 
 		if !ok || !ps.Enabled || ps.Blocked {
 			return nil, st.APIKeyState{}, false
 		}
-		
+
 		// Get keys
 		keyMap, ok := s.providers[provName]
 		if !ok {
@@ -286,9 +249,14 @@ func (s *AIService) selectProvider(ctx context.Context, excludeKeyIDs []string) 
 		// Already tried these
 		skip := false
 		for _, tried := range fallbacks {
-			if name == tried { skip = true; break }
+			if name == tried {
+				skip = true
+				break
+			}
 		}
-		if skip || name == preferred { continue }
+		if skip || name == preferred {
+			continue
+		}
 
 		if p, k, ok := findKey(name); ok {
 			slog.Info("Using catch-all AI provider", "provider", name, "key_id", k.ID)
@@ -301,7 +269,7 @@ func (s *AIService) selectProvider(ctx context.Context, excludeKeyIDs []string) 
 
 // ExecuteWithRetry handles retries for transient errors, tracking failed keys to ensure they are skipped in subsequent attempts.
 func (s *AIService) ExecuteWithRetry(ctx context.Context, op func(AIProvider) error) error {
-	maxRetries := 5 
+	maxRetries := 5
 	backoff := 1 * time.Second
 	var failedKeys []string
 	var triedProviders []string
@@ -321,14 +289,14 @@ func (s *AIService) ExecuteWithRetry(ctx context.Context, op func(AIProvider) er
 		if appErr, ok := err.(*AppError); ok {
 			// Track this key as failed for the current request context
 			failedKeys = append(failedKeys, key.ID)
-			
+
 			providerName := provider.GetModelInfo().ProviderName
 			triedProviders = append(triedProviders, providerName)
 
 			// Log failover event
-			slog.Warn("AI Provider failover triggered", 
-				"attempt", i+1, 
-				"failed_provider", providerName, 
+			slog.Warn("AI Provider failover triggered",
+				"attempt", i+1,
+				"failed_provider", providerName,
 				"error_code", appErr.Code,
 				"msg", appErr.Message,
 			)

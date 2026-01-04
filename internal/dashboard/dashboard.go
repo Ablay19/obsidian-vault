@@ -467,7 +467,7 @@ func (d *Dashboard) handleToggleProviderStatus(w http.ResponseWriter, r *http.Re
 	}
 
 	// Refresh AI service
-	d.aiService.RefreshProviders(context.Background())
+	d.aiService.InitializeProviders(context.Background())
 
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"status":"success", "message":"Provider '%s' status updated."}`, req.Provider)
@@ -539,7 +539,7 @@ func (d *Dashboard) handleAddAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Refresh AI service
-	d.aiService.RefreshProviders(context.Background())
+	d.aiService.InitializeProviders(context.Background())
 
 	// If it's an HTMX request, we might want to return the updated panel instead of JSON
 	if r.Header.Get("HX-Request") == "true" {
@@ -589,7 +589,7 @@ func (d *Dashboard) handleRemoveAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Refresh AI service
-	d.aiService.RefreshProviders(context.Background())
+	d.aiService.InitializeProviders(context.Background())
 
 	// If it's an HTMX request, we might want to return the updated panel instead of JSON
 	if r.Header.Get("HX-Request") == "true" {
@@ -626,7 +626,7 @@ func (d *Dashboard) handleToggleAPIKeyStatus(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Refresh AI service
-	d.aiService.RefreshProviders(context.Background())
+	d.aiService.InitializeProviders(context.Background())
 
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"status":"success", "message":"API key '%s' status updated."}`, req.KeyID)
@@ -654,7 +654,7 @@ func (d *Dashboard) handleRotateAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Refresh AI service
-	d.aiService.RefreshProviders(context.Background())
+	d.aiService.InitializeProviders(context.Background())
 
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"status":"success", "message":"API key for provider '%s' rotated."}`, req.ProviderName)

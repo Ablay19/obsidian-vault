@@ -63,7 +63,7 @@ func TestAIIntegration_RefreshProviders(t *testing.T) {
 	}
 
 	// Refresh AIService
-	aiService.RefreshProviders(ctx)
+	aiService.InitializeProviders(ctx)
 
 	// Now Gemini should be available
 	available = aiService.GetAvailableProviders()
@@ -84,7 +84,7 @@ func TestAIIntegration_RefreshProviders(t *testing.T) {
 		t.Fatalf("Failed to disable Gemini: %v", err)
 	}
 
-	aiService.RefreshProviders(ctx)
+	aiService.InitializeProviders(ctx)
 
 	// Gemini should no longer be available
 	available = aiService.GetAvailableProviders()

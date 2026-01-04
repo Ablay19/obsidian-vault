@@ -201,3 +201,124 @@ func TestAIService_NoKeys(t *testing.T) {
 		t.Error("Expected error when no providers available, got nil")
 	}
 }
+
+func TestAIService_AnalyzeText(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	rcm, _ := st.NewRuntimeConfigManager(db)
+	rcm.ResetState()
+
+	ctx := context.Background()
+	service := NewAIService(ctx, rcm)
+
+	// Setup a mock provider using a real provider name
+	rcm.SetProviderState("Gemini", true, false, false, "")
+	keyID, err := rcm.AddAPIKey("Gemini", "mock-gemini-key", true)
+	if err != nil {
+		t.Fatalf("AddAPIKey failed: %v", err)
+	}
+
+	service.mu.Lock()
+	service.providers["Gemini"] = make(map[string]AIProvider)
+	mockProvider := &MockProvider{
+		Name:     "Gemini",
+		Response: `{"category": "general", "topics": ["one", "two"], "questions": ["q1?"]}`,
+	}
+	service.providers["Gemini"][keyID] = mockProvider
+	service.mu.Unlock()
+	service.SetProvider("Gemini")
+
+	// Debugging logs
+	cfg := rcm.GetConfig()
+	t.Logf("--- TestAIService_AnalyzeText Debug ---")
+	t.Logf("Active Provider in RCM: %s", cfg.ActiveProvider)
+	t.Logf("Mock Provider State in RCM: %+v", cfg.Providers["Mock"])
+	keyState, ok := cfg.APIKeys[keyID]
+	if !ok {
+		t.Logf("KeyID %s not found in RCM APIKeys", keyID)
+	} else {
+		t.Logf("Key State in RCM: %+v", keyState)
+	}
+	service.mu.RLock()
+	t.Logf("Providers map in service: %+v", service.providers)
+	service.mu.RUnlock()
+	t.Logf("--- End Debug ---")
+
+
+	// Test 1: Successful analysis
+	result, err := service.AnalyzeText(ctx, "some text", "english")
+	if err != nil {
+		t.Fatalf("AnalyzeText failed: %v", err)
+	}
+	if result.Category != "general" {
+		t.Errorf("Expected category 'general', got '%s'", result.Category)
+	}
+	if len(result.Topics) != 2 {
+		t.Errorf("Expected 2 topics, got %d", len(result.Topics))
+	}
+
+	// Test 2: Provider returns invalid JSON
+	mockProvider.Response = `this is not json`
+	_, err = service.AnalyzeText(ctx, "some text", "english")
+	if err == nil {
+		t.Error("Expected error for invalid JSON response, got nil")
+	}
+
+	// Test 3: Provider returns an error
+	mockProvider.ShouldFail = true
+	mockProvider.FailError = errors.New("provider failed")
+	_, err = service.AnalyzeText(ctx, "some text", "english")
+	if err == nil {
+		t.Error("Expected error when provider fails, got nil")
+	}
+}
+
+func TestAIService_Chat(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	rcm, _ := st.NewRuntimeConfigManager(db)
+	rcm.ResetState()
+
+	ctx := context.Background()
+	service := NewAIService(ctx, rcm)
+
+	// Setup a mock provider
+	rcm.SetProviderState("Gemini", true, false, false, "")
+	keyID, err := rcm.AddAPIKey("Gemini", "mock-key", true)
+	if err != nil {
+		t.Fatalf("AddAPIKey failed: %v", err)
+	}
+	service.mu.Lock()
+	service.providers["Gemini"] = make(map[string]AIProvider)
+	mockProvider := &MockProvider{
+		Name:          "Gemini",
+		StreamContent: []string{"Hello", " ", "World"},
+	}
+	service.providers["Gemini"][keyID] = mockProvider
+	service.mu.Unlock()
+	service.SetProvider("Gemini")
+
+	// Test 1: Successful stream
+	var response string
+	callback := func(chunk string) {
+		response += chunk
+	}
+	err = service.Chat(ctx, &RequestModel{}, callback)
+	if err != nil {
+		t.Fatalf("Chat failed: %v", err)
+	}
+	if response != "Hello World" {
+		t.Errorf("Expected 'Hello World', got '%s'", response)
+	}
+
+	// Test 2: Provider returns an error during stream
+	mockProvider.ShouldFail = true
+	mockProvider.FailError = errors.New("stream failed")
+	response = ""
+	err = service.Chat(ctx, &RequestModel{}, callback)
+	if err == nil {
+		t.Error("Expected error when stream fails, got nil")
+	}
+}
