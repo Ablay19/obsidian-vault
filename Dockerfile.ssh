@@ -3,10 +3,10 @@ ARG GO_VERSION=1.25
 ARG ALPINE_VERSION=3.19
 
 # --- Builder Stage ---
-FROM golang:${GO_VERSION}-alpine AS builder
+FROM golang:alpine AS builder
 
 # Install build dependencies
-RUN apk add --no-cache build-base git
+RUN apk add build-base git
 
 WORKDIR /src
 
@@ -23,10 +23,10 @@ RUN CGO_ENABLED=0 go build -ldflags="-w -s -X main.version=${APP_VERSION}" -o /a
 
 
 # --- Final Stage ---
-FROM alpine:${ALPINE_VERSION}
+FROM alpine:latest
 
 # Install runtime dependencies
-RUN apk add --no-cache \
+RUN apk add \
   git \
   ca-certificates \
   tzdata

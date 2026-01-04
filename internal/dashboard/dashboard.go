@@ -47,13 +47,17 @@ type Dashboard struct {
 
 // NewDashboard creates a new Dashboard instance.
 func NewDashboard(aiService *ai.AIService, rcm *state.RuntimeConfigManager, db *sql.DB, authService *auth.AuthService, wsManager *ws.Manager) *Dashboard {
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if redisAddr == "" {
+		redisAddr = "localhost:6379"
+	}
 	return &Dashboard{
 		aiService:   aiService,
 		rcm:         rcm,
 		db:          db,
 		authService: authService,
 		wsManager:   wsManager,
-		rateLimiter: security.NewRateLimiter(100, time.Minute), // 100 req/min default
+		rateLimiter: security.NewRedisRateLimiter(redisAddr, 100, time.Minute), // 100 req/min default
 	}
 }
 
