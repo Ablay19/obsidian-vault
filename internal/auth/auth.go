@@ -10,12 +10,12 @@ import (
 	"net/http"
 	"obsidian-automation/internal/config"
 	"obsidian-automation/internal/database"
+	"obsidian-automation/internal/telemetry"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
@@ -33,7 +33,7 @@ type UserSession struct {
 }
 
 func NewAuthService(cfg config.Config) *AuthService {
-	zap.S().Info("Initializing Auth Service", "redirect_url", cfg.Auth.GoogleRedirectURL)
+	telemetry.ZapLogger.Sugar().Info("Initializing Auth Service", "redirect_url", cfg.Auth.GoogleRedirectURL)
 	return &AuthService{
 		oauthConfig: &oauth2.Config{
 			ClientID:     cfg.Auth.GoogleClientID,
@@ -181,7 +181,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 			// If we are in dev mode and have no session, we'll allow a "dev-session"
 			_, err := s.VerifySession(r)
 			if err != nil {
-				zap.S().Info("Dev mode detected: Bypassing real OAuth")
+				telemetry.ZapLogger.Sugar().Info("Dev mode detected: Bypassing real OAuth")
 				devSession, _ := s.CreateDevSession()
 				ctx := context.WithValue(r.Context(), "session", devSession)
 				next.ServeHTTP(w, r.WithContext(ctx))
@@ -216,7 +216,7 @@ func (s *AuthService) GinMiddleware() gin.HandlerFunc {
 			// If we are in dev mode and have no session, we'll allow a "dev-session"
 			_, err := s.VerifySession(c.Request)
 			if err != nil {
-				zap.S().Info("Dev mode detected: Bypassing real OAuth")
+				telemetry.ZapLogger.Sugar().Info("Dev mode detected: Bypassing real OAuth")
 				devSession, _ := s.CreateDevSession()
 				c.Set("session", devSession)
 				c.Next()

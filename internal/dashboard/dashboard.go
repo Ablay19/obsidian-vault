@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"obsidian-automation/internal/ai"
@@ -15,6 +14,7 @@ import (
 	"obsidian-automation/internal/security"
 	"obsidian-automation/internal/state"
 	"obsidian-automation/internal/status"
+	"obsidian-automation/internal/telemetry"
 	"os"
 	"strconv"
 	"strings"
@@ -167,14 +167,14 @@ func (d *Dashboard) handleQA(c *gin.Context) {
 	}
 
 	// Stream the response back
-	slog.Info("Handling QA request", "question", question)
+	telemetry.ZapLogger.Sugar().Info("Handling QA request", "question", question)
 	err := d.aiService.Chat(c.Request.Context(), req, func(chunk string) {
 		fmt.Fprint(c.Writer, chunk)
 		c.Writer.Flush()
 	})
 
 	if err != nil {
-		slog.Error("QA request failed", "error", err)
+		telemetry.ZapLogger.Sugar().Errorw("QA request failed", "error", err)
 		fmt.Fprintf(c.Writer, "<div class='text-red-500'>Error: %v</div>", err)
 	}
 }
@@ -201,7 +201,7 @@ func (d *Dashboard) handleStatsPanel(c *gin.Context) {
 func (d *Dashboard) handleChatHistoryPanel(c *gin.Context) {
 	history, err := database.GetChatHistory(0, 50) // UserID 0 as placeholder for "all" or just demo
 	if err != nil {
-		slog.Error("Failed to get chat history", "error", err)
+		telemetry.ZapLogger.Sugar().Errorw("Failed to get chat history", "error", err)
 	}
 	ChatHistoryPanel(history).Render(c.Request.Context(), c.Writer)
 }
@@ -214,7 +214,7 @@ func (d *Dashboard) handleEnvironmentPanel(c *gin.Context) {
 
 // handleWhatsAppPanel serves the WhatsAppPanel HTML fragment.
 func (d *Dashboard) handleWhatsAppPanel(c *gin.Context) {
-	slog.Info("Handling WhatsApp panel request")
+	telemetry.ZapLogger.Sugar().Info("Handling WhatsApp panel request")
 	WhatsAppPanel().Render(c.Request.Context(), c.Writer)
 }
 
@@ -709,10 +709,10 @@ func (d *Dashboard) handleTelegramWebhook(c *gin.Context) {
 	}
 	userSession := session.(*auth.UserSession)
 
-	slog.Info("Linking accounts via webhook", "email", userSession.Email, "telegram_id", telegramID)
+	telemetry.ZapLogger.Sugar().Info("Linking accounts via webhook", "email", userSession.Email, "telegram_id", telegramID)
 
 	if err := database.LinkTelegramToEmail(telegramID, userSession.Email); err != nil {
-		slog.Error("Webhook linking failed", "error", err)
+		telemetry.ZapLogger.Sugar().Errorw("Webhook linking failed", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal error"})
 		return
 	}

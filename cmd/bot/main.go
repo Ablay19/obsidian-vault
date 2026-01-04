@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/auth"
 	"obsidian-automation/internal/bot"
@@ -11,29 +10,34 @@ import (
 	"obsidian-automation/internal/dashboard"
 	"obsidian-automation/internal/dashboard/ws"
 	"obsidian-automation/internal/database"
-	"obsidian-automation/internal/logger"
 	"obsidian-automation/internal/state"
+	"obsidian-automation/internal/telemetry"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
 var version = "dev" // This will be overwritten by the build process
 
 func main() {
-	logger.Setup()
-	slog.Info("Starting bot", "version", version)
+	// Initialize OpenTelemetry and the Zap logger
+	tp, err := telemetry.Init("obsidian-automation-bot")
+	if err != nil {
+		panic(fmt.Sprintf("failed to initialize telemetry: %v", err))
+	}
+	defer func() {
+		if err := tp.Shutdown(context.Background()); err != nil {
+			telemetry.ZapLogger.Sugar().Errorf("Error shutting down tracer provider: %v", err)
+		}
+	}()
 
-	// Perform external binary check at startup
-	// if err := util.CheckExternalBinaries(); err != nil {
-	// 	slog.Error("Startup check failed", "error", err)
-	// 	os.Exit(1)
-	// }
+	telemetry.ZapLogger.Sugar().Info("Starting bot", "version", version)
 
-	config.LoadConfig() // Still load config for initial setup of things like dashboard port etc.
+	config.LoadConfig()
 
 	db := database.OpenDB()
 	defer db.Close()
@@ -42,66 +46,55 @@ func main() {
 
 	for {
 		if err := database.CheckExistingInstance(db); err != nil {
-			slog.Info("Another instance is running, retrying in 15 seconds...", "error", err)
+			telemetry.ZapLogger.Sugar().Info("Another instance is running, retrying in 15 seconds...", "error", err)
 			time.Sleep(15 * time.Second)
 		} else {
-			break // No other instance found, proceed with startup
+			break
 		}
 	}
 
 	if err := database.AddInstance(db); err != nil {
-		slog.Error("Error adding instance", "error", err)
-		os.Exit(1)
+		telemetry.ZapLogger.Sugar().Fatalw("Error adding instance", "error", err)
 	}
 
-	// Start a goroutine to periodically update the instance heartbeat
-	heartbeatTicker := time.NewTicker(database.HEARTBEAT_THRESHOLD / 2) // Update every half of the threshold
+	heartbeatTicker := time.NewTicker(database.HEARTBEAT_THRESHOLD / 2)
 	go func() {
 		for range heartbeatTicker.C {
 			if err := database.UpdateInstanceHeartbeat(db); err != nil {
-				slog.Error("Error updating instance heartbeat", "error", err)
+				telemetry.ZapLogger.Sugar().Errorw("Error updating instance heartbeat", "error", err)
 			}
 		}
 	}()
 
 	runtimeConfigManager, err := state.NewRuntimeConfigManager(db)
 	if err != nil {
-		slog.Error("Failed to initialize state manager", "error", err)
-		os.Exit(1)
+		telemetry.ZapLogger.Sugar().Fatalw("Failed to initialize state manager", "error", err)
 	}
 
 	ctx := context.Background()
-	// Pass provider profiles and switching rules to NewAIService
 	aiService := ai.NewAIService(ctx, runtimeConfigManager, config.AppConfig.ProviderProfiles, config.AppConfig.SwitchingRules)
 	if aiService == nil {
-		slog.Info("AI Service failed to initialize. No AI providers available or configured. Proceeding without AI features.")
+		telemetry.ZapLogger.Sugar().Info("AI Service failed to initialize. No AI providers available or configured. Proceeding without AI features.")
 	}
 
 	authService := auth.NewAuthService(config.AppConfig)
-
-	// WebSocket Manager
 	wsManager := ws.NewManager()
 	go wsManager.Start()
 
-	// Set up Gin router
 	router := gin.Default()
+	router.Use(otelgin.Middleware("obsidian-automation"))
 
-	// Register routes
 	router.POST("/api/v1/whatsapp/webhook", gin.WrapF(bot.WhatsAppWebhookHandler))
-	bot.StartHealthServer(router) // This function will need to be adapted for Gin
+	bot.StartHealthServer(router)
 	dash := dashboard.NewDashboard(aiService, runtimeConfigManager, db, authService, wsManager)
-	dash.RegisterRoutes(router) // This function will need to be adapted for Gin
-
-	// TODO: Adapt authService.Middleware to be a Gin middleware and apply it to the required routes.
-	// For now, no authentication middleware is applied.
+	dash.RegisterRoutes(router)
 
 	dashboardPort := config.AppConfig.Dashboard.Port
 	go func() {
 		addr := fmt.Sprintf(":%d", dashboardPort)
-		slog.Info("Starting HTTP server for health and dashboard...", "addr", addr)
+		telemetry.ZapLogger.Sugar().Info("Starting HTTP server for health and dashboard...", "addr", addr)
 		if err := router.Run(addr); err != nil {
-			slog.Error("HTTP server failed to start", "error", err)
-			os.Exit(1)
+			telemetry.ZapLogger.Sugar().Fatalw("HTTP server failed to start", "error", err)
 		}
 	}()
 
@@ -109,15 +102,14 @@ func main() {
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
-		slog.Info("Gracefully shutting down...")
-		heartbeatTicker.Stop() // Stop the heartbeat ticker
+		telemetry.ZapLogger.Sugar().Info("Gracefully shutting down...")
+		heartbeatTicker.Stop()
 		database.RemoveInstance(db)
 		os.Exit(0)
 	}()
 
-	// bot.Run also needs runtimeConfigManager now
 	if err := bot.Run(db, aiService, runtimeConfigManager, wsManager); err != nil {
-		slog.Error("Bot failed to run", "error", err)
-		os.Exit(1)
+		telemetry.ZapLogger.Sugar().Fatalw("Bot failed to run", "error", err)
 	}
 }
+
