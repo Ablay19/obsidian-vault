@@ -14,6 +14,7 @@ import (
 	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/logger"
 	"obsidian-automation/internal/state"
+	"obsidian-automation/internal/util" // New import
 	"os"
 	"os/signal"
 	"syscall"
@@ -22,6 +23,12 @@ import (
 
 func main() {
 	logger.Setup()
+
+	// Perform external binary check at startup
+	if err := util.CheckExternalBinaries(); err != nil {
+		slog.Error("Startup check failed", "error", err)
+		os.Exit(1)
+	}
 
 	config.LoadConfig() // Still load config for initial setup of things like dashboard port etc.
 
