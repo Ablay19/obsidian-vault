@@ -3,12 +3,12 @@ package bot
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"path/filepath"
 	"strings"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"go.uber.org/zap"
 
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/database"
@@ -252,7 +252,7 @@ func (h *reprocessCommandHandler) createObsidianNoteInternal(filePath, fileType 
 	notePath := filepath.Join("vault", "Inbox", noteFilename)
 	err := os.WriteFile(notePath, []byte(builder.String()), 0644)
 	if err != nil {
-		slog.Error("Error writing note file", "error", err)
+		zap.S().Error("Error writing note file", "error", err)
 		bot.Send(tgbotapi.NewMessage(chatID, "Error saving the note."))
 		return
 	}
@@ -260,11 +260,11 @@ func (h *reprocessCommandHandler) createObsidianNoteInternal(filePath, fileType 
 	// Save to database
 	hash, err := getFileHash(filePath)
 	if err != nil {
-		slog.Error("Error getting file hash", "error", err)
+		zap.S().Error("Error getting file hash", "error", err)
 	} else {
 		err := SaveProcessed(hash, content.Category, content.Text, content.Summary, content.Topics, content.Questions, content.AIProvider, message.From.ID)
 		if err != nil {
-			slog.Error("Error saving processed file to DB", "error", err)
+			zap.S().Error("Error saving processed file to DB", "error", err)
 		}
 	}
 
@@ -371,7 +371,7 @@ func (h *processCommandHandler) Handle(bot Bot, message *tgbotapi.Message, state
 	fileBytes, err := os.ReadFile(state.PendingFile)
 	if err != nil {
 		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "❌ Failed to read staged file."))
-		slog.Error("Read file error", "error", err)
+		zap.S().Error("Read file error", "error", err)
 		return
 	}
 

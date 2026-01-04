@@ -3,12 +3,12 @@ package ai
 import (
 	"context"
 	"io"
-	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/magicx-ai/groq-go/groq"
+	"go.uber.org/zap"
 )
 
 // GroqProvider implements the AIProvider interface for Groq.
@@ -21,7 +21,7 @@ type GroqProvider struct {
 // NewGroqProvider creates a new Groq provider for a single API key.
 func NewGroqProvider(apiKey string, modelName string, httpClient *http.Client) *GroqProvider {
 	if apiKey == "" {
-		slog.Info("Groq API key is empty. Groq AI will be unavailable for this provider instance.")
+		zap.S().Info("Groq API key is empty. Groq AI will be unavailable for this provider instance.")
 		return nil
 	}
 

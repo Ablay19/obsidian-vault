@@ -1,63 +1,59 @@
-# --- Go Builder Stage ---
-FROM golang:alpine AS builder
+# ARG for build-time variables
+ARG GO_VERSION=1.22
+ARG ALPINE_VERSION=3.19
+
+# --- Builder Stage ---
+FROM golang:${GO_VERSION}-alpine AS builder
 
 # Install build dependencies
-RUN apk add --no-cache build-base git 
+RUN apk add --no-cache build-base git
 
-WORKDIR /build
+WORKDIR /src
 
-# Copy only go mod files first for better caching
+# Copy go.mod and go.sum first to leverage Docker cache
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Install templ
-RUN go install github.com/a-h/templ/cmd/templ@latest
-
+# Copy the rest of the source code
 COPY . .
 
 # Generate templ files
-RUN templ generate ./
+RUN go run github.com/a-h/templ/cmd/templ@latest generate
 
 # Build the application
-RUN CGO_ENABLED=1 GOOS=linux go build -o telegram-bot ./cmd/bot
+# Use ldflags to embed version information
+ARG APP_VERSION=v0.0.0-dev
+RUN CGO_ENABLED=0 go build -ldflags="-w -s -X main.version=${APP_VERSION}" -o /app/main ./cmd/bot/main.go
 
-# =====================
-# Runtime Stage
-# =====================
-FROM alpine:latest
+
+# --- Final Stage ---
+FROM alpine:${ALPINE_VERSION}
 
 # Install runtime dependencies
-# Tesseract for OCR, Poppler for PDF handling (pdftotext), Git for vault sync, Pandoc for PDF conversion
+# Tesseract for OCR, Poppler for PDF handling (pdftotext), Git for vault sync
 RUN apk add --no-cache \
   tesseract-ocr \
   poppler-utils \
-  ca-certificates \
-  tzdata \
   git \
-  pandoc \
-  curl \
-  fontconfig \
-  font-noto
+  ca-certificates \
+  tzdata
 
-# Install Tectonic (required by converter for high-fidelity PDF rendering)
-RUN apk add --no-cache tectonic
+# Create a non-root user and group
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-# Security: Create a non-root user
-RUN addgroup -S appgroup && adduser -S -G appgroup -u 1000 appuser
-
+# Set up the application directory
 WORKDIR /app
 
-# Copy application binary from the builder stage
-COPY --from=builder /build/telegram-bot .
+# Copy the compiled binary from the builder stage
+COPY --from=builder /app/main /app/main
 
-# Copy configuration and migrations
+# Copy necessary assets
 COPY config.yml .
-COPY internal/database/migrations/ internal/database/migrations/
-COPY internal/dashboard/static/ internal/dashboard/static/
+COPY internal/dashboard/static/ ./internal/dashboard/static
 
-# Ensure necessary directories exist and have correct permissions
-RUN mkdir -p attachments vault pdfs data && \
-  chown -R appuser:appgroup /app
+# Create directories for data and ensure correct permissions
+RUN mkdir -p attachments vault && \
+    chown -R appuser:appgroup /app
 
 # Switch to the non-root user
 USER appuser
@@ -65,5 +61,5 @@ USER appuser
 # Expose the dashboard port
 EXPOSE 8080
 
-# Run the application
-CMD ["./telegram-bot"]
+# Set the entrypoint
+ENTRYPOINT ["/app/main"]

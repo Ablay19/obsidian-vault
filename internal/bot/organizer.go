@@ -2,10 +2,11 @@ package bot
 
 import (
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
 // organizeNote moves a note to the correct sub-directory based on its category.
@@ -30,6 +31,6 @@ func organizeNote(notePath string, category string) error {
 		return fmt.Errorf("failed to move note from %s to %s: %w", notePath, destPath, err)
 	}
 
-	slog.Info("Organized note", "from", notePath, "to", destPath)
+	zap.S().Info("Organized note", "from", notePath, "to", destPath)
 	return nil
 }

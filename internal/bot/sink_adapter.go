@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log/slog"
 	"obsidian-automation/internal/pipeline"
 	"obsidian-automation/internal/converter"
 	"obsidian-automation/internal/git"
@@ -17,6 +16,7 @@ import (
 	"os"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"go.uber.org/zap"
 )
 
 // BotSink implements pipeline.Sink to save results to Obsidian/Database.
@@ -36,7 +36,7 @@ func (s *BotSink) Save(ctx context.Context, job pipeline.Job, result pipeline.Re
 		return fmt.Errorf("invalid output type")
 	}
 
-	slog.Info("Sink saving result", "job_id", result.JobID, "category", content.Category)
+	zap.S().Info("Sink saving result", "job_id", result.JobID, "category", content.Category)
 
 	// 1. Create Note Content
 	var builder strings.Builder
@@ -87,7 +87,7 @@ func (s *BotSink) Save(ctx context.Context, job pipeline.Job, result pipeline.Re
 		os.MkdirAll("pdfs", 0755)
 		pdfPath = filepath.Join("pdfs", pdfFilename)
 		if err := converter.ConvertMarkdownToPDF(markdownContent, pdfPath); err != nil {
-			slog.Error("PDF conversion failed", "error", err)
+			zap.S().Error("PDF conversion failed", "error", err)
 		}
 	}
 
@@ -100,7 +100,7 @@ func (s *BotSink) Save(ctx context.Context, job pipeline.Job, result pipeline.Re
 	
 	// Use package-level function SaveProcessed (from dedup.go)
 	if err := SaveProcessed(hash, content.Category, content.Text, content.Summary, content.Topics, content.Questions, content.AIProvider, userID); err != nil {
-		slog.Error("Failed to save to DB", "error", err)
+		zap.S().Error("Failed to save to DB", "error", err)
 	}
 
 	// 5. Organize
@@ -111,9 +111,9 @@ func (s *BotSink) Save(ctx context.Context, job pipeline.Job, result pipeline.Re
 		go func() {
 			commitMsg := fmt.Sprintf("chore: auto commit document %s info about %s", noteFilename, content.Category)
 			if err := s.gitManager.SyncAutoCommit(commitMsg); err != nil {
-				slog.Error("Git sync failed", "job_id", job.ID, "error", err)
+				zap.S().Error("Git sync failed", "job_id", job.ID, "error", err)
 			} else {
-				slog.Info("Git sync successful", "job_id", job.ID)
+				zap.S().Info("Git sync successful", "job_id", job.ID)
 			}
 		}()
 	}

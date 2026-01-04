@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"obsidian-automation/internal/security"
 	"os"
 	"strings"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
 // RuntimeConfigManager is the central authority for the bot's runtime configuration.
@@ -40,11 +40,11 @@ func NewRuntimeConfigManager(db *sql.DB) (*RuntimeConfigManager, error) {
 
 	// Load initial state from DB
 	if err := rcm.LoadStateFromDB(); err != nil {
-		slog.Warn("Could not load state from DB, initializing with defaults", "error", err)
+		zap.S().Warn("Could not load state from DB, initializing with defaults", "error", err)
 		// If DB load fails, initialize from .env (bootstrap)
 		rcm.initializeFromEnv()
 	} else {
-		slog.Info("State loaded from DB successfully. Merging keys from environment.")
+		zap.S().Info("State loaded from DB successfully. Merging keys from environment.")
 		rcm.mergeKeysFromEnv()
 	}
 
@@ -66,7 +66,7 @@ func (rcm *RuntimeConfigManager) mergeKeysFromEnv() {
 	// Allow environment variable to override global AI enabled status
 	if viper.IsSet("AI_ENABLED") {
 		rcm.config.AIEnabled = viper.GetBool("AI_ENABLED")
-		slog.Info("AI_ENABLED status overridden by environment variable.", "enabled", rcm.config.AIEnabled)
+		zap.S().Info("AI_ENABLED status overridden by environment variable.", "enabled", rcm.config.AIEnabled)
 	}
 
 	// Re-initialize provider states from env/config to ensure enabled status is correct based on current env
@@ -335,7 +335,7 @@ func (rcm *RuntimeConfigManager) AddAPIKey(providerName, keyValue string, enable
 		IsDefault: false, // Newly added keys are not from .env
 	}
 	
-	slog.Info("New API key added", "provider", providerName, "key_id", keyID)
+	zap.S().Info("New API key added", "provider", providerName, "key_id", keyID)
 	
 	if err := rcm.persistStateToDBUnprotected(); err != nil {
 		return "", err
@@ -349,7 +349,7 @@ func (rcm *RuntimeConfigManager) RemoveAPIKey(keyID string) error {
 	defer rcm.mu.Unlock()
 	if _, ok := rcm.config.APIKeys[keyID]; ok {
 		delete(rcm.config.APIKeys, keyID)
-		slog.Info("API key removed", "key_id", keyID)
+		zap.S().Info("API key removed", "key_id", keyID)
 		return rcm.persistStateToDBUnprotected()
 	}
 	return fmt.Errorf("API key %s not found", keyID)
@@ -400,7 +400,7 @@ func (rcm *RuntimeConfigManager) RotateAPIKey(providerName string) error {
 		if nextKs.Provider == providerName && nextKs.ID != currentKeyID && nextKs.Enabled && !nextKs.Blocked {
 			// Found a new key, mark it active (no need to change anything if it's already enabled and not blocked)
 			// For now, simply finding the next available is enough. The AI service will pick it up.
-			slog.Info("Rotated API key for provider.", "provider", providerName, "new_key_id", nextKs.ID)
+			zap.S().Info("Rotated API key for provider.", "provider", providerName, "new_key_id", nextKs.ID)
 			return rcm.persistStateToDBUnprotected()
 		}
 	}
@@ -456,7 +456,7 @@ func (rcm *RuntimeConfigManager) persistStateToDBUnprotected() error {
 		if ks.Value != "" {
 			encrypted, err := security.Encrypt(ks.Value)
 			if err != nil {
-				slog.Error("Failed to encrypt API key", "key_id", id, "error", err)
+				zap.S().Error("Failed to encrypt API key", "key_id", id, "error", err)
 				continue
 			}
 			ks.EncryptedValue = encrypted
@@ -505,7 +505,7 @@ func (rcm *RuntimeConfigManager) LoadStateFromDB() error {
 		if ks.EncryptedValue != "" {
 			decrypted, err := security.Decrypt(ks.EncryptedValue)
 			if err != nil {
-				slog.Error("Failed to decrypt API key from storage", "key_id", id, "error", err)
+				zap.S().Error("Failed to decrypt API key from storage", "key_id", id, "error", err)
 				continue
 			}
 			ks.Value = decrypted
@@ -517,7 +517,7 @@ func (rcm *RuntimeConfigManager) LoadStateFromDB() error {
 	dirty := false
 	for id, ks := range rcm.config.APIKeys {
 		if !validateAPIKey(ks.Value) {
-			slog.Warn("Removing invalid API key found in DB", "key_id", id, "provider", ks.Provider)
+			zap.S().Warn("Removing invalid API key found in DB", "key_id", id, "provider", ks.Provider)
 			delete(rcm.config.APIKeys, id)
 			dirty = true
 			continue
@@ -526,7 +526,7 @@ func (rcm *RuntimeConfigManager) LoadStateFromDB() error {
 		// Normalize provider name
 		for _, name := range []string{"Gemini", "Groq", "Hugging Face", "OpenRouter"} {
 			if strings.EqualFold(ks.Provider, name) && ks.Provider != name {
-				slog.Info("Normalizing provider name for API key", "old", ks.Provider, "new", name)
+				zap.S().Info("Normalizing provider name for API key", "old", ks.Provider, "new", name)
 				ks.Provider = name
 				rcm.config.APIKeys[id] = ks
 				dirty = true
@@ -541,7 +541,7 @@ func (rcm *RuntimeConfigManager) LoadStateFromDB() error {
 			rcm.mu.Lock()
 			defer rcm.mu.Unlock()
 			if err := rcm.persistStateToDBUnprotected(); err != nil {
-				slog.Error("Failed to persist cleaned state", "error", err)
+				zap.S().Error("Failed to persist cleaned state", "error", err)
 			}
 		}()
 	}

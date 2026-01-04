@@ -2,10 +2,11 @@ package converter
 
 import (
 	"fmt"
-	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"go.uber.org/zap"
 )
 
 // PdfToText converts a PDF file to text using pdftotext command.
@@ -44,7 +45,7 @@ func ConvertMarkdownToPDF(markdownContent, outputPath string) error {
 		return fmt.Errorf("pandoc conversion failed: %w\nOutput: %s", err, string(output))
 	}
 
-	slog.Info("Successfully converted Markdown to PDF using pandoc", "output_path", outputPath)
+	zap.S().Info("Successfully converted Markdown to PDF using pandoc", "output_path", outputPath)
 	return nil
 }
 

@@ -3,9 +3,10 @@ package pipeline
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"sync"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // Pipeline manages the data ingestion flow.
@@ -40,7 +41,7 @@ func NewPipeline(workerCount int, bufferSize int, processor Processor, sinks ...
 
 // Start initializes the workers and starts processing.
 func (p *Pipeline) Start(ctx context.Context) {
-	slog.Info("Starting Ingestion Pipeline", "workers", p.workerCount)
+	zap.S().Info("Starting Ingestion Pipeline", "workers", p.workerCount)
 
 	for i := 0; i < p.workerCount; i++ {
 		p.wg.Add(1)
@@ -57,7 +58,7 @@ func (p *Pipeline) Stop() {
 	close(p.quit)
 	close(p.jobChan) // Stop accepting new jobs
 	p.wg.Wait()
-	slog.Info("Pipeline stopped")
+	zap.S().Info("Pipeline stopped")
 }
 
 // Submit adds a job to the pipeline.
@@ -96,11 +97,11 @@ func (p *Pipeline) worker(ctx context.Context, id int) {
 
 func (p *Pipeline) processJob(ctx context.Context, job Job) {
 	start := time.Now()
-	slog.Debug("Processing job", "job_id", job.ID, "source", job.Source)
+	zap.S().Debug("Processing job", "job_id", job.ID, "source", job.Source)
 
 	// Validation
 	if err := ValidateJob(job); err != nil {
-		slog.Error("Job validation failed", "job_id", job.ID, "error", err)
+		zap.S().Error("Job validation failed", "job_id", job.ID, "error", err)
 		p.results <- jobResultPair{Job: job, Result: Result{JobID: job.ID, Success: false, Error: err, ProcessedAt: time.Now()}}
 		return
 	}
@@ -108,13 +109,13 @@ func (p *Pipeline) processJob(ctx context.Context, job Job) {
 	// Processing
 	res, err := p.processor.Process(ctx, job)
 	if err != nil {
-		slog.Error("Processing failed", "job_id", job.ID, "error", err)
+		zap.S().Error("Processing failed", "job_id", job.ID, "error", err)
 		// Retry Logic could go here (re-queueing)
 		if job.RetryCount < job.MaxRetries {
 			job.RetryCount++
-			slog.Info("Retrying job", "job_id", job.ID, "attempt", job.RetryCount)
+			zap.S().Info("Retrying job", "job_id", job.ID, "attempt", job.RetryCount)
 			// Non-blocking re-queue
-			go p.Submit(job) 
+			go p.Submit(job)
 			return
 		}
 		res = Result{JobID: job.ID, Success: false, Error: err, ProcessedAt: time.Now()}
@@ -139,7 +140,7 @@ func (p *Pipeline) resultHandler(ctx context.Context) {
 			if pair.Result.Success {
 				for _, sink := range p.sinks {
 					if err := sink.Save(ctx, pair.Job, pair.Result); err != nil {
-						slog.Error("Sink save failed", "job_id", pair.Job.ID, "error", err)
+						zap.S().Error("Sink save failed", "job_id", pair.Job.ID, "error", err)
 					}
 				}
 			}

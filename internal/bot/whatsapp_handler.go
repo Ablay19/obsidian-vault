@@ -7,12 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"obsidian-automation/internal/config"
 	"obsidian-automation/internal/pipeline"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // WhatsAppWebhookHandler handles incoming webhook events from the WhatsApp Business API.
@@ -33,30 +34,30 @@ func verifyWebhook(w http.ResponseWriter, r *http.Request) {
 	if verifyToken == config.AppConfig.WhatsApp.VerifyToken {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(challenge))
-		slog.Info("WhatsApp webhook verified successfully")
+		zap.S().Info("WhatsApp webhook verified successfully")
 	} else {
 		w.WriteHeader(http.StatusForbidden)
-		slog.Warn("WhatsApp webhook verification failed")
+		zap.S().Warn("WhatsApp webhook verification failed")
 	}
 }
 
 func handleMessage(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		slog.Error("Failed to read WhatsApp webhook body", "error", err)
+		zap.S().Error("Failed to read WhatsApp webhook body", "error", err)
 		http.Error(w, "Failed to read body", http.StatusBadRequest)
 		return
 	}
 
 	if !validateSignature(r.Header.Get("X-Hub-Signature-256"), body) {
-		slog.Warn("WhatsApp webhook signature validation failed")
+		zap.S().Warn("WhatsApp webhook signature validation failed")
 		http.Error(w, "Signature validation failed", http.StatusForbidden)
 		return
 	}
 
 	var payload WhatsAppWebhookPayload
 	if err := json.Unmarshal(body, &payload); err != nil {
-		slog.Error("Failed to unmarshal WhatsApp webhook payload", "error", err)
+		zap.S().Error("Failed to unmarshal WhatsApp webhook payload", "error", err)
 		http.Error(w, "Failed to unmarshal payload", http.StatusBadRequest)
 		return
 	}
