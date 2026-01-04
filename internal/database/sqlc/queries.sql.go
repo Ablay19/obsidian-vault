@@ -8,20 +8,426 @@ package sqlc
 import (
 	"context"
 	"database/sql"
+	"time"
 )
 
-const createProcessedFile = `-- name: CreateProcessedFile :exec
-INSERT INTO processed_files (hash, category, extracted_text)
-VALUES (?, ?, ?)
+const addInstance = `-- name: AddInstance :exec
+INSERT INTO instances (id, pid, started_at) VALUES (1, ?, ?)
 `
 
-type CreateProcessedFileParams struct {
-	Hash          string         `json:"hash"`
-	Category      string         `json:"category"`
-	ExtractedText sql.NullString `json:"extracted_text"`
+type AddInstanceParams struct {
+	Pid       int64     `json:"pid"`
+	StartedAt time.Time `json:"started_at"`
 }
 
-func (q *Queries) CreateProcessedFile(ctx context.Context, arg CreateProcessedFileParams) error {
-	_, err := q.db.ExecContext(ctx, createProcessedFile, arg.Hash, arg.Category, arg.ExtractedText)
+func (q *Queries) AddInstance(ctx context.Context, arg AddInstanceParams) error {
+	_, err := q.db.ExecContext(ctx, addInstance, arg.Pid, arg.StartedAt)
+	return err
+}
+
+const deleteInstance = `-- name: DeleteInstance :exec
+DELETE FROM instances WHERE id = 1
+`
+
+func (q *Queries) DeleteInstance(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteInstance)
+	return err
+}
+
+const fileExistsByHash = `-- name: FileExistsByHash :one
+SELECT 1 FROM processed_files WHERE hash = ?
+`
+
+func (q *Queries) FileExistsByHash(ctx context.Context, hash string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, fileExistsByHash, hash)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const getAllProcessedFiles = `-- name: GetAllProcessedFiles :many
+SELECT id, hash, file_name, file_path, content_type, status, summary, topics, questions, ai_provider, user_id, created_at, updated_at FROM processed_files ORDER BY created_at DESC
+`
+
+func (q *Queries) GetAllProcessedFiles(ctx context.Context) ([]ProcessedFile, error) {
+	rows, err := q.db.QueryContext(ctx, getAllProcessedFiles)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ProcessedFile
+	for rows.Next() {
+		var i ProcessedFile
+		if err := rows.Scan(
+			&i.ID,
+			&i.Hash,
+			&i.FileName,
+			&i.FilePath,
+			&i.ContentType,
+			&i.Status,
+			&i.Summary,
+			&i.Topics,
+			&i.Questions,
+			&i.AiProvider,
+			&i.UserID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getInstancePID = `-- name: GetInstancePID :one
+SELECT pid FROM instances WHERE id = 1
+`
+
+func (q *Queries) GetInstancePID(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getInstancePID)
+	var pid int64
+	err := row.Scan(&pid)
+	return pid, err
+}
+
+const getProcessedFileCounts = `-- name: GetProcessedFileCounts :one
+SELECT COUNT(id) AS total_files,
+       COUNT(CASE WHEN content_type LIKE 'image/%' THEN 1 END) AS image_files,
+       COUNT(CASE WHEN content_type = 'application/pdf' THEN 1 END) AS pdf_files,
+       MAX(created_at) AS last_activity
+FROM processed_files
+`
+
+type GetProcessedFileCountsRow struct {
+	TotalFiles   int64       `json:"total_files"`
+	ImageFiles   int64       `json:"image_files"`
+	PdfFiles     int64       `json:"pdf_files"`
+	LastActivity interface{} `json:"last_activity"`
+}
+
+func (q *Queries) GetProcessedFileCounts(ctx context.Context) (GetProcessedFileCountsRow, error) {
+	row := q.db.QueryRowContext(ctx, getProcessedFileCounts)
+	var i GetProcessedFileCountsRow
+	err := row.Scan(
+		&i.TotalFiles,
+		&i.ImageFiles,
+		&i.PdfFiles,
+		&i.LastActivity,
+	)
+	return i, err
+}
+
+const getRecentProcessedFiles = `-- name: GetRecentProcessedFiles :many
+SELECT id, hash, file_name, file_path, content_type, status, summary, topics, questions, ai_provider, user_id, created_at, updated_at FROM processed_files ORDER BY created_at DESC LIMIT 10
+`
+
+func (q *Queries) GetRecentProcessedFiles(ctx context.Context) ([]ProcessedFile, error) {
+	rows, err := q.db.QueryContext(ctx, getRecentProcessedFiles)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ProcessedFile
+	for rows.Next() {
+		var i ProcessedFile
+		if err := rows.Scan(
+			&i.ID,
+			&i.Hash,
+			&i.FileName,
+			&i.FilePath,
+			&i.ContentType,
+			&i.Status,
+			&i.Summary,
+			&i.Topics,
+			&i.Questions,
+			&i.AiProvider,
+			&i.UserID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const insertProcessedFile = `-- name: InsertProcessedFile :exec
+INSERT INTO processed_files (hash, file_name, file_path, content_type, status, summary, topics, questions, ai_provider, user_id, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`
+
+type InsertProcessedFileParams struct {
+	Hash        string         `json:"hash"`
+	FileName    string         `json:"file_name"`
+	FilePath    string         `json:"file_path"`
+	ContentType sql.NullString `json:"content_type"`
+	Status      string         `json:"status"`
+	Summary     sql.NullString `json:"summary"`
+	Topics      sql.NullString `json:"topics"`
+	Questions   sql.NullString `json:"questions"`
+	AiProvider  sql.NullString `json:"ai_provider"`
+	UserID      sql.NullInt64  `json:"user_id"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   sql.NullTime   `json:"updated_at"`
+}
+
+func (q *Queries) InsertProcessedFile(ctx context.Context, arg InsertProcessedFileParams) error {
+	_, err := q.db.ExecContext(ctx, insertProcessedFile,
+		arg.Hash,
+		arg.FileName,
+		arg.FilePath,
+		arg.ContentType,
+		arg.Status,
+		arg.Summary,
+		arg.Topics,
+		arg.Questions,
+		arg.AiProvider,
+		arg.UserID,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
+const linkTelegramToEmailByEmail = `-- name: LinkTelegramToEmailByEmail :exec
+UPDATE users
+SET telegram_id = ?
+WHERE email = ?
+`
+
+type LinkTelegramToEmailByEmailParams struct {
+	TelegramID sql.NullInt64  `json:"telegram_id"`
+	Email      sql.NullString `json:"email"`
+}
+
+func (q *Queries) LinkTelegramToEmailByEmail(ctx context.Context, arg LinkTelegramToEmailByEmailParams) error {
+	_, err := q.db.ExecContext(ctx, linkTelegramToEmailByEmail, arg.TelegramID, arg.Email)
+	return err
+}
+
+const linkTelegramToEmailByID = `-- name: LinkTelegramToEmailByID :exec
+UPDATE users
+SET email = ?
+WHERE id = ? AND email IS NULL
+`
+
+type LinkTelegramToEmailByIDParams struct {
+	Email sql.NullString `json:"email"`
+	ID    int64          `json:"id"`
+}
+
+func (q *Queries) LinkTelegramToEmailByID(ctx context.Context, arg LinkTelegramToEmailByIDParams) error {
+	_, err := q.db.ExecContext(ctx, linkTelegramToEmailByID, arg.Email, arg.ID)
+	return err
+}
+
+const listChatMessages = `-- name: ListChatMessages :many
+SELECT id, user_id, chat_id, message_id, direction, content_type, text_content, file_path, created_at
+FROM chat_history
+WHERE user_id = ?
+ORDER BY created_at DESC
+LIMIT ?
+`
+
+type ListChatMessagesParams struct {
+	UserID int64 `json:"user_id"`
+	Limit  int64 `json:"limit"`
+}
+
+func (q *Queries) ListChatMessages(ctx context.Context, arg ListChatMessagesParams) ([]ChatHistory, error) {
+	rows, err := q.db.QueryContext(ctx, listChatMessages, arg.UserID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ChatHistory
+	for rows.Next() {
+		var i ChatHistory
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.ChatID,
+			&i.MessageID,
+			&i.Direction,
+			&i.ContentType,
+			&i.TextContent,
+			&i.FilePath,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listChatMessagesGlobal = `-- name: ListChatMessagesGlobal :many
+SELECT id, user_id, chat_id, message_id, direction, content_type, text_content, file_path, created_at
+FROM chat_history
+ORDER BY created_at DESC
+LIMIT ?
+`
+
+func (q *Queries) ListChatMessagesGlobal(ctx context.Context, limit int64) ([]ChatHistory, error) {
+	rows, err := q.db.QueryContext(ctx, listChatMessagesGlobal, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ChatHistory
+	for rows.Next() {
+		var i ChatHistory
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.ChatID,
+			&i.MessageID,
+			&i.Direction,
+			&i.ContentType,
+			&i.TextContent,
+			&i.FilePath,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUsers = `-- name: ListUsers :many
+SELECT id, username, first_name, last_name, language_code, created_at FROM users ORDER BY created_at DESC
+`
+
+type ListUsersRow struct {
+	ID           int64          `json:"id"`
+	Username     sql.NullString `json:"username"`
+	FirstName    sql.NullString `json:"first_name"`
+	LastName     sql.NullString `json:"last_name"`
+	LanguageCode sql.NullString `json:"language_code"`
+	CreatedAt    time.Time      `json:"created_at"`
+}
+
+func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUsersRow
+	for rows.Next() {
+		var i ListUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.FirstName,
+			&i.LastName,
+			&i.LanguageCode,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const saveChatMessage = `-- name: SaveChatMessage :exec
+INSERT INTO chat_history (user_id, chat_id, message_id, direction, content_type, text_content, file_path, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+`
+
+type SaveChatMessageParams struct {
+	UserID      int64          `json:"user_id"`
+	ChatID      int64          `json:"chat_id"`
+	MessageID   int64          `json:"message_id"`
+	Direction   string         `json:"direction"`
+	ContentType string         `json:"content_type"`
+	TextContent sql.NullString `json:"text_content"`
+	FilePath    sql.NullString `json:"file_path"`
+	CreatedAt   time.Time      `json:"created_at"`
+}
+
+func (q *Queries) SaveChatMessage(ctx context.Context, arg SaveChatMessageParams) error {
+	_, err := q.db.ExecContext(ctx, saveChatMessage,
+		arg.UserID,
+		arg.ChatID,
+		arg.MessageID,
+		arg.Direction,
+		arg.ContentType,
+		arg.TextContent,
+		arg.FilePath,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const updateInstanceHeartbeat = `-- name: UpdateInstanceHeartbeat :exec
+UPDATE instances SET started_at = ? WHERE id = 1
+`
+
+func (q *Queries) UpdateInstanceHeartbeat(ctx context.Context, startedAt time.Time) error {
+	_, err := q.db.ExecContext(ctx, updateInstanceHeartbeat, startedAt)
+	return err
+}
+
+const upsertUser = `-- name: UpsertUser :exec
+INSERT INTO users (id, username, first_name, last_name, language_code)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+	username = excluded.username,
+	first_name = excluded.first_name,
+	last_name = excluded.last_name,
+	language_code = excluded.language_code
+`
+
+type UpsertUserParams struct {
+	ID           int64          `json:"id"`
+	Username     sql.NullString `json:"username"`
+	FirstName    sql.NullString `json:"first_name"`
+	LastName     sql.NullString `json:"last_name"`
+	LanguageCode sql.NullString `json:"language_code"`
+}
+
+func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) error {
+	_, err := q.db.ExecContext(ctx, upsertUser,
+		arg.ID,
+		arg.Username,
+		arg.FirstName,
+		arg.LastName,
+		arg.LanguageCode,
+	)
 	return err
 }

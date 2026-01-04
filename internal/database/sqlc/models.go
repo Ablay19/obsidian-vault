@@ -9,6 +9,18 @@ import (
 	"time"
 )
 
+type ChatHistory struct {
+	ID          int64          `json:"id"`
+	UserID      int64          `json:"user_id"`
+	ChatID      int64          `json:"chat_id"`
+	MessageID   int64          `json:"message_id"`
+	Direction   string         `json:"direction"`
+	ContentType string         `json:"content_type"`
+	TextContent sql.NullString `json:"text_content"`
+	FilePath    sql.NullString `json:"file_path"`
+	CreatedAt   time.Time      `json:"created_at"`
+}
+
 type Instance struct {
 	ID        int64     `json:"id"`
 	Pid       int64     `json:"pid"`
@@ -16,9 +28,34 @@ type Instance struct {
 }
 
 type ProcessedFile struct {
-	ID            int64          `json:"id"`
-	Hash          string         `json:"hash"`
-	Category      string         `json:"category"`
-	Timestamp     time.Time      `json:"timestamp"`
-	ExtractedText sql.NullString `json:"extracted_text"`
+	ID          int64          `json:"id"`
+	Hash        string         `json:"hash"`
+	FileName    string         `json:"file_name"`
+	FilePath    string         `json:"file_path"`
+	ContentType sql.NullString `json:"content_type"`
+	Status      string         `json:"status"`
+	Summary     sql.NullString `json:"summary"`
+	Topics      sql.NullString `json:"topics"`
+	Questions   sql.NullString `json:"questions"`
+	AiProvider  sql.NullString `json:"ai_provider"`
+	UserID      sql.NullInt64  `json:"user_id"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   sql.NullTime   `json:"updated_at"`
+}
+
+type RuntimeConfig struct {
+	ID         int64        `json:"id"`
+	ConfigData []byte       `json:"config_data"`
+	UpdatedAt  sql.NullTime `json:"updated_at"`
+}
+
+type User struct {
+	ID           int64          `json:"id"`
+	Username     sql.NullString `json:"username"`
+	FirstName    sql.NullString `json:"first_name"`
+	LastName     sql.NullString `json:"last_name"`
+	LanguageCode sql.NullString `json:"language_code"`
+	TelegramID   sql.NullInt64  `json:"telegram_id"`
+	Email        sql.NullString `json:"email"`
+	CreatedAt    time.Time      `json:"created_at"`
 }

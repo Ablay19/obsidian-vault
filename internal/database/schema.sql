@@ -4,6 +4,7 @@
 -- Table: processed_files
 CREATE TABLE IF NOT EXISTS processed_files (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hash TEXT UNIQUE NOT NULL, -- Added hash column for deduplication
     file_name TEXT NOT NULL,
     file_path TEXT NOT NULL,
     content_type TEXT,
@@ -42,6 +43,8 @@ CREATE TABLE IF NOT EXISTS users (
     first_name TEXT,
     last_name TEXT,
     language_code TEXT,
+    telegram_id BIGINT UNIQUE,
+    email TEXT UNIQUE,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

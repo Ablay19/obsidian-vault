@@ -39,13 +39,15 @@ func main() {
 
 	config.LoadConfig()
 
-	db := database.OpenDB()
-	defer db.Close()
+	dbClient := database.OpenDB() // Renamed for clarity
+	defer dbClient.DB.Close()
 
-	database.RunMigrations(db)
+	database.RunMigrations(dbClient.DB) // Pass the raw *sql.DB for migrations
+
+	ctx := context.Background()
 
 	for {
-		if err := database.CheckExistingInstance(db); err != nil {
+		if err := database.CheckExistingInstance(ctx); err != nil {
 			telemetry.ZapLogger.Sugar().Info("Another instance is running, retrying in 15 seconds...", "error", err)
 			time.Sleep(15 * time.Second)
 		} else {
@@ -53,25 +55,24 @@ func main() {
 		}
 	}
 
-	if err := database.AddInstance(db); err != nil {
+	if err := database.AddInstance(ctx, os.Getpid()); err != nil { // Pass PID
 		telemetry.ZapLogger.Sugar().Fatalw("Error adding instance", "error", err)
 	}
 
 	heartbeatTicker := time.NewTicker(database.HEARTBEAT_THRESHOLD / 2)
 	go func() {
 		for range heartbeatTicker.C {
-			if err := database.UpdateInstanceHeartbeat(db); err != nil {
+			if err := database.UpdateInstanceHeartbeat(ctx); err != nil { // Pass context
 				telemetry.ZapLogger.Sugar().Errorw("Error updating instance heartbeat", "error", err)
 			}
 		}
 	}()
 
-	runtimeConfigManager, err := state.NewRuntimeConfigManager(db)
+	runtimeConfigManager, err := state.NewRuntimeConfigManager(dbClient.DB) // Pass raw *sql.DB
 	if err != nil {
 		telemetry.ZapLogger.Sugar().Fatalw("Failed to initialize state manager", "error", err)
 	}
 
-	ctx := context.Background()
 	aiService := ai.NewAIService(ctx, runtimeConfigManager, config.AppConfig.ProviderProfiles, config.AppConfig.SwitchingRules)
 	if aiService == nil {
 		telemetry.ZapLogger.Sugar().Info("AI Service failed to initialize. No AI providers available or configured. Proceeding without AI features.")
@@ -86,7 +87,7 @@ func main() {
 
 	router.POST("/api/v1/whatsapp/webhook", gin.WrapF(bot.WhatsAppWebhookHandler))
 	bot.StartHealthServer(router)
-	dash := dashboard.NewDashboard(aiService, runtimeConfigManager, db, authService, wsManager)
+	dash := dashboard.NewDashboard(aiService, runtimeConfigManager, dbClient.DB, authService, wsManager) // Pass raw *sql.DB
 	dash.RegisterRoutes(router)
 
 	dashboardPort := config.AppConfig.Dashboard.Port
@@ -104,12 +105,11 @@ func main() {
 		<-c
 		telemetry.ZapLogger.Sugar().Info("Gracefully shutting down...")
 		heartbeatTicker.Stop()
-		database.RemoveInstance(db)
+		database.RemoveInstance(ctx) // Pass context
 		os.Exit(0)
 	}()
 
-	if err := bot.Run(db, aiService, runtimeConfigManager, wsManager); err != nil {
+	if err := bot.Run(dbClient.DB, aiService, runtimeConfigManager, wsManager); err != nil { // Pass raw *sql.DB
 		telemetry.ZapLogger.Sugar().Fatalw("Bot failed to run", "error", err)
 	}
 }
-

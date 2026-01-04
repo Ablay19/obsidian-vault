@@ -1,45 +1,60 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
+	"syscall" // Added for syscall.Signal
+	"time"
+
+	"obsidian-automation/internal/database/sqlc" // sqlc generated code
+	"obsidian-automation/internal/telemetry"     // Use new structured logger
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
-	"go.uber.org/zap"
 )
 
-var DB *sql.DB
+// DBClient combines the raw *sql.DB and the sqlc-generated Queries.
+type DBClient struct {
+	DB      *sql.DB
+	Queries *sqlc.Queries
+}
 
-func OpenDB() *sql.DB {
+var Client *DBClient
+
+// OpenDB initializes the database connection and sqlc queries.
+func OpenDB() *DBClient {
 	url := os.Getenv("TURSO_DATABASE_URL")
 	token := os.Getenv("TURSO_AUTH_TOKEN")
 
 	if url == "" || token == "" {
-		fmt.Fprintf(os.Stderr, "FATAL: TURSO_DATABASE_URL or TURSO_AUTH_TOKEN is missing. Please check your environment or .env file.\n")
-		zap.S().Error("TURSO_DATABASE_URL or TURSO_AUTH_TOKEN is missing")
-		os.Exit(1)
+		telemetry.ZapLogger.Sugar().Fatalw("TURSO_DATABASE_URL or TURSO_AUTH_TOKEN is missing",
+			"TURSO_DATABASE_URL", url != "",
+			"TURSO_AUTH_TOKEN", token != "",
+		)
 	}
 
 	dsn := url + "?authToken=" + token
 
 	db, err := sql.Open("libsql", dsn)
 	if err != nil {
-		zap.S().Error("Failed to open database", "error", err)
-		os.Exit(1)
+		telemetry.ZapLogger.Sugar().Fatalw("Failed to open database", "error", err)
 	}
-	DB = db
-	return db
+
+	Client = &DBClient{
+		DB:      db,
+		Queries: sqlc.New(db),
+	}
+	return Client
 }
 
 // RunMigrations applies database migrations using a custom runner.
 func RunMigrations(db *sql.DB) {
-	zap.S().Info("Applying database migrations...")
+	telemetry.ZapLogger.Sugar().Info("Applying database migrations...")
 
 	// Create schema_migrations table if it doesn't exist
 	createMigrationsTableSQL := `
@@ -50,16 +65,14 @@ func RunMigrations(db *sql.DB) {
 	);
 `
 	if _, err := db.Exec(createMigrationsTableSQL); err != nil {
-		zap.S().Error("Failed to create schema_migrations table", "error", err)
-		os.Exit(1)
+		telemetry.ZapLogger.Sugar().Fatalw("Failed to create schema_migrations table", "error", err)
 	}
 
 	// Get all migration files from the migrations directory
 	var migrationPaths []string
 	files, err := os.ReadDir("./internal/database/migrations")
 	if err != nil {
-		zap.S().Error("Failed to read migration directory", "error", err)
-		os.Exit(1)
+		telemetry.ZapLogger.Sugar().Fatalw("Failed to read migration directory", "error", err)
 	}
 
 	for _, fileInfo := range files {
@@ -78,138 +91,157 @@ func RunMigrations(db *sql.DB) {
 		var count int
 		err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE name = ?", migrationName).Scan(&count)
 		if err != nil {
-			zap.S().Error("Failed to check migration status", "migration", migrationName, "error", err)
-			os.Exit(1)
+			telemetry.ZapLogger.Sugar().Fatalw("Failed to check migration status", "migration", migrationName, "error", err)
 		}
 		if count > 0 {
-			zap.S().Info("Migration already applied, skipping.", "migration", migrationName)
+			telemetry.ZapLogger.Sugar().Infow("Migration already applied, skipping.", "migration", migrationName)
 			continue
 		}
 
 		// Apply migration
 		sqlContent, err := os.ReadFile(path)
 		if err != nil {
-			zap.S().Error("Failed to read migration file", "migration", migrationName, "error", err)
-			os.Exit(1)
+			telemetry.ZapLogger.Sugar().Fatalw("Failed to read migration file", "migration", migrationName, "error", err)
 		}
 
-		if err := executeSQL(db, string(sqlContent)); err != nil {
-			zap.S().Error("Failed to apply migration", "migration", migrationName, "error", err)
-			os.Exit(1)
+		// Execute each statement in the migration file
+		for _, stmt := range strings.Split(string(sqlContent), ";") {
+			trimmedStmt := strings.TrimSpace(stmt)
+			if trimmedStmt == "" {
+				continue
+			}
+			if _, err := db.Exec(trimmedStmt); err != nil {
+				// Handle specific SQLite errors for "duplicate column" if it's an ALTER TABLE ADD COLUMN
+				if strings.Contains(strings.ToLower(err.Error()), "duplicate column name") && strings.Contains(strings.ToLower(trimmedStmt), "alter table") && strings.Contains(strings.ToLower(trimmedStmt), "add column") {
+					telemetry.ZapLogger.Sugar().Warnw("Skipping ALTER TABLE ADD COLUMN due to duplicate column name (likely already applied)", "migration", migrationName, "statement", trimmedStmt, "error", err)
+				} else {
+					telemetry.ZapLogger.Sugar().Fatalw("Failed to execute SQL statement", "migration", migrationName, "statement", trimmedStmt, "error", err)
+				}
+			}
 		}
 
 		// Record migration as applied
 		if _, err := db.Exec("INSERT INTO schema_migrations (name) VALUES (?)", migrationName); err != nil {
-			zap.S().Error("Failed to record migration", "migration", migrationName, "error", err)
-			os.Exit(1)
+			telemetry.ZapLogger.Sugar().Fatalw("Failed to record migration", "migration", migrationName, "error", err)
 		}
-		zap.S().Info("Migration applied successfully.", "migration", migrationName)
+		telemetry.ZapLogger.Sugar().Infow("Migration applied successfully.", "migration", migrationName)
 	}
 
-	zap.S().Info("Database migrations applied successfully.")
+	telemetry.ZapLogger.Sugar().Info("Database migrations applied successfully.")
 }
 
-// columnExists checks if a column exists in a given table.
-func columnExists(db *sql.DB, tableName, columnName string) (bool, error) {
-	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", tableName))
+// CheckExistingInstance checks if another bot instance is running.
+func CheckExistingInstance(ctx context.Context) error {
+	pid, err := Client.Queries.GetInstancePID(ctx)
 	if err != nil {
-		return false, fmt.Errorf("failed to query table info for %s: %w", tableName, err)
+		if err == sql.ErrNoRows {
+			return nil // No instance found, safe to start
+		}
+		return fmt.Errorf("failed to get instance PID: %w", err)
 	}
-	defer rows.Close()
 
-	for rows.Next() {
-		var (
-			cid      int
-			name     string
-			ctype    string
-			notnull  int
-			dflt_val sql.NullString
-			pk       int
-		)
-		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt_val, &pk); err != nil {
-			return false, fmt.Errorf("failed to scan table info row: %w", err)
+	// Check if the process with pid is still running
+	if !isProcessRunning(int(pid)) {
+		telemetry.ZapLogger.Sugar().Warnw("Stale PID found, removing and starting new instance", "pid", pid)
+		if err := Client.Queries.DeleteInstance(ctx); err != nil {
+			telemetry.ZapLogger.Sugar().Errorw("Failed to delete stale instance", "pid", pid, "error", err)
 		}
-		if strings.EqualFold(name, columnName) {
-			return true, nil
-		}
+		return nil
 	}
-	return false, nil
+	return fmt.Errorf("instance with PID %d already running", pid)
 }
 
-// executeSQL executes SQL content, handling ALTER TABLE ADD COLUMN idempotently.
-func executeSQL(db *sql.DB, sqlContent string) error {
-	statements := strings.Split(sqlContent, ";")
-	for _, stmt := range statements {
-		trimmedStmt := strings.TrimSpace(stmt)
-		if trimmedStmt == "" {
-			continue
-		}
+// AddInstance records the current bot instance's PID and start time.
+func AddInstance(ctx context.Context, pid int) error {
+	return Client.Queries.AddInstance(ctx, sqlc.AddInstanceParams{
+		Pid:       int64(pid),
+		StartedAt: time.Now(),
+	})
+}
 
-		// Remove comments for regex matching
-		lines := strings.Split(trimmedStmt, "\n")
-		var cleanStmtLines []string
-		for _, line := range lines {
-			trimmedLine := strings.TrimSpace(line)
-			if trimmedLine != "" && !strings.HasPrefix(trimmedLine, "--") {
-				cleanStmtLines = append(cleanStmtLines, trimmedLine)
-			}
-		}
-		cleanStmt := strings.Join(cleanStmtLines, " ")
+// RemoveInstance deletes the current bot instance record.
+func RemoveInstance(ctx context.Context) error {
+	return Client.Queries.DeleteInstance(ctx)
+}
 
-		// Simplified regex to just get the table and column name from ADD [COLUMN]
-		re := regexp.MustCompile(`(?i)ALTER\s+TABLE\s+(\S+)\s+ADD\s+(?:COLUMN\s+)?(\S+)`)
-		matches := re.FindStringSubmatch(cleanStmt)
-		if len(matches) == 3 {
-			tableName := matches[1]
-			columnName := matches[2]
-			exists, err := columnExists(db, tableName, columnName)
-			if err != nil {
-				return fmt.Errorf("failed to check column existence for %s.%s: %w", tableName, columnName, err)
-			}
-			if exists {
-				continue
-			}
-		}
+// UpdateInstanceHeartbeat updates the timestamp of the running instance.
+func UpdateInstanceHeartbeat(ctx context.Context) error {
+	return Client.Queries.UpdateInstanceHeartbeat(ctx, time.Now())
+}
 
-		if _, err := db.Exec(trimmedStmt); err != nil {
-			return fmt.Errorf("failed to execute SQL statement '%s': %w", trimmedStmt, err)
-		}
+// SaveMessage saves a chat message to the database.
+func SaveMessage(ctx context.Context, userID, chatID int64, messageID int, direction, contentType, textContent, filePath string) error {
+	return Client.Queries.SaveChatMessage(ctx, sqlc.SaveChatMessageParams{
+		UserID:      userID,
+		ChatID:      chatID,
+		MessageID:   int64(messageID),
+		Direction:   direction,
+		ContentType: contentType,
+		TextContent: sql.NullString{String: textContent, Valid: textContent != ""},
+		FilePath:    sql.NullString{String: filePath, Valid: filePath != ""},
+		CreatedAt:   time.Now(),
+	})
+}
+
+// GetChatHistory retrieves chat messages for a user.
+func GetChatHistory(ctx context.Context, userID int64, limit int) ([]sqlc.ChatHistory, error) {
+	if userID == 0 { // Global history (e.g., for dashboard, or if a global user_id is intended)
+		return Client.Queries.ListChatMessagesGlobal(ctx, int64(limit))
 	}
-	return nil
+	return Client.Queries.ListChatMessages(ctx, sqlc.ListChatMessagesParams{
+		UserID: userID,
+		Limit:  int64(limit),
+	})
 }
 
 // UpsertUser inserts or updates user information in the database.
-func UpsertUser(user *tgbotapi.User) error {
-	_, err := DB.Exec(`
-		INSERT INTO users (id, username, first_name, last_name, language_code)
-		VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT(id) DO UPDATE SET
-			username = excluded.username,
-			first_name = excluded.first_name,
-			last_name = excluded.last_name,
-			language_code = excluded.language_code
-	`,
-		user.ID, user.UserName, user.FirstName, user.LastName, user.LanguageCode)
-	return err
+func UpsertUser(ctx context.Context, user *tgbotapi.User) error {
+	return Client.Queries.UpsertUser(ctx, sqlc.UpsertUserParams{
+		ID:           user.ID,
+		Username:     sql.NullString{String: user.UserName, Valid: user.UserName != ""},
+		FirstName:    sql.NullString{String: user.FirstName, Valid: user.FirstName != ""},
+		LastName:     sql.NullString{String: user.LastName, Valid: user.LastName != ""},
+		LanguageCode: sql.NullString{String: user.LanguageCode, Valid: user.LanguageCode != ""},
+	})
 }
 
 // LinkTelegramToEmail associates a Telegram user ID with an existing email-based account.
-func LinkTelegramToEmail(telegramID int64, email string) error {
-	_, err := DB.Exec(`
-		UPDATE users 
-		SET telegram_id = ? 
-		WHERE email = ?
-	`, telegramID, email)
+func LinkTelegramToEmail(ctx context.Context, telegramID int64, email string) error {
+	tx, err := Client.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
+	qtx := Client.Queries.WithTx(tx)
+
+	// Update user by email to add telegram_id
+	if err := qtx.LinkTelegramToEmailByEmail(ctx, sqlc.LinkTelegramToEmailByEmailParams{
+		TelegramID: sql.NullInt64{Int64: telegramID, Valid: true},
+		Email:      sql.NullString{String: email, Valid: email != ""}, // email also needs to be NullString
+	}); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to link telegram by email: %w", err)
+	}
 
 	// Also update the record where ID is telegramID if it doesn't have an email
-	_, err = DB.Exec(`
-		UPDATE users 
-		SET email = ? 
-		WHERE id = ? AND email IS NULL
-	`, email, telegramID)
+	if err := qtx.LinkTelegramToEmailByID(ctx, sqlc.LinkTelegramToEmailByIDParams{
+		Email:      sql.NullString{String: email, Valid: email != ""},
+		ID:         telegramID, // Assuming telegramID is used as the user's ID in the users table for telegram-originated users
+	}); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to link telegram by ID: %w", err)
+	}
 
-	return err
+	return tx.Commit()
 }
+
+// isProcessRunning checks if a process with the given PID is currently running.
+func isProcessRunning(pid int) bool {
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	// Sending signal 0 to a process checks its existence without killing it.
+	// It returns an error if the process does not exist.
+	return process.Signal(syscall.Signal(0)) == nil // Changed to syscall.Signal
+}
+

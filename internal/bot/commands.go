@@ -7,13 +7,13 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"go.uber.org/zap"
 
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/pipeline"
 	"obsidian-automation/internal/state"
 	"obsidian-automation/internal/status"
+	"obsidian-automation/internal/telemetry"
 	"obsidian-automation/internal/util"
 	"os"
 	"strconv"
@@ -28,7 +28,7 @@ type startCommandHandler struct{}
 func (h *startCommandHandler) Handle(bot Bot, message *tgbotapi.Message, state *UserState) {
 	msg := tgbotapi.NewMessage(message.Chat.ID, helpMessage)
 	sent, _ := bot.Send(msg)
-	database.SaveMessage(message.From.ID, message.Chat.ID, sent.MessageID, "out", "text", msg.Text, "")
+	database.SaveMessage(context.Background(), message.From.ID, message.Chat.ID, sent.MessageID, "out", "text", msg.Text, "")
 }
 
 type helpCommandHandler struct{}
@@ -36,7 +36,7 @@ type helpCommandHandler struct{}
 func (h *helpCommandHandler) Handle(bot Bot, message *tgbotapi.Message, state *UserState) {
 	msg := tgbotapi.NewMessage(message.Chat.ID, helpMessage)
 	sent, _ := bot.Send(msg)
-	database.SaveMessage(message.From.ID, message.Chat.ID, sent.MessageID, "out", "text", msg.Text, "")
+	database.SaveMessage(context.Background(), message.From.ID, message.Chat.ID, sent.MessageID, "out", "text", msg.Text, "")
 }
 
 type langCommandHandler struct{}
@@ -223,7 +223,7 @@ func (h *pauseBotCommandHandler) Handle(bot Bot, message *tgbotapi.Message, stat
 	status.SetPaused(true)
 	msg := tgbotapi.NewMessage(message.Chat.ID, "Bot is paused.")
 	sent, _ := bot.Send(msg)
-	database.SaveMessage(message.From.ID, message.Chat.ID, sent.MessageID, "out", "text", msg.Text, "")
+	database.SaveMessage(context.Background(), message.From.ID, message.Chat.ID, sent.MessageID, "out", "text", msg.Text, "")
 }
 
 type resumeBotCommandHandler struct{}
@@ -232,7 +232,7 @@ func (h *resumeBotCommandHandler) Handle(bot Bot, message *tgbotapi.Message, sta
 	status.SetPaused(false)
 	msg := tgbotapi.NewMessage(message.Chat.ID, "Bot is resumed.")
 	sent, _ := bot.Send(msg)
-	database.SaveMessage(message.From.ID, message.Chat.ID, sent.MessageID, "out", "text", msg.Text, "")
+	database.SaveMessage(context.Background(), message.From.ID, message.Chat.ID, sent.MessageID, "out", "text", msg.Text, "")
 }
 
 type processCommandHandler struct {
@@ -256,7 +256,7 @@ func (h *processCommandHandler) Handle(bot Bot, message *tgbotapi.Message, state
 	fileBytes, err := os.ReadFile(state.PendingFile)
 	if err != nil {
 		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "❌ Failed to read staged file."))
-		zap.S().Error("Read file error", "error", err)
+		telemetry.ZapLogger.Sugar().Errorw("Read file error", "error", err)
 		return
 	}
 

@@ -87,7 +87,7 @@ func (s *BotSink) Save(ctx context.Context, job pipeline.Job, result pipeline.Re
 		os.MkdirAll("pdfs", 0755)
 		pdfPath = filepath.Join("pdfs", pdfFilename)
 		if err := converter.ConvertMarkdownToPDF(markdownContent, pdfPath); err != nil {
-			zap.S().Error("PDF conversion failed", "error", err)
+			telemetry.ZapLogger.Sugar().Errorw("PDF conversion failed", "error", err)
 		}
 	}
 
@@ -99,21 +99,34 @@ func (s *BotSink) Save(ctx context.Context, job pipeline.Job, result pipeline.Re
 	userID, _ := strconv.ParseInt(job.UserContext.UserID, 10, 64)
 
 	// Use package-level function SaveProcessed (from dedup.go)
-	if err := SaveProcessed(hash, content.Category, content.Text, content.Summary, content.Topics, content.Questions, content.AIProvider, userID); err != nil {
-		zap.S().Error("Failed to save to DB", "error", err)
+	if err := SaveProcessed(
+		ctx,
+		hash,
+		filepath.Base(job.FileLocalPath),
+		job.FileLocalPath,
+		job.ContentType.String(),
+		content.Category,
+		content.Text,
+		content.Summary,
+		content.Topics,
+		content.Questions,
+		content.AIProvider,
+		userID,
+	); err != nil {
+		telemetry.ZapLogger.Sugar().Errorw("Failed to save to DB", "error", err)
 	}
 
-	// 5. Organize
-	organizeNote(notePath, content.Category)
+	// 5. Organize - this functionality has been removed, manual organization expected for now
+	// organizeNote(notePath, content.Category)
 
 	// 6. Git Automation
 	if job.GitCommit && s.gitManager != nil {
 		go func() {
 			commitMsg := fmt.Sprintf("chore: auto commit document %s info about %s", noteFilename, content.Category)
 			if err := s.gitManager.SyncAutoCommit(commitMsg); err != nil {
-				zap.S().Error("Git sync failed", "job_id", job.ID, "error", err)
+				telemetry.ZapLogger.Sugar().Errorw("Git sync failed", "job_id", job.ID, "error", err)
 			} else {
-				zap.S().Info("Git sync successful", "job_id", job.ID)
+				telemetry.ZapLogger.Sugar().Infow("Git sync successful", "job_id", job.ID)
 			}
 		}()
 	}
