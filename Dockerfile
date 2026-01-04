@@ -40,8 +40,7 @@ RUN apk add --no-cache \
   font-noto
 
 # Install Tectonic (required by converter for high-fidelity PDF rendering)
-RUN (curl --proto '=https' --tlsv1.2 -fsSL https://drop-sh.tectonic-typesetting.org | sh )  && \
-  mv tectonic /usr/local/bin/
+RUN apk add --no-cache tectonic
 
 # Security: Create a non-root user
 RUN addgroup -S appgroup && adduser -S -G appgroup -u 1000 appuser
