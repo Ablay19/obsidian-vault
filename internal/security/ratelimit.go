@@ -4,55 +4,68 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 type RateLimiter struct {
-	tokens map[string]int
-	mu     sync.Mutex
-	limit  int
-	window time.Duration
+	requests chan struct{}
+	limit    int
+	window   time.Duration
+	mu       sync.Mutex
 }
 
 func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 	rl := &RateLimiter{
-		tokens: make(map[string]int),
-		limit:  limit,
-		window: window,
+		requests: make(chan struct{}, limit),
+		limit:    limit,
+		window:   window,
 	}
-	go rl.cleanup()
+
+	// Fill the channel with initial tokens
+	for i := 0; i < limit; i++ {
+		rl.requests <- struct{}{}
+	}
+
+	go func() {
+		ticker := time.NewTicker(window / time.Duration(limit))
+		defer ticker.Stop()
+		for range ticker.C {
+			select {
+			case rl.requests <- struct{}{}:
+			default:
+			}
+		}
+	}()
+
 	return rl
 }
 
-func (rl *RateLimiter) Allow(key string) bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	count := rl.tokens[key]
-	if count >= rl.limit {
+func (rl *RateLimiter) Allow() bool {
+	select {
+	case <-rl.requests:
+		return true
+	default:
 		return false
-	}
-
-	rl.tokens[key] = count + 1
-	return true
-}
-
-func (rl *RateLimiter) cleanup() {
-	for {
-		time.Sleep(rl.window)
-		rl.mu.Lock()
-		rl.tokens = make(map[string]int)
-		rl.mu.Unlock()
 	}
 }
 
 func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Identify by IP or session
-		ip := r.RemoteAddr
-		if !rl.Allow(ip) {
+		if !rl.Allow() {
 			http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (rl *RateLimiter) GinMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !rl.Allow() {
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "too many requests"})
+			return
+		}
+		c.Next()
+	}
 }

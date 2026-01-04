@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -198,6 +199,42 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), "session", session)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func (s *AuthService) GinMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Allow login routes, static files, and the health check endpoint
+		if strings.HasPrefix(c.Request.URL.Path, "/auth/") ||
+			strings.HasPrefix(c.Request.URL.Path, "/static/") ||
+			c.Request.URL.Path == "/status" {
+			c.Next()
+			return
+		}
+
+		// Check for dev bypass
+		if os.Getenv("ENVIRONMENT_MODE") == "dev" {
+			// If we are in dev mode and have no session, we'll allow a "dev-session"
+			_, err := s.VerifySession(c.Request)
+			if err != nil {
+				zap.S().Info("Dev mode detected: Bypassing real OAuth")
+				devSession, _ := s.CreateDevSession()
+				c.Set("session", devSession)
+				c.Next()
+				return
+			}
+		}
+
+		session, err := s.VerifySession(c.Request)
+		if err != nil {
+			c.Redirect(http.StatusFound, "/auth/login")
+			c.Abort()
+			return
+		}
+
+		// Add session to context
+		c.Set("session", session)
+		c.Next()
+	}
 }
 
 func (s *AuthService) CreateDevSession() (*UserSession, error) {

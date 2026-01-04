@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/auth"
 	"obsidian-automation/internal/bot"
@@ -18,6 +17,8 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 var version = "dev" // This will be overwritten by the build process
@@ -82,22 +83,23 @@ func main() {
 	wsManager := ws.NewManager()
 	go wsManager.Start()
 
-	router := http.NewServeMux()
-	router.HandleFunc("/api/v1/whatsapp/webhook", bot.WhatsAppWebhookHandler)
-	// Pass aiService to StartHealthServer
-	bot.StartHealthServer(router)
-	// Pass aiService, db, and wsManager
+	// Set up Gin router
+	router := gin.Default()
+
+	// Register routes
+	router.POST("/api/v1/whatsapp/webhook", gin.WrapF(bot.WhatsAppWebhookHandler))
+	bot.StartHealthServer(router) // This function will need to be adapted for Gin
 	dash := dashboard.NewDashboard(aiService, runtimeConfigManager, db, authService, wsManager)
-	dash.RegisterRoutes(router)
+	dash.RegisterRoutes(router) // This function will need to be adapted for Gin
 
-	// Wrap with Middleware
-	protectedRouter := authService.Middleware(router)
+	// TODO: Adapt authService.Middleware to be a Gin middleware and apply it to the required routes.
+	// For now, no authentication middleware is applied.
 
-	dashboardPort := config.AppConfig.Dashboard.Port // Dashboard port still comes from AppConfig
+	dashboardPort := config.AppConfig.Dashboard.Port
 	go func() {
 		addr := fmt.Sprintf(":%d", dashboardPort)
 		slog.Info("Starting HTTP server for health and dashboard...", "addr", addr)
-		if err := http.ListenAndServe(addr, protectedRouter); err != nil {
+		if err := router.Run(addr); err != nil {
 			slog.Error("HTTP server failed to start", "error", err)
 			os.Exit(1)
 		}

@@ -19,7 +19,7 @@ func Send(to []string, subject string, body string) error {
 		body
 
 	auth := smtp.PlainAuth("", from, password, host)
-	err := smtp.SendMail(fmt.Sprintf("%s:%d", host, port), auth, from, to, []byte(msg))
+	err := smtp.SendMail(fmt.Sprintf("%s:%s", host, port), auth, from, to, []byte(msg))
 	if err != nil {
 		return err
 	}

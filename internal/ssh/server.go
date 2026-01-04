@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http" // Add this import
 	"os"
+	"strconv" // Add this import
 
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
-	. "obsidian-automation/internal/ssh/models"
 )
 
 func StartServer() {
@@ -37,10 +38,10 @@ func StartServer() {
 		},
 		PublicKeyCallback: func(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
 			userEntry := logrus.WithFields(logrus.Fields{
-				"user":   conn.User(),
-				"method": "publickey",
+				"user":        conn.User(),
+				"method":      "publickey",
 				"fingerprint": ssh.FingerprintSHA256(key),
-				"remote": conn.RemoteAddr(),
+				"remote":      conn.RemoteAddr(),
 			})
 			var user User
 			if err := DB.Where("username = ?", conn.User()).First(&user).Error; err != nil {
@@ -78,7 +79,6 @@ func StartServer() {
 	go StartAPI()
 
 	logrus.Info("Listening on 2222...")
-
 
 	for {
 		conn, err := listener.Accept()
@@ -164,7 +164,7 @@ func handleDirectTCPIP(channel ssh.Channel, extraData []byte) {
 		return
 	}
 
-	dest := fmt.Sprintf("%s:%d", payload.DestAddr, payload.DestPort)
+	dest := net.JoinHostPort(payload.DestAddr, strconv.Itoa(int(payload.DestPort)))
 	connEntry := logrus.WithFields(logrus.Fields{
 		"destination_address": payload.DestAddr,
 		"destination_port":    payload.DestPort,
@@ -178,23 +178,23 @@ func handleDirectTCPIP(channel ssh.Channel, extraData []byte) {
 		connEntry.Errorf("failed to dial destination: %v", err)
 		return
 	}
-	defer conn.Close()
+	defer conn.Close() // Defer closing the connection, handles both read and write ends
 
 	connEntry.Info("Direct-tcpip connection established")
 
+	// Copy data from SSH channel to destination connection
 	go func() {
 		_, err := io.Copy(channel, conn)
 		if err != nil {
 			connEntry.Errorf("Error copying from remote to channel: %v", err)
 		}
-		channel.CloseWrite()
 	}()
 
+	// Copy data from destination connection to SSH channel
 	_, err = io.Copy(conn, channel)
 	if err != nil {
 		connEntry.Errorf("Error copying from channel to remote: %v", err)
 	}
-	conn.CloseWrite()
 }
 
 // StartAPI initializes and starts the REST API for SSH user management.

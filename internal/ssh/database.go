@@ -10,7 +10,6 @@ import (
 	"golang.org/x/crypto/ssh"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	. "obsidian-automation/internal/ssh/models"
 )
 
 var DB *gorm.DB
