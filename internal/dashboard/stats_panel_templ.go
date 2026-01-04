@@ -10,6 +10,7 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import (
 	"fmt"
+	"obsidian-automation/internal/dashboard/components"
 	"obsidian-automation/internal/status"
 )
 
@@ -38,15 +39,15 @@ func StatsPanel(stats status.Stats) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = StatsCard("description", "Total Files", fmt.Sprintf("%d", stats.TotalFiles)).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.StatsCard("description", "Total Files", fmt.Sprintf("%d", stats.TotalFiles)).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = StatsCard("auto_awesome", "AI Operations", fmt.Sprintf("%d", stats.AICalls)).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.StatsCard("auto_awesome", "AI Operations", fmt.Sprintf("%d", stats.AICalls)).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = StatsCard("update", "Last Activity", stats.LastActivity.Format("15:04:05")).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.StatsCard("update", "Last Activity", stats.LastActivity.Format("15:04:05")).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -57,7 +58,7 @@ func StatsPanel(stats status.Stats) templ.Component {
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", stats.TotalFiles))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/stats_panel.templ`, Line: 25, Col: 78}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/stats_panel.templ`, Line: 26, Col: 78}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
@@ -70,7 +71,7 @@ func StatsPanel(stats status.Stats) templ.Component {
 		var templ_7745c5c3_Var3 string
 		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", stats.AICalls))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/stats_panel.templ`, Line: 29, Col: 75}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/stats_panel.templ`, Line: 30, Col: 75}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 		if templ_7745c5c3_Err != nil {

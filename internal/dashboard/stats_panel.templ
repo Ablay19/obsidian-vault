@@ -3,14 +3,15 @@ package dashboard
 import (
 	"obsidian-automation/internal/status"
 	"fmt"
+	"obsidian-automation/internal/dashboard/components"
 )
 
 templ StatsPanel(stats status.Stats) {
 	<div class="space-y-6">
 		<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-			@StatsCard("description", "Total Files", fmt.Sprintf("%d", stats.TotalFiles))
-			@StatsCard("auto_awesome", "AI Operations", fmt.Sprintf("%d", stats.AICalls))
-			@StatsCard("update", "Last Activity", stats.LastActivity.Format("15:04:05"))
+			@components.StatsCard("description", "Total Files", fmt.Sprintf("%d", stats.TotalFiles))
+			@components.StatsCard("auto_awesome", "AI Operations", fmt.Sprintf("%d", stats.AICalls))
+			@components.StatsCard("update", "Last Activity", stats.LastActivity.Format("15:04:05"))
 		</div>
 
 		<div class="bg-[#111114] p-6 rounded-xl shadow-2xl border border-gray-800">
