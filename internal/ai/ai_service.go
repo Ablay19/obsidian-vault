@@ -13,31 +13,46 @@ import (
 	st "obsidian-automation/internal/state"
 )
 
+<<<<<<< HEAD
 // AIService manages multiple AI providers and selects the active one.
+=======
+>>>>>>> 6da3913 (she)
 type AIService struct {
 	providers map[string]map[string]AIProvider
 	sm        *st.RuntimeConfigManager
 	mu        sync.RWMutex
 }
 
-// NewAIService initializes the AI service using the RuntimeConfigManager.
 func NewAIService(ctx context.Context, sm *st.RuntimeConfigManager) *AIService {
 	s := &AIService{
 		providers: make(map[string]map[string]AIProvider),
 		sm:        sm,
 	}
+<<<<<<< HEAD
 	s.RefreshProviders(ctx)
 	
 	// Quick check if any providers loaded
 	count := 0
 	for _, m := range s.providers {
 		count += len(m)
+=======
+
+	s.initializeProviders(ctx)
+
+	hasInitializedProviders := false
+	for _, keyProviders := range s.providers {
+		if len(keyProviders) > 0 {
+			hasInitializedProviders = true
+			break
+		}
+>>>>>>> 6da3913 (she)
 	}
 	if count == 0 {
 		slog.Warn("No AI providers initialized. AI features unavailable.")
 	} else {
 		slog.Info("AI Service initialized", "provider_count", count)
 	}
+<<<<<<< HEAD
 	
 	return s
 }
@@ -46,6 +61,14 @@ func NewAIService(ctx context.Context, sm *st.RuntimeConfigManager) *AIService {
 func (s *AIService) RefreshProviders(ctx context.Context) {
 	config := s.sm.GetConfig()
 
+=======
+	log.Printf("AI Service initialized. Available providers: %v", s.GetAvailableProviders())
+
+	return s
+}
+
+func (s *AIService) initializeProviders(ctx context.Context) {
+>>>>>>> 6da3913 (she)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -97,12 +120,35 @@ func (s *AIService) SetProvider(providerName string) error {
 func (s *AIService) GetActiveProviderName() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+<<<<<<< HEAD
 	cfg := s.sm.GetConfig()
 	if cfg.ActiveProvider != "" {
 		return cfg.ActiveProvider
 	}
 	// Fallback
 	for name, ps := range cfg.Providers {
+=======
+	currentConfig := s.sm.GetConfig()
+	// TODO: Implement storing active provider preference in RuntimeConfig. For now, use first enabled.
+	for name, ps := range currentConfig.Providers {
+		if ps.Enabled { // Arbitrarily pick first enabled
+			return name
+		}
+	}
+	return "None"
+}
+
+// GetActiveProvider returns an active AIProvider instance for the currently preferred provider.
+// This method should select an appropriate key based on availability and health.
+func (s *AIService) GetActiveProvider(ctx context.Context) (AIProvider, st.APIKeyState, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	currentConfig := s.sm.GetConfig()
+	// TODO: Get preferred active provider from RuntimeConfig. For now, use first enabled.
+	var preferredProviderName string
+	for name, ps := range currentConfig.Providers {
+>>>>>>> 6da3913 (she)
 		if ps.Enabled {
 			return name
 		}
