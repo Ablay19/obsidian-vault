@@ -2,18 +2,18 @@ package bot
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
-	"obsidian-automation/internal/pipeline"
-	"obsidian-automation/internal/converter"
-	"obsidian-automation/internal/git"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
+	"fmt"
+	"obsidian-automation/internal/bot/converter"
+	"obsidian-automation/internal/git"
+	"obsidian-automation/internal/pipeline"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-	"os"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"go.uber.org/zap"
@@ -75,7 +75,7 @@ func (s *BotSink) Save(ctx context.Context, job pipeline.Job, result pipeline.Re
 	// Ensure vault/Inbox exists
 	os.MkdirAll(filepath.Join("vault", "Inbox"), 0755)
 	notePath := filepath.Join("vault", "Inbox", noteFilename)
-	
+
 	if err := os.WriteFile(notePath, []byte(markdownContent), 0644); err != nil {
 		return fmt.Errorf("failed to write note file: %w", err)
 	}
@@ -97,7 +97,7 @@ func (s *BotSink) Save(ctx context.Context, job pipeline.Job, result pipeline.Re
 	hash := hex.EncodeToString(hashBytes[:])
 
 	userID, _ := strconv.ParseInt(job.UserContext.UserID, 10, 64)
-	
+
 	// Use package-level function SaveProcessed (from dedup.go)
 	if err := SaveProcessed(hash, content.Category, content.Text, content.Summary, content.Topics, content.Questions, content.AIProvider, userID); err != nil {
 		zap.S().Error("Failed to save to DB", "error", err)

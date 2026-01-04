@@ -30,7 +30,7 @@ func SaveMessage(userID, chatID int64, messageID int, direction, contentType, te
 func GetChatHistory(userID int64, limit int) ([]ChatMessage, error) {
 	var rows *sql.Rows
 	var err error
-	
+
 	if userID == 0 {
 		query := `
 			SELECT id, user_id, chat_id, message_id, direction, content_type, text_content, file_path, created_at
@@ -49,7 +49,7 @@ func GetChatHistory(userID int64, limit int) ([]ChatMessage, error) {
 		`
 		rows, err = DB.Query(query, userID, limit)
 	}
-	
+
 	if err != nil {
 		return nil, err
 	}

@@ -61,7 +61,7 @@ func (p *GroqProvider) GenerateCompletion(ctx context.Context, req *RequestModel
 		Model:    groq.ModelID(model),
 		Messages: messages,
 	}
-	
+
 	// ResponseFormat might not be supported in this SDK version, relying on prompt.
 	if req.Temperature != 0 {
 		gReq.Temperature = req.Temperature
@@ -81,7 +81,7 @@ func (p *GroqProvider) GenerateCompletion(ctx context.Context, req *RequestModel
 	}
 
 	return &ResponseModel{
-		Content: content,
+		Content:      content,
 		ProviderInfo: p.GetModelInfo(),
 	}, nil
 }

@@ -14,7 +14,6 @@ import (
 	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/logger"
 	"obsidian-automation/internal/state"
-	"obsidian-automation/internal/util"
 	"os"
 	"os/signal"
 	"syscall"

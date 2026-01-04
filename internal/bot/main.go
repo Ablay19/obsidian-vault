@@ -6,16 +6,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
 	"obsidian-automation/internal/ai"
+	"obsidian-automation/internal/config" // Import app config
+	"obsidian-automation/internal/dashboard/ws"
 	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/git"
 	"obsidian-automation/internal/pipeline"
-	"obsidian-automation/internal/dashboard/ws"
 	"obsidian-automation/internal/state" // Import the new state package
 	"obsidian-automation/internal/status"
-	"obsidian-automation/internal/config" // Import app config
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -26,26 +26,16 @@ import (
 
 // Package-level variables for dependencies
 var (
-	db         *sql.DB
-	aiService  ai.AIServiceInterface
-	rcm        *state.RuntimeConfigManager
+	db                *sql.DB
+	aiService         ai.AIServiceInterface
+	rcm               *state.RuntimeConfigManager
 	ingestionPipeline *pipeline.Pipeline
-	gitManager *git.Manager
-	wsManager  *ws.Manager
-	userStates = make(map[int64]*UserState)
-	stateMutex sync.RWMutex
-	userLocks  sync.Map // Per-user processing lock
+	gitManager        *git.Manager
+	wsManager         *ws.Manager
+	userStates        = make(map[int64]*UserState)
+	stateMutex        sync.RWMutex
+	userLocks         sync.Map // Per-user processing lock
 )
-
-type UserState struct {
-	Language          string
-	LastProcessedFile string
-	LastCreatedNote   string
-	PendingFile       string
-	PendingFileType   string
-	PendingContext    string
-	IsStaging         bool
-}
 
 func getUserState(userID int64) *UserState {
 	stateMutex.Lock()
@@ -56,13 +46,6 @@ func getUserState(userID int64) *UserState {
 	state := &UserState{Language: "English"}
 	userStates[userID] = state
 	return state
-}
-
-// Bot interfaces for mocking
-type Bot interface {
-	Send(c tgbotapi.Chattable) (tgbotapi.Message, error)
-	Request(c tgbotapi.Chattable) (*tgbotapi.APIResponse, error)
-	GetFile(config tgbotapi.FileConfig) (tgbotapi.File, error)
 }
 
 type TelegramBot struct {

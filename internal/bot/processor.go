@@ -56,19 +56,19 @@ func (p *botProcessor) Process(ctx context.Context, job pipeline.Job) (pipeline.
 
 	if processedContent.Category == "unprocessed" || processedContent.Category == "error" {
 		return pipeline.Result{
-			JobID: job.ID,
-			Success: false,
-			Error: fmt.Errorf("file processing failed: %s", processedContent.Category),
+			JobID:       job.ID,
+			Success:     false,
+			Error:       fmt.Errorf("file processing failed: %s", processedContent.Category),
 			ProcessedAt: time.Now(),
-			Output: processedContent, // Include processedContent even on error for debugging
+			Output:      processedContent, // Include processedContent even on error for debugging
 		}, fmt.Errorf("file processing failed for job %s", job.ID)
 	}
 
 	return pipeline.Result{
-		JobID: job.ID,
-		Success: true,
+		JobID:       job.ID,
+		Success:     true,
 		ProcessedAt: time.Now(),
-		Output: processedContent,
+		Output:      processedContent,
 	}, nil
 }
 
@@ -249,7 +249,7 @@ func processFileWithAI(ctx context.Context, filePath, fileType string, aiService
 	}
 
 	result := ProcessedContent{
-		Text:       text,
+		Text:     text,
 		Category: "general",
 		Tags:     []string{},
 		Language: language, // Use the provided language
@@ -287,8 +287,8 @@ func processFileWithAI(ctx context.Context, filePath, fileType string, aiService
 
 		// Prepare Request Model
 		chatReq := &ai.RequestModel{
-			UserPrompt: summaryPrompt,
-			ImageData:  fileData,
+			UserPrompt:  summaryPrompt,
+			ImageData:   fileData,
 			Temperature: 0.5,
 		}
 
@@ -308,7 +308,7 @@ func processFileWithAI(ctx context.Context, filePath, fileType string, aiService
 		result.Summary = fullSummaryBuilder.String()
 
 		updateStatus("📊 Generating topics and questions...")
-		
+
 		// 2. Get the structured data
 		analysisResult, err := aiService.AnalyzeTextWithParams(ctx, text, language, len(text), 1, 0.01)
 		if err != nil {

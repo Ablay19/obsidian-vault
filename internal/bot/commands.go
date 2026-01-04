@@ -3,7 +3,6 @@ package bot
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -12,53 +11,22 @@ import (
 
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/database"
-	"obsidian-automation/internal/git"
 	"obsidian-automation/internal/pipeline"
 	"obsidian-automation/internal/state"
 	"obsidian-automation/internal/status"
+	"obsidian-automation/internal/util"
 	"os"
 	"strconv"
 )
 
-// CommandHandler interface for command handling
-type CommandHandler interface {
-	Handle(bot Bot, message *tgbotapi.Message, state *UserState)
-}
-
-// CommandDependencies holds the dependencies required by command handlers.
-type CommandDependencies struct {
-	AIService         ai.AIServiceInterface // Use the interface
-	RCM               *state.RuntimeConfigManager
-	IngestionPipeline *pipeline.Pipeline
-	GitManager        *git.Manager
-}
-
-// NewCommandRouter creates and returns a map of command names to their handlers.
-func NewCommandRouter(deps CommandDependencies) map[string]CommandHandler {
-	return map[string]CommandHandler{
-		"start":          &startCommandHandler{},
-		"help":           &helpCommandHandler{},
-		"lang":           &langCommandHandler{},
-		"setprovider":    &setProviderCommandHandler{aiService: deps.AIService},
-		"stats":          &statsCommandHandler{rcm: deps.RCM},
-		"last":           &lastCommandHandler{},
-		"reprocess":      &reprocessCommandHandler{deps: deps},
-		"pid":            &pidCommandHandler{},
-		"link":           &linkCommandHandler{},
-		"service_status": &serviceStatusCommandHandler{aiService: deps.AIService, rcm: deps.RCM},
-		"modelinfo":      &modelInfoCommandHandler{aiService: deps.AIService},
-		"pause_bot":      &pauseBotCommandHandler{},
-		"resume_bot":     &resumeBotCommandHandler{},
-		"process":        &processCommandHandler{ingestionPipeline: deps.IngestionPipeline},
-	}
-}
-
 // --- Specific Command Handlers ---
+
+const helpMessage = "🤖 Bot active! Send images/PDFs for processing.\n\nCommands:\n/process - Process staged file\n/stats - Statistics\n/last - Show last created note\n/reprocess - Reprocess last file\n/lang - Set AI language (e.g. /lang English)\n/setprovider - Set AI provider (Dynamic Menu)\n/modelinfo - Show AI model information\n/help - This message"
 
 type startCommandHandler struct{}
 
 func (h *startCommandHandler) Handle(bot Bot, message *tgbotapi.Message, state *UserState) {
-	msg := tgbotapi.NewMessage(message.Chat.ID, "🤖 Bot active! Send images/PDFs for processing.\n\nCommands:\n/process - Process staged file\n/stats - Statistics\n/last - Show last created note\n/reprocess - Reprocess last file\n/lang - Set AI language (e.g. /lang English)\n/setprovider - Set AI provider (Dynamic Menu)\n/modelinfo - Show AI model information\n/help - This message")
+	msg := tgbotapi.NewMessage(message.Chat.ID, helpMessage)
 	sent, _ := bot.Send(msg)
 	database.SaveMessage(message.From.ID, message.Chat.ID, sent.MessageID, "out", "text", msg.Text, "")
 }
@@ -66,7 +34,7 @@ func (h *startCommandHandler) Handle(bot Bot, message *tgbotapi.Message, state *
 type helpCommandHandler struct{}
 
 func (h *helpCommandHandler) Handle(bot Bot, message *tgbotapi.Message, state *UserState) {
-	msg := tgbotapi.NewMessage(message.Chat.ID, "🤖 Bot active! Send images/PDFs for processing.\n\nCommands:\n/process - Process staged file\n/stats - Statistics\n/last - Show last created note\n/reprocess - Reprocess last file\n/lang - Set AI language (e.g. /lang English)\n/setprovider - Set AI provider (Dynamic Menu)\n/modelinfo - Show AI model information\n/help - This message")
+	msg := tgbotapi.NewMessage(message.Chat.ID, helpMessage)
 	sent, _ := bot.Send(msg)
 	database.SaveMessage(message.From.ID, message.Chat.ID, sent.MessageID, "out", "text", msg.Text, "")
 }
@@ -101,9 +69,9 @@ func (h *setProviderCommandHandler) Handle(bot Bot, message *tgbotapi.Message, s
 	arg := message.CommandArguments()
 	if arg != "" {
 		if err := h.aiService.SetProvider(arg); err != nil {
-			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "❌ " + err.Error()))
+			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "❌ "+err.Error()))
 		} else {
-			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "✅ AI provider set to: " + arg))
+			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "✅ AI provider set to: "+arg))
 		}
 		return
 	}
@@ -128,20 +96,20 @@ func (h *setProviderCommandHandler) Handle(bot Bot, message *tgbotapi.Message, s
 		if healthyMap[p] {
 			statusIcon = "🟢"
 		}
-		
+
 		label := fmt.Sprintf("%s %s", statusIcon, p)
 		if p == currentProviderName {
 			label = "✅ " + p
 		}
-		
-		    rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-		            tgbotapi.NewInlineKeyboardButtonData(label, "setprovider:" + p),
-		        ))
-		    }
-		
-		    rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-		        tgbotapi.NewInlineKeyboardButtonData("🔄 Refresh Status", "refresh_providers"),
-		    ))
+
+		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData(label, "setprovider:"+p),
+		))
+	}
+
+	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("🔄 Refresh Status", "refresh_providers"),
+	))
 	msg := tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("Current AI provider: *%s*\n\nSelect a provider below (🟢=Healthy, ❌=Error/Expired):", currentProviderName))
 	msg.ParseMode = "Markdown"
 	msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(rows...)
@@ -160,7 +128,7 @@ func (h *statsCommandHandler) Handle(bot Bot, message *tgbotapi.Message, state *
 	statsText.WriteString(fmt.Sprintf("• *Total Images Processed:* %d\n", statsData.ImageFiles))
 	statsText.WriteString(fmt.Sprintf("• *Total PDFs Processed:* %d\n", statsData.PDFFiles))
 	statsText.WriteString(fmt.Sprintf("• *Total AI Calls:* %d\n", statsData.AICalls))
-	statsText.WriteString(fmt.Sprintf("• *Last Activity:* %s\n", formatTime(statsData.LastActivity)))
+	statsText.WriteString(fmt.Sprintf("• *Last Activity:* %s\n", util.FormatTime(statsData.LastActivity)))
 	msg := tgbotapi.NewMessage(message.Chat.ID, statsText.String())
 	msg.ParseMode = "Markdown"
 	bot.Send(msg)
@@ -187,93 +155,10 @@ func (h *reprocessCommandHandler) Handle(bot Bot, message *tgbotapi.Message, sta
 		if strings.HasSuffix(strings.ToLower(state.LastProcessedFile), ".jpg") || strings.HasSuffix(strings.ToLower(state.LastProcessedFile), ".png") {
 			fileType = "image"
 		}
-		h.createObsidianNoteInternal(state.LastProcessedFile, fileType, message, bot, message.Chat.ID, 0, "")
+		createObsidianNote(context.Background(), bot, h.deps.AIService, message, state, state.LastProcessedFile, fileType, 0, "")
 	} else {
 		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "No file to reprocess. Please send a file first."))
 	}
-}
-
-// createObsidianNoteInternal orchestrates the whole process of creating an Obsidian note.
-func (h *reprocessCommandHandler) createObsidianNoteInternal(filePath, fileType string, message *tgbotapi.Message, bot Bot, chatID int64, messageID int, additionalContext string) {
-	state := getUserState(message.From.ID) // Still relying on global userState for simplicity here
-
-	updateStatus := func(status string) {
-		if messageID != 0 {
-			bot.Send(tgbotapi.NewEditMessageText(chatID, messageID, status))
-		}
-	}
-
-	streamCallback := func(chunk string) {
-		// This could be used to stream the response to the user in real-time
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second) // Longer timeout for file processing
-	defer cancel()
-
-	content := processFileWithAI(ctx, filePath, fileType, h.deps.AIService, streamCallback, state.Language, updateStatus, additionalContext)
-
-	if content.Category == "unprocessed" || content.Category == "error" {
-		bot.Send(tgbotapi.NewMessage(chatID, "Could not process the file."))
-		return
-	}
-
-	// Create note content
-	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("# %s\n\n", time.Now().Format("2006-01-02_15-04-05")))
-	builder.WriteString(fmt.Sprintf("**Category:** %s\n", content.Category))
-	builder.WriteString(fmt.Sprintf("**AI Provider:** %s\n", content.AIProvider))
-	builder.WriteString(fmt.Sprintf("**Tags:** #%s\n\n", strings.Join(content.Tags, " #")))
-
-	if content.Summary != "" {
-		builder.WriteString("## Summary\n")
-		builder.WriteString(content.Summary + "\n\n")
-	}
-	if len(content.Topics) > 0 {
-		builder.WriteString("## Key Topics\n")
-		for _, topic := range content.Topics {
-			builder.WriteString(fmt.Sprintf("- %s\n", topic))
-		}
-		builder.WriteString("\n")
-	}
-	if len(content.Questions) > 0 {
-		builder.WriteString("## Review Questions\n")
-		for _, q := range content.Questions {
-			builder.WriteString(fmt.Sprintf("- %s\n", q))
-		}
-		builder.WriteString("\n")
-	}
-	builder.WriteString("## Extracted Text\n")
-	builder.WriteString("```\n")
-	builder.WriteString(content.Text)
-	builder.WriteString("\n```\n")
-
-	// Save the note
-	noteFilename := fmt.Sprintf("%s_%s.md", time.Now().Format("20060102_150405"), content.Category)
-	notePath := filepath.Join("vault", "Inbox", noteFilename)
-	err := os.WriteFile(notePath, []byte(builder.String()), 0644)
-	if err != nil {
-		zap.S().Error("Error writing note file", "error", err)
-		bot.Send(tgbotapi.NewMessage(chatID, "Error saving the note."))
-		return
-	}
-
-	// Save to database
-	hash, err := getFileHash(filePath)
-	if err != nil {
-		zap.S().Error("Error getting file hash", "error", err)
-	} else {
-		err := SaveProcessed(hash, content.Category, content.Text, content.Summary, content.Topics, content.Questions, content.AIProvider, message.From.ID)
-		if err != nil {
-			zap.S().Error("Error saving processed file to DB", "error", err)
-		}
-	}
-
-	// Organize the note
-	organizeNote(notePath, content.Category)
-
-	bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("Note '%s' created successfully!", noteFilename)))
-	state.LastCreatedNote = noteFilename
-	state.LastProcessedFile = filePath
 }
 
 type pidCommandHandler struct{}
@@ -290,14 +175,14 @@ func (h *linkCommandHandler) Handle(bot Bot, message *tgbotapi.Message, state *U
 		dashboardURL = "http://localhost:8080"
 	}
 	link := fmt.Sprintf("%s/api/v1/auth/telegram/webhook?id=%d", dashboardURL, message.From.ID)
-	msg := tgbotapi.NewMessage(message.Chat.ID, "🔗 *Link your Dashboard Account*\n\nClick the link below while logged into the web dashboard to sync your accounts:\n\n" + link)
+	msg := tgbotapi.NewMessage(message.Chat.ID, "🔗 *Link your Dashboard Account*\n\nClick the link below while logged into the web dashboard to sync your accounts:\n\n"+link)
 	msg.ParseMode = "Markdown"
 	bot.Send(msg)
 }
 
 type serviceStatusCommandHandler struct {
 	aiService ai.AIServiceInterface
-	rcm *state.RuntimeConfigManager
+	rcm       *state.RuntimeConfigManager
 }
 
 func (h *serviceStatusCommandHandler) Handle(bot Bot, message *tgbotapi.Message, state *UserState) {
@@ -360,9 +245,9 @@ func (h *processCommandHandler) Handle(bot Bot, message *tgbotapi.Message, state
 		return
 	}
 	statusMsg, _ := bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Submitting to processing pipeline..."))
-	
+
 	args := message.CommandArguments()
-	outputFormat := "pdf" 
+	outputFormat := "pdf"
 	if strings.Contains(args, "--output md") {
 		outputFormat = "md"
 	}
@@ -380,7 +265,7 @@ func (h *processCommandHandler) Handle(bot Bot, message *tgbotapi.Message, state
 		Source:       "telegram",
 		SourceID:     strconv.FormatInt(int64(message.MessageID), 10),
 		Data:         fileBytes,
-		ContentType:  pipeline.ContentTypeImage, 
+		ContentType:  pipeline.ContentTypeImage,
 		ReceivedAt:   time.Now(),
 		MaxRetries:   3,
 		OutputFormat: outputFormat,
@@ -391,7 +276,7 @@ func (h *processCommandHandler) Handle(bot Bot, message *tgbotapi.Message, state
 		},
 		Metadata: map[string]interface{}{
 			"caption": state.PendingContext,
-			"chat_id": message.Chat.ID, 
+			"chat_id": message.Chat.ID,
 		},
 	}
 
@@ -408,23 +293,4 @@ func (h *processCommandHandler) Handle(bot Bot, message *tgbotapi.Message, state
 	state.IsStaging = false
 	state.PendingFile = ""
 	state.PendingContext = ""
-}
-
-// formatTime formats a time.Time object into a human-readable string.
-func formatTime(t time.Time) string {
-	if t.IsZero() {
-		return "--"
-	}
-	diff := time.Since(t)
-
-	if diff < time.Minute {
-		return fmt.Sprintf("%ds ago", int(diff.Seconds()))
-	}
-	if diff < time.Hour {
-		return fmt.Sprintf("%dm ago", int(diff.Minutes()))
-	}
-	if diff < 24*time.Hour {
-		return fmt.Sprintf("%dh ago", int(diff.Hours()))
-	}
-	return t.Format("Jan 02, 2006 15:04 MST")
 }

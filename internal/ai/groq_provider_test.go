@@ -72,7 +72,7 @@ func TestGroqProvider_GenerateCompletion_Error(t *testing.T) {
 	}
 
 	provider := NewGroqProvider("fake-key", "llama3-70b", client)
-	
+
 	req := &RequestModel{UserPrompt: "Hi"}
 	_, err := provider.GenerateCompletion(context.Background(), req)
 

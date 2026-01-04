@@ -11,14 +11,14 @@ import (
 
 // Pipeline manages the data ingestion flow.
 type Pipeline struct {
-	jobChan    chan Job
-	results    chan jobResultPair
-	processor  Processor
-	sinks      []Sink
+	jobChan     chan Job
+	results     chan jobResultPair
+	processor   Processor
+	sinks       []Sink
 	workerCount int
-	metrics    *Metrics
-	wg         sync.WaitGroup
-	quit       chan struct{}
+	metrics     *Metrics
+	wg          sync.WaitGroup
+	quit        chan struct{}
 }
 
 type jobResultPair struct {
@@ -29,13 +29,13 @@ type jobResultPair struct {
 // NewPipeline creates a new ingestion pipeline.
 func NewPipeline(workerCount int, bufferSize int, processor Processor, sinks ...Sink) *Pipeline {
 	return &Pipeline{
-		jobChan:    make(chan Job, bufferSize),
-		results:    make(chan jobResultPair, bufferSize),
-		processor:  processor,
-		sinks:      sinks,
+		jobChan:     make(chan Job, bufferSize),
+		results:     make(chan jobResultPair, bufferSize),
+		processor:   processor,
+		sinks:       sinks,
 		workerCount: workerCount,
-		metrics:    NewMetrics(),
-		quit:       make(chan struct{}),
+		metrics:     NewMetrics(),
+		quit:        make(chan struct{}),
 	}
 }
 

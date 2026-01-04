@@ -2,15 +2,15 @@ package ai
 
 // RequestModel represents a standardized request to an AI provider.
 type RequestModel struct {
-	SystemPrompt string    `json:"system_prompt,omitempty"`
-	UserPrompt   string    `json:"user_prompt"`
-	Images       []string  `json:"images,omitempty"`   // Base64 encoded or URLs
-	ImageData    []byte    `json:"image_data,omitempty"` // Raw bytes
-	Model        string    `json:"model,omitempty"`
-	Temperature  float64   `json:"temperature,omitempty"`
-	MaxTokens    int       `json:"max_tokens,omitempty"`
-	JSONMode     bool      `json:"json_mode,omitempty"` // Request JSON output
-	RequestID    string    `json:"request_id,omitempty"`
+	SystemPrompt string   `json:"system_prompt,omitempty"`
+	UserPrompt   string   `json:"user_prompt"`
+	Images       []string `json:"images,omitempty"`     // Base64 encoded or URLs
+	ImageData    []byte   `json:"image_data,omitempty"` // Raw bytes
+	Model        string   `json:"model,omitempty"`
+	Temperature  float64  `json:"temperature,omitempty"`
+	MaxTokens    int      `json:"max_tokens,omitempty"`
+	JSONMode     bool     `json:"json_mode,omitempty"` // Request JSON output
+	RequestID    string   `json:"request_id,omitempty"`
 }
 
 // ResponseModel represents a standardized response from an AI provider.

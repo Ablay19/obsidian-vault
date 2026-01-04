@@ -108,7 +108,7 @@ func (rcm *RuntimeConfigManager) mergeKeysFromEnv() {
 	if geminiAPIKeys == "" {
 		geminiAPIKeys = os.Getenv("GEMINI_API_KEY")
 	}
-	
+
 	if geminiAPIKeys != "" {
 		for i, keyVal := range splitAPIKeys(geminiAPIKeys) {
 			if validateAPIKey(keyVal) {
@@ -146,7 +146,7 @@ func (rcm *RuntimeConfigManager) initializeProviderStates() {
 		// Crucial: remove any legacy lowercase keys that might be in the map from previous versions
 		delete(rcm.config.Providers, strings.ToLower(name))
 		delete(rcm.config.Providers, name) // reset
-		
+
 		rcm.config.Providers[name] = ProviderState{
 			Name:      name,
 			Enabled:   enabled,
@@ -158,7 +158,7 @@ func (rcm *RuntimeConfigManager) initializeProviderStates() {
 	setProvider("Groq", viper.GetString("providers.groq.model"), os.Getenv("GROQ_API_KEY") != "")
 	setProvider("Hugging Face", viper.GetString("providers.huggingface.model"), os.Getenv("HUGGINGFACE_API_KEY") != "" || os.Getenv("HF_TOKEN") != "")
 	setProvider("OpenRouter", viper.GetString("providers.openrouter.model"), os.Getenv("OPENROUTER_API_KEY") != "")
-	
+
 	// Normalize ActiveProvider if it was lowercase
 	if rcm.config.ActiveProvider != "" {
 		for _, name := range []string{"Gemini", "Groq", "Hugging Face", "OpenRouter"} {
@@ -253,7 +253,7 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 func (rcm *RuntimeConfigManager) GetConfig() RuntimeConfig {
 	rcm.mu.RLock()
 	defer rcm.mu.RUnlock()
-	
+
 	// Perform a deep copy to ensure isolation and mask sensitive values
 	copy := RuntimeConfig{
 		AIEnabled:      rcm.config.AIEnabled,
@@ -334,9 +334,9 @@ func (rcm *RuntimeConfigManager) AddAPIKey(providerName, keyValue string, enable
 		Enabled:   enabled,
 		IsDefault: false, // Newly added keys are not from .env
 	}
-	
+
 	zap.S().Info("New API key added", "provider", providerName, "key_id", keyID)
-	
+
 	if err := rcm.persistStateToDBUnprotected(); err != nil {
 		return "", err
 	}
@@ -575,7 +575,6 @@ func validateAPIKey(key string) bool {
 	return security.ValidateAPIKeyFormat(key)
 }
 
-
 // GetDB returns the underlying database connection.
 func (rcm *RuntimeConfigManager) GetDB() *sql.DB {
 	return rcm.db
@@ -586,7 +585,7 @@ func (rcm *RuntimeConfigManager) ResetState() {
 	rcm.mu.Lock()
 	defer rcm.mu.Unlock()
 	rcm.config.APIKeys = make(map[string]APIKeyState)
-	
+
 	// Reset providers to known defaults but disabled
 	rcm.config.Providers = map[string]ProviderState{
 		"Gemini":       {Name: "Gemini", Enabled: false, ModelName: "gemini-pro"},
@@ -597,4 +596,3 @@ func (rcm *RuntimeConfigManager) ResetState() {
 	rcm.config.ActiveProvider = ""
 	rcm.persistStateToDBUnprotected()
 }
-

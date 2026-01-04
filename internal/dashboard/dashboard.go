@@ -14,7 +14,7 @@ import (
 	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/gcp"
 	"obsidian-automation/internal/security" // New import
-	"obsidian-automation/internal/state" 
+	"obsidian-automation/internal/state"
 	"obsidian-automation/internal/status"
 	"os"
 	"strconv"
@@ -818,7 +818,7 @@ func (d *Dashboard) handleTelegramWebhook(w http.ResponseWriter, r *http.Request
 	// Telegram Login Widget callback logic
 	// In a production app, we would verify the hash/signature.
 	// For this implementation, we take the telegram_id and email from the session.
-	
+
 	telegramIDStr := r.URL.Query().Get("id")
 	if telegramIDStr == "" {
 		http.Error(w, "Missing telegram id", http.StatusBadRequest)
@@ -839,7 +839,7 @@ func (d *Dashboard) handleTelegramWebhook(w http.ResponseWriter, r *http.Request
 	}
 
 	slog.Info("Linking accounts via webhook", "email", session.Email, "telegram_id", telegramID)
-	
+
 	if err := database.LinkTelegramToEmail(telegramID, session.Email); err != nil {
 		slog.Error("Webhook linking failed", "error", err)
 		http.Error(w, "Internal error", http.StatusInternalServerError)
@@ -848,5 +848,3 @@ func (d *Dashboard) handleTelegramWebhook(w http.ResponseWriter, r *http.Request
 
 	http.Redirect(w, r, "/?linked=true", http.StatusFound)
 }
-
-

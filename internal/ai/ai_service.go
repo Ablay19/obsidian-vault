@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
 	"obsidian-automation/internal/config"
 	st "obsidian-automation/internal/state"
-	"go.uber.org/zap"
 )
 
 type AIService struct {
@@ -348,7 +348,7 @@ Text:
 // Chat streams the response for a conversation.
 func (s *AIService) Chat(ctx context.Context, req *RequestModel, callback func(string)) error {
 	task_tokens := len(req.UserPrompt)
-	task_depth := 1 // Simple chat is depth 1
+	task_depth := 1  // Simple chat is depth 1
 	max_cost := 0.01 // Default max cost for a chat
 
 	return s.ExecuteWithRetry(ctx, task_tokens, task_depth, max_cost, func(p AIProvider) error {

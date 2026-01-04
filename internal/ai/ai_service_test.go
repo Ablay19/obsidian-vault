@@ -60,12 +60,12 @@ func TestAIService_SelectProvider_Logic(t *testing.T) {
 	// Setup in-memory DB for RCM
 	db := setupTestDB(t) // Reusing the helper from integration_test.go (same package)
 	defer db.Close()
-	
+
 	rcm, _ := st.NewRuntimeConfigManager(db)
-	
+
 	// Reset to clear Env vars
 	rcm.ResetState()
-	
+
 	providerConfigs := map[string]config.ProviderConfig{
 		"Gemini": {
 			ProviderName: "Gemini",
@@ -83,20 +83,26 @@ func TestAIService_SelectProvider_Logic(t *testing.T) {
 
 	// Inject Mocks directly into service.providers
 	// We need to setup RCM state to match these keys so selectProvider finds them valid
-	
+
 	// Ensure providers are enabled in config (Reset cleared them)
 	rcm.SetProviderState("Gemini", true, false, false, "")
 	rcm.SetProviderState("Groq", true, false, false, "")
 
 	// Add Key 1 for Gemini (Mock)
 	k1ID, err := rcm.AddAPIKey("Gemini", "mock-gemini-key-1", true)
-	if err != nil { t.Fatalf("AddKey failed: %v", err) }
+	if err != nil {
+		t.Fatalf("AddKey failed: %v", err)
+	}
 	// Add Key 2 for Gemini (Mock)
 	k2ID, err := rcm.AddAPIKey("Gemini", "mock-gemini-key-2", true)
-	if err != nil { t.Fatalf("AddKey failed: %v", err) }
+	if err != nil {
+		t.Fatalf("AddKey failed: %v", err)
+	}
 	// Add Key 1 for Groq (Mock)
 	g1ID, err := rcm.AddAPIKey("Groq", "mock-groq-key-1", true)
-	if err != nil { t.Fatalf("AddKey failed: %v", err) }
+	if err != nil {
+		t.Fatalf("AddKey failed: %v", err)
+	}
 
 	// Manually inject mocks (bypassing RefreshProviders which would overwrite them)
 	service.mu.Lock()
@@ -115,7 +121,7 @@ func TestAIService_SelectProvider_Logic(t *testing.T) {
 
 	// Test 1: Preferred Provider Selection
 	service.SetProvider("Gemini")
-	
+
 	err = service.ExecuteWithRetry(ctx, 100, 1, 0.01, func(p AIProvider) error {
 		info := p.GetModelInfo()
 		if info.ProviderName != "Gemini" {
@@ -130,7 +136,7 @@ func TestAIService_SelectProvider_Logic(t *testing.T) {
 	// Test 2: Fallback Logic
 	mockGemini1.ShouldFail = true
 	mockGemini1.FailError = NewError(ErrCodeRateLimit, "rate limited", errors.New("429")) // Retryable
-	
+
 	err = service.ExecuteWithRetry(ctx, 100, 1, 0.01, func(p AIProvider) error {
 		resp, err := p.GenerateCompletion(ctx, &RequestModel{})
 		if err != nil {
@@ -141,11 +147,11 @@ func TestAIService_SelectProvider_Logic(t *testing.T) {
 		}
 		return nil
 	})
-	
+
 	if err != nil {
 		t.Errorf("Fallback/Retry failed: %v", err)
 	}
-	
+
 	// Test 3: Cross-Provider Fallback
 	mockGemini2.ShouldFail = true
 	mockGemini2.FailError = NewError(ErrCodeRateLimit, "rate limited", errors.New("429"))

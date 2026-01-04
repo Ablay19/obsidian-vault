@@ -21,26 +21,26 @@ func (ct ContentType) String() string {
 
 // Job represents a single ingestion task.
 type Job struct {
-	ID            string
-	Source        string      // e.g., "telegram", "gdrive"
-	SourceID      string      // e.g., Message ID or File ID
-	ContentType   ContentType
-	Data          []byte      // Or a path/URL
-	FileLocalPath string      // New field: Local path to the downloaded file
-	Metadata      map[string]interface{}
-	ReceivedAt    time.Time
-	RetryCount    int
-	MaxRetries    int
-	UserContext   UserContext // Info about the user (auth, preferences)
-	OutputFormat  string      // e.g., "md", "pdf"
-	GitCommit     bool        // Whether to commit/push
+	ID               string
+	Source           string // e.g., "telegram", "gdrive"
+	SourceID         string // e.g., Message ID or File ID
+	ContentType      ContentType
+	Data             []byte // Or a path/URL
+	FileLocalPath    string // New field: Local path to the downloaded file
+	Metadata         map[string]interface{}
+	ReceivedAt       time.Time
+	RetryCount       int
+	MaxRetries       int
+	UserContext      UserContext // Info about the user (auth, preferences)
+	OutputFormat     string      // e.g., "md", "pdf"
+	GitCommit        bool        // Whether to commit/push
 	ProcessedContent interface{} // New field: To store the processed content result
 }
 
 type UserContext struct {
-	UserID    string
-	GoogleID  string
-	Language  string
+	UserID   string
+	GoogleID string
+	Language string
 }
 
 // Result represents the output of a processing job.

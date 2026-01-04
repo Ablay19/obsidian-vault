@@ -48,7 +48,7 @@ func (p *GeminiProvider) GenerateCompletion(ctx context.Context, req *RequestMod
 	if req.Model != "" {
 		model = p.client.GenerativeModel(req.Model)
 	}
-	
+
 	if req.Temperature != 0 {
 		model.SetTemperature(float32(req.Temperature))
 	}
@@ -65,7 +65,7 @@ func (p *GeminiProvider) GenerateCompletion(ctx context.Context, req *RequestMod
 			Parts: []genai.Part{genai.Text(req.SystemPrompt)},
 		}
 	}
-	
+
 	parts = append(parts, genai.Text(req.UserPrompt))
 	if len(req.ImageData) > 0 {
 		parts = append(parts, genai.ImageData("jpeg", req.ImageData))
@@ -84,7 +84,7 @@ func (p *GeminiProvider) GenerateCompletion(ctx context.Context, req *RequestMod
 	}
 
 	return &ResponseModel{
-		Content: content,
+		Content:      content,
 		ProviderInfo: p.GetModelInfo(),
 	}, nil
 }
@@ -107,7 +107,7 @@ func (p *GeminiProvider) StreamCompletion(ctx context.Context, req *RequestModel
 			Parts: []genai.Part{genai.Text(req.SystemPrompt)},
 		}
 	}
-	
+
 	parts = append(parts, genai.Text(req.UserPrompt))
 	if len(req.ImageData) > 0 {
 		parts = append(parts, genai.ImageData("jpeg", req.ImageData))

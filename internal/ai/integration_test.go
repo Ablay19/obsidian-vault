@@ -6,8 +6,8 @@ import (
 	"obsidian-automation/internal/config"
 	"testing"
 
-	st "obsidian-automation/internal/state"
 	_ "github.com/mattn/go-sqlite3"
+	st "obsidian-automation/internal/state"
 )
 
 func setupTestDB(t *testing.T) *sql.DB {
