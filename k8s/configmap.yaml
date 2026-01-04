@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: obsidian-bot-config
+data:
+  config.yaml: |
+    # Add your non-sensitive config.yaml content here
+    # For example:
+    dashboard:
+      port: 8080
+    providers:
+      gemini:
+        model: "gemini-pro"
+      groq:
+        model: "llama3-70b"
+    # etc...
