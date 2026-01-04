@@ -1,7 +1,9 @@
 package dashboard
 
 import (
+	"database/sql"
 	"fmt"
+	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/status"
 	"regexp"
 	"time"
@@ -39,4 +41,18 @@ func getPID(services []status.ServiceStatus) string {
 		}
 	}
 	return "N/A"
+}
+
+func isTelegramLinked(email string) bool {
+	if email == "" {
+		return false
+	}
+	var telegramID sql.NullInt64
+	err := database.DB.QueryRow("SELECT telegram_id FROM users WHERE email = ?", email).Scan(&telegramID)
+	if err != nil {
+		fmt.Printf("DEBUG: isTelegramLinked check for %s failed: %v\n", email, err)
+		return false
+	}
+	fmt.Printf("DEBUG: isTelegramLinked check for %s: valid=%v, id=%d\n", email, telegramID.Valid, telegramID.Int64)
+	return telegramID.Valid
 }

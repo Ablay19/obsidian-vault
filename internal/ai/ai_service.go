@@ -75,9 +75,6 @@ func (s *AIService) RefreshProviders(ctx context.Context) {
 					provider = NewHuggingFaceProvider(keyState.Value, modelName)
 				case "OpenRouter":
 					provider = NewOpenRouterProvider(keyState.Value, modelName, nil)
-				case "onnx", "None", "ONNX":
-					// Known but unimplemented or handled elsewhere
-					continue
 				default:
 					slog.Warn("Unknown provider", "name", providerName)
 					continue
@@ -269,9 +266,10 @@ func (s *AIService) selectProvider(ctx context.Context, excludeKeyIDs []string) 
 
 // ExecuteWithRetry handles retries for transient errors, tracking failed keys to ensure they are skipped in subsequent attempts.
 func (s *AIService) ExecuteWithRetry(ctx context.Context, op func(AIProvider) error) error {
-	maxRetries := 5 // Increased retries since we now skip failed keys
+	maxRetries := 5 
 	backoff := 1 * time.Second
 	var failedKeys []string
+	var triedProviders []string
 
 	for i := 0; i < maxRetries; i++ {
 		provider, key, err := s.selectProvider(ctx, failedKeys)
@@ -288,27 +286,33 @@ func (s *AIService) ExecuteWithRetry(ctx context.Context, op func(AIProvider) er
 		if appErr, ok := err.(*AppError); ok {
 			// Track this key as failed for the current request context
 			failedKeys = append(failedKeys, key.ID)
+			
+			providerName := provider.GetModelInfo().ProviderName
+			triedProviders = append(triedProviders, providerName)
+
+			// Log failover event
+			slog.Warn("AI Provider failover triggered", 
+				"attempt", i+1, 
+				"failed_provider", providerName, 
+				"error_code", appErr.Code,
+				"msg", appErr.Message,
+			)
 
 			// If it's a serious permanent error, block the key globally
 			if appErr.Code == ErrCodeUnauthorized || appErr.Code == ErrCodeInvalidRequest {
 				slog.Error("Blocking failing key permanently (invalid/unauthorized)", "key_id", key.ID, "error", appErr.Message)
 				s.sm.UpdateKeyUsage(key.ID, appErr.Message, -1)
-			} else if appErr.Code == ErrCodeRateLimit {
-				slog.Warn("Key rate limited, skipping for this request", "key_id", key.ID)
-				// We don't block it permanently, just let backoff handle it or try next key
 			}
 
 			if appErr.Retry && i < maxRetries-1 {
-				slog.Warn("Transient error, retrying with different key", "attempt", i+1, "failed_key", key.ID, "error", err)
 				time.Sleep(backoff)
-				backoff = time.Duration(math.Min(float64(backoff)*2, float64(15*time.Second)))
+				backoff = time.Duration(math.Min(float64(backoff)*2, float64(10*time.Second)))
 				continue
 			}
 		} else {
-			// Non-AppError (e.g. context timeout)
 			failedKeys = append(failedKeys, key.ID)
 			if i < maxRetries-1 {
-				slog.Warn("System error, retrying with different key", "attempt", i+1, "error", err)
+				slog.Warn("System error, retrying with different provider/key", "attempt", i+1, "error", err)
 				continue
 			}
 		}
@@ -316,7 +320,7 @@ func (s *AIService) ExecuteWithRetry(ctx context.Context, op func(AIProvider) er
 		return err // Non-retryable or max retries reached
 	}
 
-	return fmt.Errorf("max retries exceeded (tried %d keys)", len(failedKeys))
+	return fmt.Errorf("max retries exceeded (tried providers: %v)", triedProviders)
 }
 
 // AnalyzeText generates structured JSON data from text.

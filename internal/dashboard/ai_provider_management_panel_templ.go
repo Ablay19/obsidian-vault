@@ -144,7 +144,7 @@ func AIProviderManagementPanel(config state.RuntimeConfig) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</div></div><script>\n\t\tfunction toggleProvider(name, enabled) {\n\t\t\tfetch('/api/ai/provider/toggle', {\n\t\t\t\tmethod: 'POST',\n\t\t\t\theaders: { 'Content-Type': 'application/json' },\n\t\t\t\tbody: JSON.stringify({ provider: name, enabled: enabled })\n\t\t\t}).then(res => {\n\t\t\t\tif (res.ok) {\n\t\t\t\t\t$store.notifications.show('Provider status updated', 'success');\n\t\t\t\t\thtmx.trigger('#main-content', 'refresh');\n\t\t\t\t} else {\n\t\t\t\t\t$store.notifications.show('Failed to update provider', 'error');\n\t\t\t\t}\n\t\t\t})\n\t\t}\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</div></div><script>\n\t\tfunction toggleProvider(name, enabled) {\n\t\t\tfetch('/api/ai/provider/toggle', {\n\t\t\t\tmethod: 'POST',\n\t\t\t\theaders: { 'Content-Type': 'application/json' },\n\t\t\t\tbody: JSON.stringify({ provider: name, enabled: enabled })\n\t\t\t}).then(res => {\n\t\t\t\tif (res.ok) {\n\t\t\t\t\t$store.notifications.show('Provider status updated', 'success');\n\t\t\t\t\tif (window.Alpine && Alpine.store('app')) {\n                        Alpine.store('app').syncUI();\n                    } else {\n                        htmx.trigger('#main-content', 'refresh');\n                    }\n\t\t\t\t} else {\n\t\t\t\t\t$store.notifications.show('Failed to update provider', 'error');\n\t\t\t\t}\n\t\t\t})\n\t\t}\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

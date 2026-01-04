@@ -10,11 +10,13 @@ import (
 	"net/url" // New import
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/auth"
+	"obsidian-automation/internal/dashboard/ws"
 	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/gcp"
 	"obsidian-automation/internal/state" // Import the state package
 	"obsidian-automation/internal/status"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -37,15 +39,17 @@ type Dashboard struct {
 	rcm         *state.RuntimeConfigManager
 	db          *sql.DB
 	authService *auth.AuthService
+	wsManager   *ws.Manager
 }
 
 // NewDashboard creates a new Dashboard instance.
-func NewDashboard(aiService *ai.AIService, rcm *state.RuntimeConfigManager, db *sql.DB, authService *auth.AuthService) *Dashboard {
+func NewDashboard(aiService *ai.AIService, rcm *state.RuntimeConfigManager, db *sql.DB, authService *auth.AuthService, wsManager *ws.Manager) *Dashboard {
 	return &Dashboard{
 		aiService:   aiService,
 		rcm:         rcm,
 		db:          db,
 		authService: authService,
+		wsManager:   wsManager,
 	}
 }
 
@@ -62,8 +66,21 @@ func (d *Dashboard) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("/api/auth/google/list-projects", d.handleGCPListProjects)
 	router.HandleFunc("/api/auth/google/list-keys", d.handleGCPListKeys)
 
+	// Telegram Auth Webhook
+	router.HandleFunc("/api/v1/auth/telegram/webhook", d.handleTelegramWebhook)
+
 	// Protected routes
-	router.HandleFunc("/", d.handleDashboard)
+	router.HandleFunc("/", d.handleDashboardRedirect)
+	router.HandleFunc("/dashboard/overview", func(w http.ResponseWriter, r *http.Request) { d.renderDashboardPage(w, r, "overview") })
+	router.HandleFunc("/dashboard/status", func(w http.ResponseWriter, r *http.Request) { d.renderDashboardPage(w, r, "status") })
+	router.HandleFunc("/dashboard/providers", func(w http.ResponseWriter, r *http.Request) { d.renderDashboardPage(w, r, "providers") })
+	router.HandleFunc("/dashboard/keys", func(w http.ResponseWriter, r *http.Request) { d.renderDashboardPage(w, r, "keys") })
+	router.HandleFunc("/dashboard/history", func(w http.ResponseWriter, r *http.Request) { d.renderDashboardPage(w, r, "history") })
+	router.HandleFunc("/dashboard/chat", func(w http.ResponseWriter, r *http.Request) { d.renderDashboardPage(w, r, "chat") })
+	router.HandleFunc("/dashboard/whatsapp", func(w http.ResponseWriter, r *http.Request) { d.renderDashboardPage(w, r, "whatsapp") })
+	router.HandleFunc("/dashboard/env", func(w http.ResponseWriter, r *http.Request) { d.renderDashboardPage(w, r, "env") })
+
+	router.HandleFunc("/ws", d.wsManager.HandleWebSocket)
 	router.HandleFunc("/api/services/status", d.handleServicesStatus)
 
 	// New routes for provider management
@@ -97,6 +114,7 @@ func (d *Dashboard) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("/dashboard/panels/stats", d.handleStatsPanel)
 	router.HandleFunc("/dashboard/panels/chat_history", d.handleChatHistoryPanel)
 	router.HandleFunc("/dashboard/panels/environment", d.handleEnvironmentPanel)
+	router.HandleFunc("/dashboard/panels/whatsapp", d.handleWhatsAppPanel)
 	router.HandleFunc("/dashboard/panels/qa_console", d.handleQAConsolePanel)
 	router.HandleFunc("/api/qa", d.handleQA)
 }
@@ -188,6 +206,12 @@ func (d *Dashboard) handleEnvironmentPanel(w http.ResponseWriter, r *http.Reques
 	EnvironmentPanel(config.Environment).Render(r.Context(), w)
 }
 
+// handleWhatsAppPanel serves the WhatsAppPanel HTML fragment.
+func (d *Dashboard) handleWhatsAppPanel(w http.ResponseWriter, r *http.Request) {
+	slog.Info("Handling WhatsApp panel request")
+	WhatsAppPanel().Render(r.Context(), w)
+}
+
 // handleQAConsolePanel serves the QAConsolePanel HTML fragment.
 func (d *Dashboard) handleQAConsolePanel(w http.ResponseWriter, r *http.Request) {
 	QAConsolePanel().Render(r.Context(), w)
@@ -207,16 +231,22 @@ func (d *Dashboard) handleAPIKeysPanel(w http.ResponseWriter, r *http.Request) {
 	APIKeysPanel(apiKeysSlice, providers).Render(r.Context(), w)
 }
 
-// handleDashboard serves the main dashboard HTML page.
-func (d *Dashboard) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	App().Render(r.Context(), w)
+// handleDashboardRedirect redirects / to /dashboard/overview
+func (d *Dashboard) handleDashboardRedirect(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/dashboard/overview", http.StatusFound)
+}
+
+// renderDashboardPage renders the main App component with the specified active tab.
+func (d *Dashboard) renderDashboardPage(w http.ResponseWriter, r *http.Request, tab string) {
+	App(tab).Render(r.Context(), w)
 }
 
 // handleOverviewPanel serves the OverviewPanel HTML fragment.
 func (d *Dashboard) handleOverviewPanel(w http.ResponseWriter, r *http.Request) {
 	services := status.GetServicesStatus(d.aiService, d.rcm)
 	providers := d.getAIProviders()
-	OverviewPanel(services, providers).Render(r.Context(), w)
+	session := getSessionUser(r.Context())
+	OverviewPanel(services, providers, session).Render(r.Context(), w)
 }
 
 // handleFileProcessingPanel serves the FileProcessingPanel HTML fragment.
@@ -779,6 +809,41 @@ func (d *Dashboard) handleGCPListKeys(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(keys)
+}
+
+func (d *Dashboard) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
+	// Telegram Login Widget callback logic
+	// In a production app, we would verify the hash/signature.
+	// For this implementation, we take the telegram_id and email from the session.
+	
+	telegramIDStr := r.URL.Query().Get("id")
+	if telegramIDStr == "" {
+		http.Error(w, "Missing telegram id", http.StatusBadRequest)
+		return
+	}
+
+	telegramID, err := strconv.ParseInt(telegramIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid telegram id", http.StatusBadRequest)
+		return
+	}
+
+	session := getSessionUser(r.Context())
+	if session == nil {
+		// If not logged in, we might need a temporary token flow
+		http.Error(w, "Session required to link account", http.StatusUnauthorized)
+		return
+	}
+
+	slog.Info("Linking accounts via webhook", "email", session.Email, "telegram_id", telegramID)
+	
+	if err := database.LinkTelegramToEmail(telegramID, session.Email); err != nil {
+		slog.Error("Webhook linking failed", "error", err)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, "/?linked=true", http.StatusFound)
 }
 
 

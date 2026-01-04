@@ -47,7 +47,11 @@ templ AIProviderManagementPanel(config state.RuntimeConfig) {
 			}).then(res => {
 				if (res.ok) {
 					$store.notifications.show('Provider status updated', 'success');
-					htmx.trigger('#main-content', 'refresh');
+					if (window.Alpine && Alpine.store('app')) {
+                        Alpine.store('app').syncUI();
+                    } else {
+                        htmx.trigger('#main-content', 'refresh');
+                    }
 				} else {
 					$store.notifications.show('Failed to update provider', 'error');
 				}

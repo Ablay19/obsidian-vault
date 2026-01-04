@@ -6,14 +6,14 @@ import (
 )
 
 type ChatMessage struct {
-	ID          int
+	ID          sql.NullInt64
 	UserID      int64
 	ChatID      int64
 	MessageID   int
 	Direction   string
 	ContentType string
-	TextContent string
-	FilePath    string
+	TextContent sql.NullString
+	FilePath    sql.NullString
 	CreatedAt   time.Time
 }
 

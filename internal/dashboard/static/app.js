@@ -6,9 +6,15 @@ document.addEventListener('alpine:init', () => {
         lastUpdate: new Date(),
         isPaused: false,
         sidebarOpen: false,
-        activeTab: window.location.hash.replace('#', '') || 'overview',
+        activeTab: window.initialTab || 'overview',
 
         init() {
+            // Persist initial tab not needed as much with direct routes, 
+            // but we can keep it for any history restoration if we wanted.
+            
+            // WebSocket Connection
+            this.initWebSocket();
+
             // Polling interval logic
             setInterval(() => {
                 if (!this.isPaused && this.shouldPoll()) {
@@ -22,17 +28,77 @@ document.addEventListener('alpine:init', () => {
             
             // Handle back/forward buttons
             window.addEventListener('hashchange', () => {
-                this.activeTab = window.location.hash.replace('#', '') || 'overview';
-                // Trigger HTMX if needed? (Usually better to let HTMX handle its own navigation if using hx-boost)
-                // But since we use discrete hx-get, we might need to manually trigger the target.
-                const link = document.querySelector(`[hx-target="#main-content"][href="#${this.activeTab}"]`);
-                if (link) htmx.trigger(link, 'click');
+                const newTab = window.location.hash.replace('#', '') || 'overview';
+                if (newTab !== this.activeTab) {
+                    this.activeTab = newTab;
+                    localStorage.setItem('activeTab', newTab);
+                    this.syncUI();
+                }
             });
+
+            // HTMX integration for state updates
+            document.addEventListener('htmx:afterSettle', (evt) => {
+                // When content is swapped, ensure Alpine components are initialized
+                // and UI state reflects current store values.
+            });
+        },
+
+        initWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            
+            console.log('Connecting to WebSocket...', wsUrl);
+            const socket = new WebSocket(wsUrl);
+
+            socket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                console.debug('WS Event:', data.type, data.payload);
+                
+                // Dispatch custom event for specific components
+                window.dispatchEvent(new CustomEvent(`ws:${data.type}`, { detail: data.payload }));
+                
+                // Global reactions
+                if (data.type === 'notification') {
+                    $store.notifications.show(data.payload.message, data.payload.level);
+                }
+            };
+
+            socket.onclose = () => {
+                console.warn('WebSocket disconnected. Reconnecting in 5s...');
+                setTimeout(() => this.initWebSocket(), 5000);
+            };
+
+            socket.onerror = (err) => {
+                console.error('WebSocket error:', err);
+            };
         },
 
         setActiveTab(tab) {
             this.activeTab = tab;
             window.location.hash = tab;
+            localStorage.setItem('activeTab', tab);
+        },
+
+        // Helper to force UI to match activeTab (triggers HTMX)
+        syncUI() {
+            const link = document.querySelector(`[hx-target="#main-content"][href="#${this.activeTab}"]`);
+            if (link) {
+                htmx.trigger(link, 'click');
+            } else {
+                // Fallback for direct URL access or missing elements
+                const urlMap = {
+                    'overview': '/dashboard/panels/overview',
+                    'status': '/dashboard/panels/service_status',
+                    'providers': '/dashboard/panels/ai_providers',
+                    'keys': '/dashboard/panels/api_keys',
+                    'history': '/dashboard/panels/chat_history',
+                    'chat': '/dashboard/panels/qa_console',
+                    'env': '/dashboard/panels/environment',
+                    'whatsapp': '/dashboard/panels/whatsapp'
+                };
+                const targetUrl = urlMap[this.activeTab] || urlMap['overview'];
+                htmx.ajax('GET', targetUrl, '#main-content');
+            }
         },
 
         // Helper to check if polling should occur (e.g., pause on input focus)
@@ -40,8 +106,9 @@ document.addEventListener('alpine:init', () => {
             const active = document.activeElement;
             const isInput = active.tagName === 'INPUT' || 
                            active.tagName === 'TEXTAREA' || 
-                           active.tagName === 'SELECT';
-            return !isInput;
+                           active.tagName === 'SELECT' ||
+                           active.isContentEditable;
+            return !isInput && !this.isPaused;
         },
 
         // Manually trigger a UI sync if needed

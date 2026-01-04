@@ -33,6 +33,8 @@ up: build ## Build and start the container.
 	  --env-file $(ENV_FILE) \
 	  -v "./vault:/app/vault" \
 	  -v "./data:/app/data" \
+	  -v "./attachments:/app/attachments" \
+	  -v "./pdfs:/app/pdfs" \
 	  -p $(DASHBOARD_PORT):8080 \
 	  $(IMAGE_NAME)
 	@echo "✅ Bot $(CONTAINER_NAME) started successfully!"
@@ -51,10 +53,14 @@ logs: ## View container logs.
 
 # Show container status.
 status: ## Show container status.
-	@docker ps --filter "name=^/$(CONTAINTAINER_NAME)$$"
+	@docker ps --filter "name=^/$(CONTAINER_NAME)$$"
 
 # Restart the container.
 restart: down up ## Restart the container.
+
+# Run locally (clearing CGO flags to avoid onnxruntime issues)
+run-local: ## Run the bot locally.
+	@CGO_LDFLAGS="" CGO_CFLAGS="" go run ./cmd/bot/main.go
 
 sqlc-generate: ## Generate SQLC code from queries.
 	@echo "Generating SQLC code..."

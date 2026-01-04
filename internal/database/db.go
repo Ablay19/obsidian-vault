@@ -47,7 +47,8 @@ func RunMigrations(db *sql.DB) {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT NOT NULL UNIQUE,
 		applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);`
+	);
+`
 	if _, err := db.Exec(createMigrationsTableSQL); err != nil {
 		logger.GetDBLogger().Error("Failed to create schema_migrations table", "error", err)
 		os.Exit(1)
@@ -128,7 +129,6 @@ func columnExists(db *sql.DB, tableName, columnName string) (bool, error) {
 		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt_val, &pk); err != nil {
 			return false, fmt.Errorf("failed to scan table info row: %w", err)
 		}
-		logger.GetDBLogger().Info("Found column in table", "table", tableName, "column", name)
 		if strings.EqualFold(name, columnName) {
 			return true, nil
 		}
@@ -162,13 +162,11 @@ func executeSQL(db *sql.DB, sqlContent string) error {
 		if len(matches) == 3 {
 			tableName := matches[1]
 			columnName := matches[2]
-			logger.GetDBLogger().Info("Checking for column existence before migration", "table", tableName, "column", columnName)
 			exists, err := columnExists(db, tableName, columnName)
 			if err != nil {
 				return fmt.Errorf("failed to check column existence for %s.%s: %w", tableName, columnName, err)
 			}
 			if exists {
-				logger.GetDBLogger().Info("Column already exists in table, skipping ALTER TABLE ADD COLUMN statement.", "column", columnName, "table", tableName)
 				continue
 			}
 		}
@@ -192,5 +190,26 @@ func UpsertUser(user *tgbotapi.User) error {
 			language_code = excluded.language_code
 	`,
 		user.ID, user.UserName, user.FirstName, user.LastName, user.LanguageCode)
+	return err
+}
+
+// LinkTelegramToEmail associates a Telegram user ID with an existing email-based account.
+func LinkTelegramToEmail(telegramID int64, email string) error {
+	_, err := DB.Exec(`
+		UPDATE users 
+		SET telegram_id = ? 
+		WHERE email = ?
+	`, telegramID, email)
+	if err != nil {
+		return err
+	}
+	
+	// Also update the record where ID is telegramID if it doesn't have an email
+	_, err = DB.Exec(`
+		UPDATE users 
+		SET email = ? 
+		WHERE id = ? AND email IS NULL
+	`, email, telegramID)
+	
 	return err
 }

@@ -5,7 +5,12 @@ import (
 )
 
 templ ChatHistoryPanel(messages []database.ChatMessage) {
-	<div class="bg-[#111114] p-6 rounded-xl shadow-2xl border border-gray-800">
+	<div 
+		class="bg-[#111114] p-6 rounded-xl shadow-2xl border border-gray-800"
+		hx-get="/dashboard/panels/chat_history" 
+		hx-trigger="every 5s"
+		hx-swap="outerHTML"
+	>
 		<h2 class="text-[10px] font-bold mb-6 flex items-center uppercase tracking-[0.2em] text-gray-500">
 			<span class="material-icons mr-2 text-blue-500 text-sm">history</span>
 			Conversation History
@@ -25,11 +30,17 @@ templ ChatHistoryPanel(messages []database.ChatMessage) {
 							<span>{ msg.Direction }</span>
 							<span>{ msg.CreatedAt.Format("02 Jan 15:04") }</span>
 						</div>
-						<div class="text-[11px] whitespace-pre-wrap font-sans leading-relaxed">{ msg.TextContent }</div>
-						if msg.FilePath != "" {
+						<div class="text-[11px] whitespace-pre-wrap font-sans leading-relaxed">
+                            if msg.TextContent.Valid {
+                                { msg.TextContent.String }
+                            } else {
+                                <span class="italic opacity-50">No content</span>
+                            }
+                        </div>
+						if msg.FilePath.Valid && msg.FilePath.String != "" {
 							<div class="mt-2 pt-2 border-t border-white/10 flex items-center space-x-2">
 								<span class="material-icons text-xs">attach_file</span>
-								<span class="text-[9px] font-mono opacity-70 truncate">{ msg.FilePath }</span>
+								<span class="text-[9px] font-mono opacity-70 truncate">{ msg.FilePath.String }</span>
 							</div>
 						}
 					</div>

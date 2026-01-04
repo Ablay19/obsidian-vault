@@ -7,10 +7,13 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/git"
 	"obsidian-automation/internal/pipeline"
+	"obsidian-automation/internal/pipeline/sources"
+	"obsidian-automation/internal/dashboard/ws"
 	"obsidian-automation/internal/state" // Import the new state package
 	"obsidian-automation/internal/status"
 	"obsidian-automation/internal/config" // Import app config
@@ -31,6 +34,7 @@ var (
 	rcm        *state.RuntimeConfigManager // Add package-level RCM
 	ingestionPipeline *pipeline.Pipeline
 	gitManager *git.Manager
+	wsManager  *ws.Manager
 	userStates = make(map[int64]*UserState)
 	stateMutex sync.RWMutex
 	userLocks  sync.Map // Per-user processing lock
@@ -77,10 +81,11 @@ func (t *TelegramBot) GetFile(config tgbotapi.FileConfig) (tgbotapi.File, error)
 }
 
 // Run initializes and starts the bot.
-func Run(database *sql.DB, ais *ai.AIService, runtimeConfigManager *state.RuntimeConfigManager) error {
+func Run(database *sql.DB, ais *ai.AIService, runtimeConfigManager *state.RuntimeConfigManager, wsm *ws.Manager) error {
 	db = database
 	aiService = ais
 	rcm = runtimeConfigManager // Assign to package-level variable
+	wsManager = wsm
 
 	token := os.Getenv("TELEGRAM_BOT_TOKEN")
 	if token == "" {
@@ -113,6 +118,14 @@ func Run(database *sql.DB, ais *ai.AIService, runtimeConfigManager *state.Runtim
 	ingestionPipeline.Start(context.Background())
 	defer ingestionPipeline.Stop()
 
+	// Initialize WhatsApp Source
+	waSource := sources.NewWhatsAppSource(wsManager)
+	go func() {
+		if err := waSource.Start(context.Background(), ingestionPipeline.GetJobChan()); err != nil {
+			slog.Error("WhatsApp source failed to start", "error", err)
+		}
+	}()
+
 	commands := []tgbotapi.BotCommand{
 		{Command: "start", Description: "Start the bot"},
 		{Command: "help", Description: "Show help message"},
@@ -122,6 +135,7 @@ func Run(database *sql.DB, ais *ai.AIService, runtimeConfigManager *state.Runtim
 		{Command: "reprocess", Description: "Reprocess last sent file"},
 		{Command: "pid", Description: "Show the process ID of the bot instance"},
 		{Command: "setprovider", Description: "Set AI provider (Gemini, Groq)"},
+		{Command: "link", Description: "Link Telegram to Dashboard account"},
 		{Command: "service_status", Description: "Show service status"},
 		{Command: "pause_bot", Description: "Pause the bot"},
 		{Command: "resume_bot", Description: "Resume the bot"},
@@ -179,6 +193,20 @@ func handleUpdate(bot Bot, update *tgbotapi.Update, token string) {
 		contentType = "pdf"
 	}
 	database.SaveMessage(update.Message.From.ID, update.Message.Chat.ID, update.Message.MessageID, "in", contentType, update.Message.Text, "")
+
+	// User Mapping Protocol: Email-based
+	// Check for email in message text to link accounts
+	emailRegex := regexp.MustCompile(`[a-z0-9._%+\-]+@[a-z0-9.-]+\.[a-z]{2,}`)
+	email := emailRegex.FindString(strings.ToLower(update.Message.Text))
+	if email != "" {
+		slog.Info("Attempting to map user via email", "email", email, "telegram_id", update.Message.From.ID)
+		err := database.LinkTelegramToEmail(update.Message.From.ID, email)
+		if err != nil {
+			slog.Error("Failed to link user", "error", err)
+		} else {
+			bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "✅ Your Telegram account has been linked to your Dashboard account ("+email+")."))
+		}
+	}
 
 	if update.Message.Photo != nil {
 		handlePhoto(bot, update.Message, token)
@@ -325,6 +353,16 @@ func handleCommand(bot Bot, message *tgbotapi.Message) {
 		state.IsStaging = false
 		state.PendingFile = ""
 		state.PendingContext = ""
+
+	case "link":
+		dashboardURL := os.Getenv("DASHBOARD_URL")
+		if dashboardURL == "" {
+			dashboardURL = "http://localhost:8080"
+		}
+		link := fmt.Sprintf("%s/api/v1/auth/telegram/webhook?id=%d", dashboardURL, message.From.ID)
+		msg := tgbotapi.NewMessage(message.Chat.ID, "🔗 *Link your Dashboard Account*\n\nClick the link below while logged into the web dashboard to sync your accounts:\n\n"+link)
+		msg.ParseMode = "Markdown"
+		bot.Send(msg)
 
 	case "start", "help":
 		msg := tgbotapi.NewMessage(message.Chat.ID, "🤖 Bot active! Send images/PDFs for processing.\n\nCommands:\n/process - Process staged file\n/stats - Statistics\n/last - Show last created note\n/reprocess - Reprocess last file\n/lang - Set AI language (e.g. /lang English)\n/setprovider - Set AI provider (Dynamic Menu)\n/modelinfo - Show AI model information\n/help - This message")

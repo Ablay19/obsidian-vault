@@ -10,6 +10,7 @@ import (
 	"obsidian-automation/internal/bot"
 	"obsidian-automation/internal/config"
 	"obsidian-automation/internal/dashboard"
+	"obsidian-automation/internal/dashboard/ws"
 	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/logger"
 	"obsidian-automation/internal/state" // Import the new state package
@@ -68,10 +69,14 @@ func main() {
 
 	authService := auth.NewAuthService(config.AppConfig)
 
+	// WebSocket Manager
+	wsManager := ws.NewManager()
+	go wsManager.Start()
+
 	router := http.NewServeMux()
 	bot.StartHealthServer(router) // This needs to be updated to use runtimeConfigManager later
-	// Pass aiService and db
-	dash := dashboard.NewDashboard(aiService, runtimeConfigManager, db, authService)
+	// Pass aiService, db, and wsManager
+	dash := dashboard.NewDashboard(aiService, runtimeConfigManager, db, authService, wsManager)
 	dash.RegisterRoutes(router)
 
 	// Wrap with Middleware
@@ -98,7 +103,7 @@ func main() {
 	}()
 
 	// bot.Run also needs runtimeConfigManager now
-	if err := bot.Run(db, aiService, runtimeConfigManager); err != nil {
+	if err := bot.Run(db, aiService, runtimeConfigManager, wsManager); err != nil {
 		slog.Error("Bot failed to run", "error", err)
 		os.Exit(1)
 	}

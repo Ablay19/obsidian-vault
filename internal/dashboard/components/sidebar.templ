@@ -1,0 +1,75 @@
+package components
+
+import (
+	"obsidian-automation/internal/auth"
+)
+
+templ Sidebar(user *auth.UserSession) {
+    <!-- Sidebar Container -->
+    <aside :class="$store.app.sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+           class="w-64 bg-[#111114] border-r border-gray-800 flex flex-col fixed inset-y-0 left-0 z-30 transition-transform duration-300 ease-in-out lg:static lg:h-screen lg:sticky lg:top-0 shadow-2xl lg:shadow-none">
+        <div class="p-6 border-b border-gray-800 flex justify-between items-center">
+            <div>
+                <h1 class="text-sm font-bold flex items-center text-white tracking-widest uppercase">
+                    <span class="material-icons mr-2 text-blue-500">smart_toy</span>
+                    Obsidian Bot
+                </h1>
+                if user != nil {
+                    <div class="mt-2 flex items-center space-x-2">
+                        <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                        <span class="text-[9px] text-blue-400 font-bold uppercase truncate max-w-[120px]">{ user.Name }</span>
+                    </div>
+                } else {
+                    <div class="mt-2 flex items-center space-x-2">
+                        <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                        <span class="text-[10px] text-gray-500 uppercase font-bold tracking-tighter">System Online</span>
+                    </div>
+                }
+            </div>
+            <!-- Close button for mobile -->
+            <button @click="$store.app.toggleSidebar()" class="lg:hidden text-gray-500 hover:text-white">
+                <span class="material-icons">close</span>
+            </button>
+        </div>
+        
+        <nav class="flex-grow p-4 space-y-1">
+            @navLink("dashboard", "Control Center", "/dashboard/overview", "overview")
+            @navLink("analytics", "Service Status", "/dashboard/status", "status")
+            @navLink("psychology", "AI Providers", "/dashboard/providers", "providers")
+            @navLink("vpn_key", "Access Keys", "/dashboard/keys", "keys")
+            @navLink("history", "Chat History", "/dashboard/history", "history")
+            @navLink("chat", "QA Console", "/dashboard/chat", "chat")
+            @navLink("whatsapp", "WhatsApp", "/dashboard/whatsapp", "whatsapp")
+            @navLink("settings", "Environment", "/dashboard/env", "env")
+            
+            <div class="pt-4 mt-4 border-t border-gray-800">
+                <a href="/auth/logout" class="flex items-center px-4 py-2.5 text-red-500/70 hover:text-red-500 hover:bg-red-500/5 rounded-lg group transition-all">
+                    <span class="material-icons mr-3 text-sm">logout</span>
+                    Logout
+                </a>
+            </div>
+        </nav>
+
+        <div class="p-4 border-t border-gray-800">
+            <div class="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
+                <div class="text-[10px] text-gray-500 uppercase font-bold mb-2">Sync Engine</div>
+                <div class="flex justify-between items-center font-mono">
+                    <span class="text-gray-400">NEXT:</span>
+                    <span x-text="$store.app.countdown + 's'" class="text-blue-500 font-bold"></span>
+                </div>
+                <div class="w-full bg-gray-800 h-1 mt-2 rounded-full overflow-hidden">
+                    <div class="bg-blue-500 h-full transition-all duration-1000" :style="'width: ' + (($store.app.countdown / $store.app.syncInterval) * 100) + '%'"></div>
+                </div>
+            </div>
+        </div>
+    </aside>
+}
+
+templ navLink(icon, text, href, tabName string) {
+    <a href={ templ.SafeURL(href) } 
+       class="flex items-center px-4 py-2.5 rounded-lg group transition-all border"
+       :class={ "$store.app.activeTab === '" + tabName + "' ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' : 'text-gray-500 hover:text-white hover:bg-gray-800 border-transparent'" }>
+        <span class="material-icons mr-3 text-sm">{ icon }</span>
+        { text }
+    </a>
+}
