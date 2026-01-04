@@ -26,13 +26,15 @@ type ProcessedContent struct {
 	AIProvider string
 }
 
+var execCommand = exec.Command
+
 func extractTextFromImage(imagePath string) (string, error) {
 	slog.Info("Starting OCR text extraction from image", "path", imagePath)
-	cmd := exec.Command("tesseract", imagePath, "stdout", "-l", "eng+fra+ara")
+	cmd := execCommand("tesseract", imagePath, "stdout", "-l", "eng+fra+ara")
 	output, err := cmd.Output()
 	if err != nil {
 		slog.Warn("Tesseract failed with multi-language, retrying with default", "path", imagePath, "error", err)
-		cmd = exec.Command("tesseract", imagePath, "stdout")
+		cmd = execCommand("tesseract", imagePath, "stdout")
 		output, err = cmd.Output()
 		if err != nil {
 			slog.Error("Tesseract failed completely", "path", imagePath, "error", err)
@@ -46,7 +48,7 @@ func extractTextFromImage(imagePath string) (string, error) {
 
 func extractTextFromPDF(pdfPath string) (string, error) {
 	slog.Info("Starting text extraction from PDF", "path", pdfPath)
-	cmd := exec.Command("pdftotext", pdfPath, "-")
+	cmd := execCommand("pdftotext", pdfPath, "-")
 	output, err := cmd.Output()
 	if err == nil && len(output) > 0 {
 		extracted := strings.TrimSpace(string(output))
@@ -163,7 +165,7 @@ func processFile(filePath, fileType string) ProcessedContent {
 	return classifyContent(text)
 }
 
-func processFileWithAI(ctx context.Context, filePath, fileType string, aiService *ai.AIService, streamCallback func(string), language string, updateStatus func(string), additionalContext string) ProcessedContent {
+func processFileWithAI(ctx context.Context, filePath, fileType string, aiService ai.AIServiceInterface, streamCallback func(string), language string, updateStatus func(string), additionalContext string) ProcessedContent {
 	// Do basic OCR/extraction first
 	var text string
 	var err error
