@@ -6,13 +6,71 @@ import (
 	"log/slog"
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/config"
+	"obsidian-automation/internal/pipeline"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/ledongthuc/pdf"
 )
+
+// Processor interface for the processing pipeline.
+type Processor interface {
+	Process(ctx context.Context, job pipeline.Job) (pipeline.Result, error)
+}
+
+type botProcessor struct {
+	aiService ai.AIServiceInterface
+}
+
+// NewBotProcessor creates a new botProcessor instance.
+func NewBotProcessor(aiService ai.AIServiceInterface) Processor {
+	return &botProcessor{
+		aiService: aiService,
+	}
+}
+
+// Process implements the Processor interface for botProcessor.
+func (p *botProcessor) Process(ctx context.Context, job pipeline.Job) (pipeline.Result, error) {
+	streamCallback := func(chunk string) {
+		slog.Debug("Stream chunk", "chunk", chunk)
+	}
+	updateStatus := func(statusMsg string) {
+		slog.Info("Processing status", "status", statusMsg)
+	}
+
+	caption, _ := job.Metadata["caption"].(string)
+
+	processedContent := processFileWithAI(
+		ctx,
+		job.FileLocalPath,
+		job.ContentType.String(),
+		p.aiService,
+		streamCallback,
+		job.UserContext.Language,
+		updateStatus,
+		caption,
+	)
+
+	if processedContent.Category == "unprocessed" || processedContent.Category == "error" {
+		return pipeline.Result{
+			JobID: job.ID,
+			Success: false,
+			Error: fmt.Errorf("file processing failed: %s", processedContent.Category),
+			ProcessedAt: time.Now(),
+			Output: processedContent, // Include processedContent even on error for debugging
+		}, fmt.Errorf("file processing failed for job %s", job.ID)
+	}
+
+	return pipeline.Result{
+		JobID: job.ID,
+		Success: true,
+		ProcessedAt: time.Now(),
+		Output: processedContent,
+	}, nil
+}
 
 type ProcessedContent struct {
 	Text       string
@@ -191,7 +249,7 @@ func processFileWithAI(ctx context.Context, filePath, fileType string, aiService
 	}
 
 	result := ProcessedContent{
-		Text:     text,
+		Text:       text,
 		Category: "general",
 		Tags:     []string{},
 		Language: language, // Use the provided language
@@ -252,7 +310,7 @@ func processFileWithAI(ctx context.Context, filePath, fileType string, aiService
 		updateStatus("📊 Generating topics and questions...")
 		
 		// 2. Get the structured data
-		analysisResult, err := aiService.AnalyzeText(ctx, text, language)
+		analysisResult, err := aiService.AnalyzeTextWithParams(ctx, text, language, len(text), 1, 0.01)
 		if err != nil {
 			slog.Error("Error from AI analysis service", "error", err)
 			updateStatus("⚠️ AI analysis failed. Using basic classification.")

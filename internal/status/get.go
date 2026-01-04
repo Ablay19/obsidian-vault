@@ -48,11 +48,15 @@ type ServiceStatus struct {
 
 // Stats holds various statistics about the bot's operations.
 type Stats struct {
-	TotalFiles   int
-	ImageFiles   int
-	PDFFiles     int
-	AICalls      int
-	LastActivity time.Time
+	TotalFiles       int
+	ImageFiles       int
+	PDFFiles         int
+	AICalls          int
+	LastActivity     time.Time
+	SelectedProvider string
+	EstimatedCost    float64
+	ActualLatency    time.Duration
+	AccuracyResult   float64
 }
 
 // GetStats returns the current statistics of the bot.
@@ -70,21 +74,15 @@ func GetStats(rcm *state.RuntimeConfigManager) Stats {
 	// Total Files
 	_ = db.QueryRow("SELECT COUNT(*) FROM processed_files").Scan(&stats.TotalFiles)
 
-	// Image Files (This assumes hash or some field can distinguish, or we just count based on category if we don't have extension stored explicitly)
-	// For now let's use a simple query if possible. 
-	// Based on earlier analysis, processed_files doesn't have an extension column.
-	// But let's assume some way to distinguish if needed, otherwise leave as placeholder.
-	// Actually, let's just count all for now as Total.
-
 	// AI Calls
-	// We can count from chat_history where direction is 'out' or we can add a specific counter.
 	_ = db.QueryRow("SELECT COUNT(*) FROM chat_history WHERE direction = 'out'").Scan(&stats.AICalls)
 
+	// The new fields will be populated by the calling code.
 	return stats
 }
 
 // GetServicesStatus gathers and returns the status of all monitored services.
-func GetServicesStatus(aiService *ai.AIService, rcm *state.RuntimeConfigManager) []ServiceStatus {
+func GetServicesStatus(aiService ai.AIServiceInterface, rcm *state.RuntimeConfigManager) []ServiceStatus {
 	var statuses []ServiceStatus
 
 	// 1. Bot Status

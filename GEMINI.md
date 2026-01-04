@@ -17,6 +17,7 @@ configuration system. It is fully containerized with Docker for easy deployment 
 ### AI & Content Processing
 
 -   **AI-Powered Analysis**: Leverages Google's Gemini models (configurable via `config.yml`) and **Groq** for content summarization, question answering, and categorization.
+-   **Intelligent Model Switching**: Automatically selects the best AI provider (e.g., Gemini, Groq) for a given task based on configurable criteria such as cost, latency, and accuracy. This ensures optimal performance and cost-effectiveness.
 -   **Multi-Provider AI Support**: Seamlessly switch between Google Gemini and Groq AI providers, offering flexibility and optimized performance. The active provider can be changed via bot command or the web dashboard.
 -   **Streaming Responses**: AI-generated responses are streamed in real-time to the user for an interactive, "live-typing" experience.
 -   **Multi-Language Support**: AI responses can be configured to default to any language on-the-fly via
@@ -136,9 +137,37 @@ This file (located in the project root) defines the AI models to use for each pr
 ```yaml
 providers:
   gemini:
-    model: gemini-1.5-pro-latest # Or gemini-pro, gemini-flash, etc.
+    model: gemini-1.5-pro-latest
   groq:
-    model: llama-3.1-8b-instant # Or llama3-70b-8192, mixtral-8x7b-32768, etc.
+    model: llama-3.1-8b-instant
+
+provider_profiles:
+  gemini:
+    provider_name: "gemini"
+    model_name: "gemini-1.5-pro-latest"
+    input_cost_per_token: 0.000007
+    output_cost_per_token: 0.000021
+    max_input_tokens: 8192
+    max_output_tokens: 2048
+    latency_ms_threshold: 3000
+    accuracy_pct_threshold: 0.95
+  groq:
+    provider_name: "groq"
+    model_name: "llama-3.1-8b-instant"
+    input_cost_per_token: 0.00000005
+    output_cost_per_token: 0.0000001
+    max_input_tokens: 4096
+    max_output_tokens: 1024
+    latency_ms_threshold: 500
+    accuracy_pct_threshold: 0.90
+
+switching_rules:
+  default_provider: "gemini"
+  latency_target: 1000
+  accuracy_threshold: 0.92
+  retry_count: 3
+  retry_delay_ms: 1000
+  on_error: "switch_provider"
 
 classification:
   patterns:
@@ -212,6 +241,7 @@ into the project's CI/CD pipeline to ensure adherence to standards.
 ### `internal/ai`
 
 -   **`ai_service.go`**: Contains the `AIService` struct, which manages multiple AI providers (Gemini, Groq) and handles switching between them.
+-   **`selector.go`**: Implements the `select_provider` function, which contains the core logic for dynamically selecting an AI provider.
 -   **`provider.go`**: Defines the `AIProvider` interface and `ModelInfo` struct.
 -   **`gemini_provider.go`**: Implements the `AIProvider` interface for the Google Gemini API, using models specified in `config.yml`.
 -   **`groq_provider.go`**: Implements the `AIProvider` interface for the Groq API, using models specified in `config.yml`.

@@ -14,7 +14,7 @@ import (
 	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/logger"
 	"obsidian-automation/internal/state"
-	"obsidian-automation/internal/util" // New import
+	"obsidian-automation/internal/util"
 	"os"
 	"os/signal"
 	"syscall"
@@ -36,7 +36,7 @@ func main() {
 	defer db.Close()
 
 	database.RunMigrations(db)
-	
+
 	for {
 		if err := database.CheckExistingInstance(db); err != nil {
 			slog.Info("Another instance is running, retrying in 15 seconds...", "error", err)
@@ -68,8 +68,8 @@ func main() {
 	}
 
 	ctx := context.Background()
-	// Pass runtimeConfigManager instead of appConfig
-	aiService := ai.NewAIService(ctx, runtimeConfigManager)
+	// Pass provider profiles and switching rules to NewAIService
+	aiService := ai.NewAIService(ctx, runtimeConfigManager, config.AppConfig.ProviderProfiles, config.AppConfig.SwitchingRules)
 	if aiService == nil {
 		slog.Info("AI Service failed to initialize. No AI providers available or configured. Proceeding without AI features.")
 	}
@@ -81,7 +81,8 @@ func main() {
 	go wsManager.Start()
 
 	router := http.NewServeMux()
-	bot.StartHealthServer(router) // This needs to be updated to use runtimeConfigManager later
+	// Pass aiService to StartHealthServer
+	bot.StartHealthServer(router)
 	// Pass aiService, db, and wsManager
 	dash := dashboard.NewDashboard(aiService, runtimeConfigManager, db, authService, wsManager)
 	dash.RegisterRoutes(router)

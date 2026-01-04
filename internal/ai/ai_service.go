@@ -10,19 +10,24 @@ import (
 	"sync"
 	"time"
 
+	"obsidian-automation/internal/config"
 	st "obsidian-automation/internal/state"
 )
 
 type AIService struct {
-	providers map[string]map[string]AIProvider
-	sm        *st.RuntimeConfigManager
-	mu        sync.RWMutex
+	providers       map[string]map[string]AIProvider
+	sm              *st.RuntimeConfigManager
+	providerConfigs map[string]config.ProviderConfig
+	switchingRules  config.SwitchingRules
+	mu              sync.RWMutex
 }
 
-func NewAIService(ctx context.Context, sm *st.RuntimeConfigManager) *AIService {
+func NewAIService(ctx context.Context, sm *st.RuntimeConfigManager, providerConfigs map[string]config.ProviderConfig, switchingRules config.SwitchingRules) *AIService {
 	s := &AIService{
-		providers: make(map[string]map[string]AIProvider),
-		sm:        sm,
+		providers:       make(map[string]map[string]AIProvider),
+		sm:              sm,
+		providerConfigs: providerConfigs,
+		switchingRules:  switchingRules,
 	}
 
 	s.InitializeProviders(ctx)
@@ -177,7 +182,7 @@ func (s *AIService) GetProvidersInfo() []ModelInfo {
 // === Core Logic ===
 
 // selectProvider selects an active provider and key, respecting fallback logic and exclusion list.
-func (s *AIService) selectProvider(ctx context.Context, excludeKeyIDs []string) (AIProvider, st.APIKeyState, error) {
+func (s *AIService) selectProvider(ctx context.Context, task_tokens int, task_depth int, max_cost float64, excludeKeyIDs []string) (AIProvider, st.APIKeyState, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -186,7 +191,8 @@ func (s *AIService) selectProvider(ctx context.Context, excludeKeyIDs []string) 
 		return nil, st.APIKeyState{}, fmt.Errorf("AI is globally disabled")
 	}
 
-	preferred := cfg.ActiveProvider
+	providerName := select_provider(task_tokens, task_depth, max_cost, s.providerConfigs, s.switchingRules)
+	slog.Info("Selected provider", "provider", providerName)
 
 	isExcluded := func(id string) bool {
 		for _, ex := range excludeKeyIDs {
@@ -223,59 +229,23 @@ func (s *AIService) selectProvider(ctx context.Context, excludeKeyIDs []string) 
 		return nil, st.APIKeyState{}, false
 	}
 
-	// 1. Try preferred
-	if preferred != "" && preferred != "None" {
-		if p, k, ok := findKey(preferred); ok {
-			slog.Debug("Selected preferred AI provider", "provider", preferred, "key_id", k.ID)
-			return p, k, nil
-		}
+	if p, k, ok := findKey(providerName); ok {
+		slog.Debug("Selected AI provider", "provider", providerName, "key_id", k.ID)
+		return p, k, nil
 	}
 
-	// 2. Fallback
-	// Order fallback by attempting Gemini first, then Groq, then others
-	fallbacks := []string{"Gemini", "Groq", "Hugging Face", "OpenRouter"}
-	for _, name := range fallbacks {
-		if name == preferred {
-			continue
-		}
-		if p, k, ok := findKey(name); ok {
-			slog.Info("Using fallback AI provider", "provider", name, "key_id", k.ID)
-			return p, k, nil
-		}
-	}
-
-	// 3. Catch-all for any other provider
-	for name := range s.providers {
-		// Already tried these
-		skip := false
-		for _, tried := range fallbacks {
-			if name == tried {
-				skip = true
-				break
-			}
-		}
-		if skip || name == preferred {
-			continue
-		}
-
-		if p, k, ok := findKey(name); ok {
-			slog.Info("Using catch-all AI provider", "provider", name, "key_id", k.ID)
-			return p, k, nil
-		}
-	}
-
-	return nil, st.APIKeyState{}, fmt.Errorf("no active AI providers available (tried %d exclusions)", len(excludeKeyIDs))
+	return nil, st.APIKeyState{}, fmt.Errorf("no active AI providers available for selected provider %s", providerName)
 }
 
 // ExecuteWithRetry handles retries for transient errors, tracking failed keys to ensure they are skipped in subsequent attempts.
-func (s *AIService) ExecuteWithRetry(ctx context.Context, op func(AIProvider) error) error {
-	maxRetries := 5
-	backoff := 1 * time.Second
+func (s *AIService) ExecuteWithRetry(ctx context.Context, task_tokens int, task_depth int, max_cost float64, op func(AIProvider) error) error {
+	maxRetries := s.switchingRules.RetryCount
+	backoff := time.Duration(s.switchingRules.RetryDelayMs) * time.Millisecond
 	var failedKeys []string
 	var triedProviders []string
 
 	for i := 0; i < maxRetries; i++ {
-		provider, key, err := s.selectProvider(ctx, failedKeys)
+		provider, key, err := s.selectProvider(ctx, task_tokens, task_depth, max_cost, failedKeys)
 		if err != nil {
 			return err
 		}
@@ -328,25 +298,30 @@ func (s *AIService) ExecuteWithRetry(ctx context.Context, op func(AIProvider) er
 
 // AnalyzeText generates structured JSON data from text.
 func (s *AIService) AnalyzeText(ctx context.Context, text, language string) (*AnalysisResult, error) {
+	return s.AnalyzeTextWithParams(ctx, text, language, len(text), 1, 0.01)
+}
+
+// AnalyzeTextWithParams generates structured JSON data from text with additional parameters.
+func (s *AIService) AnalyzeTextWithParams(ctx context.Context, text, language string, task_tokens int, task_depth int, max_cost float64) (*AnalysisResult, error) {
 	prompt := fmt.Sprintf(`Analyze the following text and return ONLY a JSON object.
 Target JSON Structure:
 {
-  "category": "One of [physics, math, chemistry, admin, general]",
-  "topics": ["topic1", "topic2", "topic3"],
-  "questions": ["question1", "question2"]
+"category": "One of [physics, math, chemistry, admin, general]",
+"topics": ["topic1", "topic2", "topic3"],
+"questions": ["question1", "question2"]
 }
 Ensure "topics" and "questions" are in %s.
 Text:
 %s`, language, text)
 
 	req := &RequestModel{
-		UserPrompt: prompt,
-		JSONMode:   true,
+		UserPrompt:  prompt,
+		JSONMode:    true,
 		Temperature: 0.2,
 	}
 
 	var resp *ResponseModel
-	err := s.ExecuteWithRetry(ctx, func(p AIProvider) error {
+	err := s.ExecuteWithRetry(ctx, task_tokens, task_depth, max_cost, func(p AIProvider) error {
 		var e error
 		resp, e = p.GenerateCompletion(ctx, req)
 		return e
@@ -372,7 +347,11 @@ Text:
 
 // Chat streams the response for a conversation.
 func (s *AIService) Chat(ctx context.Context, req *RequestModel, callback func(string)) error {
-	return s.ExecuteWithRetry(ctx, func(p AIProvider) error {
+	task_tokens := len(req.UserPrompt)
+	task_depth := 1 // Simple chat is depth 1
+	max_cost := 0.01 // Default max cost for a chat
+
+	return s.ExecuteWithRetry(ctx, task_tokens, task_depth, max_cost, func(p AIProvider) error {
 		stream, err := p.StreamCompletion(ctx, req)
 		if err != nil {
 			return err

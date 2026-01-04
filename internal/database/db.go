@@ -3,7 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
-	"obsidian-automation/internal/logger"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -22,7 +22,7 @@ func OpenDB() *sql.DB {
 
 	if url == "" || token == "" {
 		fmt.Fprintf(os.Stderr, "FATAL: TURSO_DATABASE_URL or TURSO_AUTH_TOKEN is missing. Please check your environment or .env file.\n")
-		logger.GetDBLogger().Error("TURSO_DATABASE_URL or TURSO_AUTH_TOKEN is missing")
+		slog.Error("TURSO_DATABASE_URL or TURSO_AUTH_TOKEN is missing")
 		os.Exit(1)
 	}
 
@@ -30,7 +30,7 @@ func OpenDB() *sql.DB {
 
 	db, err := sql.Open("libsql", dsn)
 	if err != nil {
-		logger.GetDBLogger().Error("Failed to open database", "error", err)
+		slog.Error("Failed to open database", "error", err)
 		os.Exit(1)
 	}
 	DB = db
@@ -39,7 +39,7 @@ func OpenDB() *sql.DB {
 
 // RunMigrations applies database migrations using a custom runner.
 func RunMigrations(db *sql.DB) {
-	logger.GetDBLogger().Info("Applying database migrations...")
+	slog.Info("Applying database migrations...")
 
 	// Create schema_migrations table if it doesn't exist
 	createMigrationsTableSQL := `
@@ -50,7 +50,7 @@ func RunMigrations(db *sql.DB) {
 	);
 `
 	if _, err := db.Exec(createMigrationsTableSQL); err != nil {
-		logger.GetDBLogger().Error("Failed to create schema_migrations table", "error", err)
+		slog.Error("Failed to create schema_migrations table", "error", err)
 		os.Exit(1)
 	}
 
@@ -58,7 +58,7 @@ func RunMigrations(db *sql.DB) {
 	var migrationPaths []string
 	files, err := os.ReadDir("./internal/database/migrations")
 	if err != nil {
-		logger.GetDBLogger().Error("Failed to read migration directory", "error", err)
+		slog.Error("Failed to read migration directory", "error", err)
 		os.Exit(1)
 	}
 
@@ -78,35 +78,35 @@ func RunMigrations(db *sql.DB) {
 		var count int
 		err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE name = ?", migrationName).Scan(&count)
 		if err != nil {
-			logger.GetDBLogger().Error("Failed to check migration status", "migration", migrationName, "error", err)
+			slog.Error("Failed to check migration status", "migration", migrationName, "error", err)
 			os.Exit(1)
 		}
 		if count > 0 {
-			logger.GetDBLogger().Info("Migration already applied, skipping.", "migration", migrationName)
+			slog.Info("Migration already applied, skipping.", "migration", migrationName)
 			continue
 		}
 
 		// Apply migration
 		sqlContent, err := os.ReadFile(path)
 		if err != nil {
-			logger.GetDBLogger().Error("Failed to read migration file", "migration", migrationName, "error", err)
+			slog.Error("Failed to read migration file", "migration", migrationName, "error", err)
 			os.Exit(1)
 		}
 
 		if err := executeSQL(db, string(sqlContent)); err != nil {
-			logger.GetDBLogger().Error("Failed to apply migration", "migration", migrationName, "error", err)
+			slog.Error("Failed to apply migration", "migration", migrationName, "error", err)
 			os.Exit(1)
 		}
 
 		// Record migration as applied
 		if _, err := db.Exec("INSERT INTO schema_migrations (name) VALUES (?)", migrationName); err != nil {
-			logger.GetDBLogger().Error("Failed to record migration", "migration", migrationName, "error", err)
+			slog.Error("Failed to record migration", "migration", migrationName, "error", err)
 			os.Exit(1)
 		}
-		logger.GetDBLogger().Info("Migration applied successfully.", "migration", migrationName)
+		slog.Info("Migration applied successfully.", "migration", migrationName)
 	}
 
-	logger.GetDBLogger().Info("Database migrations applied successfully.")
+	slog.Info("Database migrations applied successfully.")
 }
 
 // columnExists checks if a column exists in a given table.

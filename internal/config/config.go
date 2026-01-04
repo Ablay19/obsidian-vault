@@ -8,6 +8,17 @@ import (
 	"github.com/spf13/viper"
 )
 
+// SwitchingRules defines the criteria for dynamic provider selection.
+type SwitchingRules struct {
+	DefaultProvider     string  `mapstructure:"default_provider"`
+	LatencyTarget       int     `mapstructure:"latency_target"`
+	ThroughputTarget    int     `mapstructure:"throughput_target"`
+	AccuracyThreshold   float64 `mapstructure:"accuracy_threshold"`
+	RetryCount          int     `mapstructure:"retry_count"`
+	RetryDelayMs        int     `mapstructure:"retry_delay_ms"`
+	OnError             string  `mapstructure:"on_error"`
+}
+
 // Config holds the configuration for the application.
 type Config struct {
 	Providers struct {
@@ -28,6 +39,8 @@ type Config struct {
 			Model  string `mapstructure:"model"`
 		} `mapstructure:"openrouter"`
 	} `mapstructure:"providers"`
+	ProviderProfiles  map[string]ProviderConfig `mapstructure:"provider_profiles"`
+	SwitchingRules    SwitchingRules                 `mapstructure:"switching_rules"`
 	Classification struct {
 		Patterns map[string][]string `mapstructure:"patterns"`
 	} `mapstructure:"classification"`
@@ -79,6 +92,13 @@ func LoadConfig() {
 	viper.SetDefault("git.user_name", "Obsidian Bot")
 	viper.SetDefault("git.user_email", "bot@obsidian.internal")
 	viper.SetDefault("git.vault_path", "vault")
+	viper.SetDefault("switching_rules.default_provider", "gemini")
+	viper.SetDefault("switching_rules.retry_count", 3)
+	viper.SetDefault("switching_rules.retry_delay_ms", 1000)
+	viper.SetDefault("switching_rules.on_error", "switch_provider")
+	viper.SetDefault("switching_rules.latency_target", 5000)
+	viper.SetDefault("switching_rules.throughput_target", 10)
+	viper.SetDefault("switching_rules.accuracy_threshold", 0.95)
 
 	// 3. Setup environment variable support (Viper will now see the variables set by godotenv)
 	viper.AutomaticEnv()
