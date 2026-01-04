@@ -6,10 +6,10 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"obsidian-automation/internal/telemetry" // Add telemetry import
+	"obsidian-automation/internal/telemetry"
 
 	"golang.org/x/crypto/ssh"
-	"gorm.io/driver/sqlite"
+	sqlite "github.com/glebarez/sqlite" // Use glebarez/sqlite
 	"gorm.io/gorm"
 )
 
@@ -18,7 +18,11 @@ var DB *gorm.DB
 func InitDB() {
 	telemetry.ZapLogger.Sugar().Debug("InitDB called")
 	var err error
+
+	// Revert to local SQLite
 	DB, err = gorm.Open(sqlite.Open("ssh_users.db"), &gorm.Config{})
+	telemetry.ZapLogger.Sugar().Infow("Connecting SSH DB to local SQLite", "path", "ssh_users.db")
+
 	if err != nil {
 		telemetry.ZapLogger.Sugar().Errorf("Failed to connect SSH user database: %v", err)
 		panic(fmt.Errorf("failed to connect SSH user database: %s", err))

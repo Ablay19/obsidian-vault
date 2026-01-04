@@ -1,9 +1,9 @@
 # ARG for build-time variables
-ARG GO_VERSION=1.25
+ARG GO_VERSION=1.25.4
 ARG ALPINE_VERSION=3.19
 
 # --- Builder Stage ---
-FROM golang:alpine AS builder
+FROM golang:${GO_VERSION}-alpine AS builder
 
 # Install build dependencies
 RUN apk add build-base git
@@ -19,11 +19,11 @@ COPY . .
 
 # Build the SSH server application
 ARG APP_VERSION=v0.0.0-dev
-RUN CGO_ENABLED=0 go build -ldflags="-w -s -X main.version=${APP_VERSION}" -o /app/ssh-server ./cmd/cli/main.go
+RUN CGO_ENABLED=0 go build -ldflags="-w -s -X main.version=${APP_VERSION}" -o /app/ssh-server ./cmd/cli/*.go
 
 
 # --- Final Stage ---
-FROM alpine:latest
+FROM alpine:${ALPINE_VERSION}
 
 # Install runtime dependencies
 RUN apk add \

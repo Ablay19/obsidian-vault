@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/viper"
-	"gorm.io/driver/sqlite"
+	sqlite "github.com/glebarez/sqlite" // Use glebarez/sqlite
 	"gorm.io/gorm"
 	. "obsidian-automation/cmd/cli/database/models"
 )

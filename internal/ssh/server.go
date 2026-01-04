@@ -61,24 +61,24 @@ func StartServer() {
 	// You can generate a key with 'ssh-keygen -t rsa'
 	privateBytes, err := os.ReadFile("id_rsa")
 	if err != nil {
-		logrus.Fatalf("Failed to load private key (./id_rsa): %v", err)
+		telemetry.ZapLogger.Sugar().Fatalw("Failed to load private key (./id_rsa)", "error", err)
 	}
 
 	private, err := ssh.ParsePrivateKey(privateBytes)
 	if err != nil {
-		logrus.Fatalf("Failed to parse private key: %v", err)
+		telemetry.ZapLogger.Sugar().Fatalw("Failed to parse private key", "error", err)
 	}
 
 	config.AddHostKey(private)
 
 	listener, err := net.Listen("tcp", "0.0.0.0:2222")
 	if err != nil {
-		logrus.Fatalf("Failed to listen on 2222: %v", err)
+		telemetry.ZapLogger.Sugar().Fatalw("Failed to listen on 2222", "error", err)
 	}
 
-	go StartAPI()
-
 	logrus.Info("Listening on 2222...")
+
+	go StartAPI() // Start the API in a goroutine
 
 	for {
 		conn, err := listener.Accept()
@@ -99,6 +99,9 @@ func StartServer() {
 		go ssh.DiscardRequests(reqs)
 		go handleChannels(chans)
 	}
+
+	// Block indefinitely to keep the server running
+	select {}
 }
 
 func handleChannels(chans <-chan ssh.NewChannel) {
@@ -205,7 +208,7 @@ func StartAPI() {
 
 	logrus.Infof("SSH Management API listening on :8081")
 	if err := http.ListenAndServe(":8081", router); err != nil {
-		logrus.Fatalf("SSH Management API failed to start: %v", err)
+		telemetry.ZapLogger.Sugar().Fatalw("SSH Management API failed to start", "error", err)
 	}
 }
 
