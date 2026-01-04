@@ -15,7 +15,7 @@ func SaveProcessed(ctx context.Context, hash, fileName, filePath, contentType, c
 		Hash:        hash,
 		FileName:    fileName,
 		FilePath:    filePath,
-		ContentType: contentType,
+		ContentType: sql.NullString{String: contentType, Valid: contentType != ""},
 		Status:      "processed",
 		Summary:     sql.NullString{String: summary, Valid: summary != ""},
 		Topics:      sql.NullString{String: strings.Join(topics, ", "), Valid: len(topics) > 0},

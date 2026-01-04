@@ -78,7 +78,7 @@ func (s *AuthService) HandleCallback(ctx context.Context, code string) (*UserSes
 	}
 
 	// Update or create user in DB with tokens
-	_, err = database.DB.Exec(`
+	_, err = database.Client.DB.Exec(`
 		INSERT INTO users (id, first_name, google_id, email, profile_picture, access_token, refresh_token, token_expiry)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(google_id) DO UPDATE SET
@@ -250,7 +250,7 @@ func (s *AuthService) GetTokenForUser(ctx context.Context, googleID string) (*oa
 	var accessToken, refreshToken string
 	var expiry time.Time
 
-	err := database.DB.QueryRow(`
+	err := database.Client.DB.QueryRow(`
 		SELECT access_token, refresh_token, token_expiry 
 		FROM users 
 		WHERE google_id = ?
@@ -275,7 +275,7 @@ func (s *AuthService) GetTokenForUser(ctx context.Context, googleID string) (*oa
 
 	// If token was refreshed, update DB
 	if newToken.AccessToken != accessToken {
-		_, _ = database.DB.Exec(`
+		_, _ = database.Client.DB.Exec(`
 			UPDATE users 
 			SET access_token = ?, refresh_token = ?, token_expiry = ? 
 			WHERE google_id = ?

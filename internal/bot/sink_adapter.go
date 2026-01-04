@@ -9,6 +9,7 @@ import (
 	"obsidian-automation/internal/bot/converter"
 	"obsidian-automation/internal/git"
 	"obsidian-automation/internal/pipeline"
+	"obsidian-automation/internal/telemetry"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -16,7 +17,6 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"go.uber.org/zap"
 )
 
 // BotSink implements pipeline.Sink to save results to Obsidian/Database.
@@ -36,7 +36,7 @@ func (s *BotSink) Save(ctx context.Context, job pipeline.Job, result pipeline.Re
 		return fmt.Errorf("invalid output type")
 	}
 
-	zap.S().Info("Sink saving result", "job_id", result.JobID, "category", content.Category)
+	telemetry.ZapLogger.Sugar().Info("Sink saving result", "job_id", result.JobID, "category", content.Category)
 
 	// 1. Create Note Content
 	var builder strings.Builder

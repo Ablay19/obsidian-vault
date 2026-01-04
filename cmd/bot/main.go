@@ -23,6 +23,8 @@ import (
 
 var version = "dev" // This will be overwritten by the build process
 
+const HEARTBEAT_THRESHOLD = 30 * time.Second // Define locally after database refactor
+
 func main() {
 	// Initialize OpenTelemetry and the Zap logger
 	tp, err := telemetry.Init("obsidian-automation-bot")
@@ -59,7 +61,7 @@ func main() {
 		telemetry.ZapLogger.Sugar().Fatalw("Error adding instance", "error", err)
 	}
 
-	heartbeatTicker := time.NewTicker(database.HEARTBEAT_THRESHOLD / 2)
+	heartbeatTicker := time.NewTicker(HEARTBEAT_THRESHOLD / 2)
 	go func() {
 		for range heartbeatTicker.C {
 			if err := database.UpdateInstanceHeartbeat(ctx); err != nil { // Pass context

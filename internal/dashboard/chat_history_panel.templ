@@ -1,10 +1,10 @@
 package dashboard
 
 import (
-	"obsidian-automation/internal/database"
+	"obsidian-automation/internal/database/sqlc"
 )
 
-templ ChatHistoryPanel(messages []database.ChatMessage) {
+templ ChatHistoryPanel(messages []sqlc.ChatHistory) {
 	<div 
 		class="bg-[#111114] p-6 rounded-xl shadow-2xl border border-gray-800"
 		hx-get="/dashboard/panels/chat_history" 

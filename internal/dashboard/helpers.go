@@ -7,6 +7,7 @@ import (
 	"obsidian-automation/internal/auth"
 	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/status"
+	"obsidian-automation/internal/telemetry" // Add telemetry import
 	"regexp"
 	"time"
 )
@@ -53,16 +54,16 @@ func getPID(services []status.ServiceStatus) string {
 	return "N/A"
 }
 
-func isTelegramLinked(email string) bool {
+func isTelegramLinked(email string) bool { // Added context
 	if email == "" {
 		return false
 	}
 	var telegramID sql.NullInt64
-	err := database.DB.QueryRow("SELECT telegram_id FROM users WHERE email = ?", email).Scan(&telegramID)
+	err := database.Client.DB.QueryRow("SELECT telegram_id FROM users WHERE email = ?", email).Scan(&telegramID)
 	if err != nil {
-		fmt.Printf("DEBUG: isTelegramLinked check for %s failed: %v\n", email, err)
+		telemetry.ZapLogger.Sugar().Debugw("isTelegramLinked check failed", "email", email, "error", err)
 		return false
 	}
-	fmt.Printf("DEBUG: isTelegramLinked check for %s: valid=%v, id=%d\n", email, telegramID.Valid, telegramID.Int64)
+	telemetry.ZapLogger.Sugar().Debugw("isTelegramLinked check successful", "email", email, "valid", telegramID.Valid, "id", telegramID.Int64)
 	return telegramID.Valid
 }

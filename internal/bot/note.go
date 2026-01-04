@@ -11,8 +11,8 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"go.uber.org/zap"
 	"obsidian-automation/internal/ai"
+	"obsidian-automation/internal/telemetry"
 )
 
 // createObsidianNote orchestrates the whole process of creating an Obsidian note.
@@ -69,7 +69,7 @@ func createObsidianNote(ctx context.Context, bot Bot, aiService ai.AIServiceInte
 	notePath := filepath.Join("vault", "Inbox", noteFilename)
 	err := os.WriteFile(notePath, []byte(builder.String()), 0644)
 	if err != nil {
-		zap.S().Error("Error writing note file", "error", err)
+		telemetry.ZapLogger.Sugar().Errorw("Error writing note file", "error", err)
 		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Error saving the note."))
 		return
 	}
@@ -77,11 +77,30 @@ func createObsidianNote(ctx context.Context, bot Bot, aiService ai.AIServiceInte
 	// Save to database
 	hash, err := getFileHash(filePath)
 	if err != nil {
-		zap.S().Error("Error getting file hash", "error", err)
+		telemetry.ZapLogger.Sugar().Errorw("Error getting file hash", "error", err)
 	} else {
-		err := SaveProcessed(hash, content.Category, content.Text, content.Summary, content.Topics, content.Questions, content.AIProvider, message.From.ID)
+		contentType := "unknown"
+		if fileType == "image" {
+			contentType = "image/jpeg" // Or more specific if known
+		} else if fileType == "pdf" {
+			contentType = "application/pdf"
+		}
+		err := SaveProcessed(
+			ctx,
+			hash,
+			noteFilename,
+			notePath,
+			contentType,
+			content.Category,
+			content.Text,
+			content.Summary,
+			content.Topics,
+			content.Questions,
+			content.AIProvider,
+			message.From.ID,
+		)
 		if err != nil {
-			zap.S().Error("Error saving processed file to DB", "error", err)
+			telemetry.ZapLogger.Sugar().Errorw("Error saving processed file to DB", "error", err)
 		}
 	}
 

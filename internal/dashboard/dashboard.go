@@ -203,7 +203,7 @@ func (d *Dashboard) handleStatsPanel(c *gin.Context) {
 
 // handleChatHistoryPanel serves the ChatHistoryPanel HTML fragment.
 func (d *Dashboard) handleChatHistoryPanel(c *gin.Context) {
-	history, err := database.GetChatHistory(0, 50) // UserID 0 as placeholder for "all" or just demo
+	history, err := database.GetChatHistory(context.Background(), 0, 50) // UserID 0 as placeholder for "all" or just demo
 	if err != nil {
 		telemetry.ZapLogger.Sugar().Errorw("Failed to get chat history", "error", err)
 	}
@@ -265,7 +265,7 @@ func (d *Dashboard) handleFileProcessingPanel(c *gin.Context) {
 		limit = "50" // Default safe limit
 	}
 	query := fmt.Sprintf("SELECT id, hash, category, timestamp, extracted_text, summary, topics, questions, ai_provider FROM processed_files ORDER BY timestamp DESC LIMIT %s", limit)
-	rows, err := d.db.Query(query)
+	rows, err := database.Client.DB.Query(query)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "Failed to query database")
 		return
@@ -287,7 +287,7 @@ func (d *Dashboard) handleFileProcessingPanel(c *gin.Context) {
 
 // handleUsersPanel serves the UsersPanel HTML fragment.
 func (d *Dashboard) handleUsersPanel(c *gin.Context) {
-	rows, err := d.db.Query("SELECT id, username, first_name, last_name, language_code, created_at FROM users ORDER BY created_at DESC")
+	rows, err := database.Client.DB.Query("SELECT id, username, first_name, last_name, language_code, created_at FROM users ORDER BY created_at DESC")
 	if err != nil {
 		c.String(http.StatusInternalServerError, "Failed to query database")
 		return
@@ -713,9 +713,9 @@ func (d *Dashboard) handleTelegramWebhook(c *gin.Context) {
 	}
 	userSession := session.(*auth.UserSession)
 
-	telemetry.ZapLogger.Sugar().Info("Linking accounts via webhook", "email", userSession.Email, "telegram_id", telegramID)
+	telemetry.ZapLogger.Sugar().Infow("Linking accounts via webhook", "email", userSession.Email, "telegram_id", telegramID)
 
-	if err := database.LinkTelegramToEmail(telegramID, userSession.Email); err != nil {
+	if err := database.LinkTelegramToEmail(c.Request.Context(), telegramID, userSession.Email); err != nil {
 		telemetry.ZapLogger.Sugar().Errorw("Webhook linking failed", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal error"})
 		return

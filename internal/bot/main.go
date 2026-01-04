@@ -14,6 +14,7 @@ import (
 	"obsidian-automation/internal/pipeline"
 	"obsidian-automation/internal/state" // Import the new state package
 	"obsidian-automation/internal/status"
+	"obsidian-automation/internal/telemetry"
 	"os"
 	"regexp"
 	"strings"
@@ -21,12 +22,10 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"go.uber.org/zap"
 )
 
 // Package-level variables for dependencies
 var (
-	db                *sql.DB
 	aiService         ai.AIServiceInterface
 	rcm               *state.RuntimeConfigManager
 	ingestionPipeline *pipeline.Pipeline
@@ -61,15 +60,14 @@ func (t *TelegramBot) GetFile(config tgbotapi.FileConfig) (tgbotapi.File, error)
 }
 
 // Run initializes and starts the bot.
-func Run(database *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.RuntimeConfigManager, wsm *ws.Manager) error {
-	db = database
+func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.RuntimeConfigManager, wsm *ws.Manager) error {
 	aiService = ais
 	rcm = runtimeConfigManager // Assign to package-level variable
 	wsManager = wsm
 
 	token := os.Getenv("TELEGRAM_BOT_TOKEN")
 	if token == "" {
-		fmt.Fprintf(os.Stderr, "FATAL: TELEGRAM_BOT_TOKEN is not set. Bot cannot start.\n")
+		telemetry.ZapLogger.Sugar().Fatal("TELEGRAM_BOT_TOKEN is not set. Bot cannot start.")
 		return fmt.Errorf("TELEGRAM_BOT_TOKEN not set")
 	}
 
@@ -83,17 +81,17 @@ func Run(database *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *stat
 	gitCfg := config.AppConfig.Git
 	gitManager = git.NewManager(gitCfg.VaultPath)
 	if err := gitManager.ConfigureUser(gitCfg.UserName, gitCfg.UserEmail); err != nil {
-		zap.S().Warn("Failed to configure Git user", "error", err)
+		telemetry.ZapLogger.Sugar().Warnw("Failed to configure Git user", "error", err)
 	}
 	if gitCfg.RemoteURL != "" {
 		if err := gitManager.EnsureRemote(gitCfg.RemoteURL); err != nil {
-			zap.S().Warn("Failed to ensure Git remote", "error", err)
+			telemetry.ZapLogger.Sugar().Warnw("Failed to ensure Git remote", "error", err)
 		}
 	}
 
 	// Initialize Pipeline
 	processor := NewBotProcessor(aiService)
-	sink := NewBotSink(db, botAPI, gitManager)
+	sink := NewBotSink(database.Client.DB, botAPI, gitManager) // Use database.Client.DB
 	ingestionPipeline = pipeline.NewPipeline(3, 100, processor, sink) // 3 workers, buffer 100
 	ingestionPipeline.Start(context.Background())
 	defer ingestionPipeline.Stop()
@@ -123,30 +121,30 @@ func Run(database *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *stat
 		{Command: "process", Description: "Process staged file"},
 	}
 	if _, err := bot.Request(tgbotapi.NewSetMyCommands(commands...)); err != nil {
-		zap.S().Error("Error setting bot commands", "error", err)
+		telemetry.ZapLogger.Sugar().Errorw("Error setting bot commands", "error", err)
 	}
 
-	zap.S().Info("Authorized on account", "username", bot.Self.UserName)
+	telemetry.ZapLogger.Sugar().Infow("Authorized on account", "username", bot.Self.UserName)
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 	updates := bot.GetUpdatesChan(u)
-	zap.S().Info("Bot is running...")
+	telemetry.ZapLogger.Sugar().Info("Bot is running...")
 
 	for update := range updates {
 		if status.IsPaused() {
 			time.Sleep(1 * time.Second)
 			continue
 		}
-		zap.S().Debug("Received update", "update_id", update.UpdateID)
-		go handleUpdate(bot, &update, token, commandRouter)
+		telemetry.ZapLogger.Sugar().Debugw("Received update", "update_id", update.UpdateID)
+		go handleUpdate(context.Background(), bot, &update, token, commandRouter) // Pass context
 	}
 	return nil
 }
 
 // handleUpdate processes incoming Telegram updates.
-func handleUpdate(bot Bot, update *tgbotapi.Update, token string, commandRouter map[string]CommandHandler) {
+func handleUpdate(ctx context.Context, bot Bot, update *tgbotapi.Update, token string, commandRouter map[string]CommandHandler) {
 	if update.CallbackQuery != nil {
-		zap.S().Info("Handling callback query", "chat_id", update.CallbackQuery.Message.Chat.ID, "data", update.CallbackQuery.Data)
+		telemetry.ZapLogger.Sugar().Infow("Handling callback query", "chat_id", update.CallbackQuery.Message.Chat.ID, "data", update.CallbackQuery.Data)
 		handleCallbackQuery(bot, update.CallbackQuery, commandRouter)
 		return
 	}
@@ -160,13 +158,13 @@ func handleUpdate(bot Bot, update *tgbotapi.Update, token string, commandRouter 
 	if !update.Message.IsCommand() {
 		userID := update.Message.From.ID
 		if _, loaded := userLocks.LoadOrStore(userID, true); loaded {
-			zap.S().Warn("User is already being processed, skipping duplicate content update", "user_id", userID)
+			telemetry.ZapLogger.Sugar().Warnw("User is already being processed, skipping duplicate content update", "user_id", userID)
 			return
 		}
 		defer userLocks.Delete(userID)
 	}
 
-	zap.S().Info("Handling message", "chat_id", update.Message.Chat.ID, "user", update.Message.From.UserName, "text", update.Message.Text)
+	telemetry.ZapLogger.Sugar().Infow("Handling message", "chat_id", update.Message.Chat.ID, "user", update.Message.From.UserName, "text", update.Message.Text)
 
 	// Save incoming message to history
 	contentType := "text"
@@ -175,26 +173,26 @@ func handleUpdate(bot Bot, update *tgbotapi.Update, token string, commandRouter 
 	} else if update.Message.Document != nil {
 		contentType = "pdf"
 	}
-	database.SaveMessage(update.Message.From.ID, update.Message.Chat.ID, update.Message.MessageID, "in", contentType, update.Message.Text, "")
+	database.SaveMessage(ctx, update.Message.From.ID, update.Message.Chat.ID, update.Message.MessageID, "in", contentType, update.Message.Text, "") // Pass context
 
 	// User Mapping Protocol: Email-based
 	// Check for email in message text to link accounts
 	emailRegex := regexp.MustCompile(`[a-z0-9._%+\-]+@[a-z0-9.-]+\.[a-z]{2,}`)
 	email := emailRegex.FindString(strings.ToLower(update.Message.Text))
 	if email != "" {
-		zap.S().Info("Attempting to map user via email", "email", email, "telegram_id", update.Message.From.ID)
-		err := database.LinkTelegramToEmail(update.Message.From.ID, email)
+		telemetry.ZapLogger.Sugar().Infow("Attempting to map user via email", "email", email, "telegram_id", update.Message.From.ID)
+		err := database.LinkTelegramToEmail(ctx, update.Message.From.ID, email) // Pass context
 		if err != nil {
-			zap.S().Error("Failed to link user", "error", err)
+			telemetry.ZapLogger.Sugar().Errorw("Failed to link user", "error", err)
 		} else {
 			bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "✅ Your Telegram account has been linked to your Dashboard account ("+email+")."))
 		}
 	}
 
 	if update.Message.Photo != nil {
-		handlePhoto(bot, update.Message, token)
+		handlePhoto(ctx, bot, update.Message, token) // Pass context
 	} else if update.Message.Document != nil {
-		handleDocument(bot, update.Message, token)
+		handleDocument(ctx, bot, update.Message, token) // Pass context
 	} else if update.Message.IsCommand() || update.Message.Text != "" {
 		handleCommand(bot, update.Message, commandRouter)
 	}
@@ -228,8 +226,8 @@ func handleCallbackQuery(bot Bot, callback *tgbotapi.CallbackQuery, commandRoute
 
 // handleCommand processes text messages and commands.
 func handleCommand(bot Bot, message *tgbotapi.Message, commandRouter map[string]CommandHandler) {
-	zap.S().Info("Processing command/text", "chat_id", message.Chat.ID, "text", message.Text)
-	database.UpsertUser(message.From)
+	telemetry.ZapLogger.Sugar().Infow("Processing command/text", "chat_id", message.Chat.ID, "text", message.Text)
+	database.UpsertUser(context.Background(), message.From) // Pass context
 	state := getUserState(message.From.ID) // Get user state for language
 
 	if !message.IsCommand() {
@@ -243,7 +241,7 @@ func handleCommand(bot Bot, message *tgbotapi.Message, commandRouter map[string]
 			return
 		}
 
-		zap.S().Info("Handling non-command text as AI prompt", "chat_id", message.Chat.ID, "text_len", len(message.Text))
+		telemetry.ZapLogger.Sugar().Infow("Handling non-command text as AI prompt", "chat_id", message.Chat.ID, "text_len", len(message.Text))
 		// Handle non-command text messages as a general AI prompt
 		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Thinking..."))
 
@@ -274,7 +272,7 @@ func handleCommand(bot Bot, message *tgbotapi.Message, commandRouter map[string]
 		msg.ParseMode = tgbotapi.ModeHTML
 		sentMsg, err := bot.Send(msg)
 		if err == nil {
-			database.SaveMessage(message.From.ID, message.Chat.ID, sentMsg.MessageID, "out", "text", responseText.String(), "")
+			database.SaveMessage(context.Background(), message.From.ID, message.Chat.ID, sentMsg.MessageID, "out", "text", responseText.String(), "") // Pass context
 		}
 		return
 	}
@@ -287,12 +285,12 @@ func handleCommand(bot Bot, message *tgbotapi.Message, commandRouter map[string]
 }
 
 // handlePhoto processes incoming photos.
-func handlePhoto(bot Bot, message *tgbotapi.Message, token string) {
-	database.UpsertUser(message.From)
+func handlePhoto(ctx context.Context, bot Bot, message *tgbotapi.Message, token string) { // Pass context
+	database.UpsertUser(ctx, message.From) // Pass context
 	status.UpdateActivity()
 
 	photo := message.Photo[len(message.Photo)-1]
-	filename := downloadFile(bot, photo.FileID, "jpg", token)
+	filename := downloadFile(ctx, bot, photo.FileID, "jpg", token) // Pass context
 	if filename == "" {
 		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "❌ Failed to download image."))
 		return
@@ -313,8 +311,8 @@ func handlePhoto(bot Bot, message *tgbotapi.Message, token string) {
 }
 
 // handleDocument processes incoming documents.
-func handleDocument(bot Bot, message *tgbotapi.Message, token string) {
-	database.UpsertUser(message.From)
+func handleDocument(ctx context.Context, bot Bot, message *tgbotapi.Message, token string) { // Pass context
+	database.UpsertUser(ctx, message.From) // Pass context
 	status.UpdateActivity()
 
 	doc := message.Document
@@ -324,7 +322,7 @@ func handleDocument(bot Bot, message *tgbotapi.Message, token string) {
 		return
 	}
 
-	filename := downloadFile(bot, doc.FileID, "pdf", token)
+	filename := downloadFile(ctx, bot, doc.FileID, "pdf", token) // Pass context
 	if filename == "" {
 		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "❌ Failed to download document."))
 		return
@@ -344,10 +342,10 @@ func handleDocument(bot Bot, message *tgbotapi.Message, token string) {
 }
 
 // downloadFile downloads a file from Telegram.
-func downloadFile(bot Bot, fileID, ext, token string) string {
+func downloadFile(ctx context.Context, bot Bot, fileID, ext, token string) string { // Pass context
 	file, err := bot.GetFile(tgbotapi.FileConfig{FileID: fileID})
 	if err != nil {
-		zap.S().Error("GetFile error", "error", err)
+		telemetry.ZapLogger.Sugar().Errorw("GetFile error", "error", err)
 		return ""
 	}
 
@@ -355,13 +353,13 @@ func downloadFile(bot Bot, fileID, ext, token string) string {
 
 	resp, err := http.Get(fileURL)
 	if err != nil {
-		zap.S().Error("HTTP error downloading file", "error", err)
+		telemetry.ZapLogger.Sugar().Errorw("HTTP error downloading file", "error", err)
 		return ""
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		zap.S().Error("Bad response status", "status", resp.StatusCode)
+		telemetry.ZapLogger.Sugar().Errorw("Bad response status", "status", resp.StatusCode)
 		return ""
 	}
 
@@ -371,17 +369,17 @@ func downloadFile(bot Bot, fileID, ext, token string) string {
 	filename := fmt.Sprintf("attachments/%s.%s", time.Now().Format("20060102_150405"), ext)
 	out, err := os.Create(filename)
 	if err != nil {
-		zap.S().Error("Create file error", "error", err)
+		telemetry.ZapLogger.Sugar().Errorw("Create file error", "error", err)
 		return ""
 	}
 	defer out.Close()
 
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {
-		zap.S().Error("Write file error", "error", err)
+		telemetry.ZapLogger.Sugar().Errorw("Write file error", "error", err)
 		return ""
 	}
 
-	zap.S().Info("File downloaded", "path", filename)
+	telemetry.ZapLogger.Sugar().Infow("File downloaded", "path", filename)
 	return filename
 }
