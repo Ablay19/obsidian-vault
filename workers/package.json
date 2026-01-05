@@ -14,5 +14,9 @@
   },
   "dependencies": {
     "crypto-js": "^4.2.0"
-  }
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
 }

@@ -1,4 +1,7 @@
 .env*
+bot
+main
+cli
 telegram-bot
 obsidian-automation
 stats.json
@@ -14,10 +17,14 @@ logs/*
 vendor/
 *.out
 .Makefile.swp
-/config/.env
 *.log*
 helix*
 main
 bot_binary
-pdfs/
 whatsapp_session.db*
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
