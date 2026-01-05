@@ -1,0 +1,340 @@
+name: Deploy Obsidian Bot to Cloudflare
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run deployment every night at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  GO_VERSION: '1.21'
+  NODE_VERSION: '20'
+
+jobs:
+  test:
+    name: Test Application
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+            
+      - name: Download dependencies
+        run: go mod download
+        
+      - name: Run tests
+        run: |
+          go test -v -race -coverprofile=coverage.out ./...
+          go tool cover -html=coverage.out -o coverage.html
+          
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.out
+
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          
+      - name: Build binary
+        run: |
+          CGO_ENABLED=0 go build -ldflags="-s -w" -o obsidian-bot cmd/bot/main.go
+          
+      - name: Build Docker image
+        run: |
+          docker build -t obsidian-bot:${{ github.sha }} .
+          docker tag obsidian-bot:${{ github.sha }} obsidian-bot:latest
+          
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: obsidian-bot-binary
+          path: ./obsidian-bot
+
+  deploy-workers:
+    name: Deploy Cloudflare Workers
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install Wrangler
+        run: npm install -g wrangler
+        
+      - name: Deploy AI Proxy Worker
+        run: |
+          cd workers/ai-proxy
+          npm ci
+          wrangler deploy --env production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          
+      - name: Deploy Analytics Worker
+        run: |
+          cd workers/analytics
+          npm ci
+          wrangler deploy --env production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          
+      - name: Deploy Cache Worker
+        run: |
+          cd workers/cache
+          npm ci
+          wrangler deploy --env production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  setup-infrastructure:
+    name: Setup Cloudflare Infrastructure
+    runs-on: ubuntu-latest
+    needs: deploy-workers
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Setup Node.js and Wrangler
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          
+      - name: Install Wrangler
+        run: npm install -g wrangler
+        
+      - name: Create R2 bucket
+        run: |
+          if ! wrangler r2 bucket list | grep -q "obsidian-bot-media"; then
+            wrangler r2 bucket create obsidian-bot-media
+            echo "Created R2 bucket"
+          else
+            echo "R2 bucket already exists"
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          
+      - name: Create D1 database
+        run: |
+          if ! wrangler d1 list | grep -q "obsidian-bot-db"; then
+            wrangler d1 create obsidian-bot-db
+            echo "Created D1 database"
+          else
+            echo "D1 database already exists"
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          
+      - name: Deploy database schema
+        run: |
+          wrangler d1 execute obsidian-bot-db --file=./database/d1_schema.sql
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          
+      - name: Create KV namespaces
+        run: |
+          # Create AI cache namespace
+          if ! wrangler kv:namespace list | grep -q "AI_CACHE"; then
+            AI_CACHE_ID=$(wrangler kv:namespace create "AI_CACHE" | jq -r '.id')
+            echo "AI_CACHE_ID=$AI_CACHE_ID" >> $GITHUB_ENV
+          else
+            AI_CACHE_ID=$(wrangler kv:namespace list | grep "AI_CACHE" | jq -r '.id')
+            echo "AI_CACHE_ID=$AI_CACHE_ID" >> $GITHUB_ENV
+          fi
+          
+          # Create analytics namespace
+          if ! wrangler kv:namespace list | grep -q "ANALYTICS"; then
+            ANALYTICS_ID=$(wrangler kv:namespace create "ANALYTICS" | jq -r '.id')
+            echo "ANALYTICS_ID=$ANALYTICS_ID" >> $GITHUB_ENV
+          else
+            ANALYTICS_ID=$(wrangler kv:namespace list | grep "ANALYTICS" | jq -r '.id')
+            echo "ANALYTICS_ID=$ANALYTICS_ID" >> $GITHUB_ENV
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  deploy-app:
+    name: Deploy Main Application
+    runs-on: ubuntu-latest
+    needs: [build, setup-infrastructure]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup deployment environment
+        run: |
+          # Update configuration with Cloudflare infrastructure IDs
+          echo "CLOUDFLARE_AI_CACHE_ID=${{ env.AI_CACHE_ID }}" >> $GITHUB_ENV
+          echo "CLOUDFLARE_ANALYTICS_ID=${{ env.ANALYTICS_ID }}" >> $GITHUB_ENV
+          
+      - name: Deploy to production
+        run: |
+          # Your deployment script here
+          # This could deploy to:
+          # - Render
+          # - Railway
+          # - DigitalOcean App Platform
+          # - Google Cloud Run
+          # - AWS ECS
+          echo "Deploying to production server..."
+        env:
+          # Pass infrastructure IDs to application
+          CLOUDFLARE_AI_CACHE_ID: ${{ env.AI_CACHE_ID }}
+          CLOUDFLARE_ANALYTICS_ID: ${{ env.ANALYTICS_ID }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+
+  health-check:
+    name: Post-Deployment Health Check
+    runs-on: ubuntu-latest
+    needs: deploy-app
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Wait for deployment
+        run: sleep 60
+        
+      - name: Check application health
+        run: |
+          # Check main application
+          curl -f https://api.obsidian-bot.com/health || exit 1
+          
+          # Check AI proxy workers
+          curl -f https://obsidian-bot-workers-prod.your-subdomain.workers.dev/health || exit 1
+          
+          # Check analytics worker
+          curl -f https://obsidian-bot-workers-prod.your-subdomain.workers.dev/status || exit 1
+          
+          echo "✅ All health checks passed"
+          
+      - name: Run smoke tests
+        run: |
+          # Test key endpoints
+          curl -X POST https://obsidian-bot-workers-prod.your-subdomain.workers.dev/ai/proxy/test \
+            -H "Content-Type: application/json" \
+            -d '{"prompt": "Hello world"}' \
+            || exit 1
+            
+          # Test database connectivity
+          curl https://api.obsidian-bot.com/api/services/status || exit 1
+          
+          echo "✅ Smoke tests passed"
+
+  rollback:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: [health-check]
+    if: failure() && github.ref == 'refs/heads/main'
+    steps:
+      - name: Deploy previous version
+        run: |
+          echo "🔄 Initiating rollback..."
+          # Implement your rollback logic here
+          # This could:
+          # 1. Deploy previous Docker image
+          # 2. Revert database migrations
+          # 3. Switch traffic back to previous version
+          
+      - name: Notify team
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#deployments'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          text: |
+            🚨 Deployment rollback initiated for Obsidian Bot
+            Commit: ${{ github.sha }}
+            Branch: ${{ github.ref }}
+            Action: Automated rollback due to failed deployment
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+          
+      - name: Run Gosec security scanner
+        uses: securecodewarrior/github-action-gosec@master
+        with:
+          args: '-no-fail -fmt sarif -out gosec.sarif ./...'
+          
+      - name: Upload Gosec results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'gosec.sarif'
+
+  performance-test:
+    name: Performance Testing
+    runs-on: ubuntu-latest
+    needs: health-check
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Install performance testing tools
+        run: |
+          npm install -g artillery
+          
+      - name: Run performance tests
+        run: |
+          artillery run tests/performance/load-test.yml
+        env:
+          TARGET_URL: https://api.obsidian-bot.com
+          
+      - name: Upload performance results
+        uses: actions/upload-artifact@v3
+        with:
+          name: performance-results
+          path: artillery-report.html

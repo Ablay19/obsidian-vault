@@ -1,0 +1,98 @@
+# Performance testing configuration for Obsidian Bot
+config:
+  target: 'https://api.obsidian-bot.com'
+  phases:
+    - duration: 60
+      arrivalRate: 5
+      name: "Warm up"
+    - duration: 120
+      arrivalRate: 20
+      name: "Normal load"
+    - duration: 60
+      arrivalRate: 50
+      name: "Peak load"
+    - duration: 60
+      arrivalRate: 100
+      name: "Stress test"
+
+scenarios:
+  - name: "Health Check"
+    weight: 20
+    flow:
+      - get:
+          url: "/api/services/status"
+          
+  - name: "AI Proxy Test"
+    weight: 40
+    flow:
+      - post:
+          url: "/ai/proxy/test"
+          headers:
+            Content-Type: "application/json"
+          json:
+            prompt: "What is the capital of France?"
+            
+  - name: "Dashboard Load"
+    weight: 30
+    flow:
+      - get:
+          url: "/dashboard/overview"
+      - think: 1  # Wait 1 second
+      - get:
+          url: "/dashboard/status"
+      - think: 1
+      - get:
+          url: "/dashboard/providers"
+          
+  - name: "SSH Management"
+    weight: 10
+    flow:
+      - get:
+          url: "/api/v1/ssh/users"
+      - post:
+          url: "/api/v1/ssh/users"
+          headers:
+            Content-Type: "application/json"
+          json:
+            username: "test_user"
+            password: "test_password"
+
+# Load testing for Cloudflare Workers
+workers:
+  target: 'https://obsidian-bot-workers-prod.your-subdomain.workers.dev'
+  phases:
+    - duration: 60
+      arrivalRate: 10
+      name: "AI Worker Load"
+      
+  scenarios:
+    - name: "AI Worker Performance"
+      weight: 100
+      flow:
+        - post:
+            url: "/ai/proxy/gemini"
+            headers:
+              Content-Type: "application/json"
+            json:
+              prompt: "Generate a simple function in Python"
+        - think: 2  # Simulate processing time
+        - post:
+            url: "/ai/proxy/groq"
+            headers:
+              Content-Type: "application/json"
+            json:
+              prompt: "What are the benefits of cloud computing?"
+
+# WebSocket performance testing
+websocket:
+  target: 'wss://api.obsidian-bot.com/ws'
+  scenarios:
+    - name: "WebSocket Connection Test"
+      weight: 100
+      engine: ws
+      flow:
+        - connect:
+            target: '/'
+        - send: '{"type": "subscribe", "channel": "status"}'
+        - think: 5
+        - send: '{"type": "ping"}'

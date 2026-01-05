@@ -1,0 +1,29 @@
+name = "obsidian-bot-workers"
+main = "index.js"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[env.production]
+name = "obsidian-bot-workers-prod"
+routes = [
+  { pattern = "api.obsidian-bot.com/ai/*", zone_name = "obsidian-bot.com" }
+]
+
+[env.staging]
+name = "obsidian-bot-workers-staging"
+routes = [
+  { pattern = "staging-api.obsidian-bot.com/ai/*", zone_name = "obsidian-bot.com" }
+]
+
+[[env.production.kv_namespaces]]
+binding = "AI_CACHE"
+id = "your-kv-namespace-id"
+preview_id = "your-preview-kv-namespace-id"
+
+[[env.production.r2_buckets]]
+binding = "MEDIA_STORAGE"
+bucket_name = "obsidian-bot-media"
+
+[vars]
+ENVIRONMENT = "production"
+LOG_LEVEL = "info"
