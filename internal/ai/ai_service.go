@@ -50,6 +50,12 @@ func (s *AIService) InitializeProviders(ctx context.Context) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Handle nil RuntimeConfigManager gracefully
+	if s.sm == nil {
+		s.providers = make(map[string]map[string]AIProvider)
+		return
+	}
+
 	config := s.sm.GetConfig()
 	s.providers = make(map[string]map[string]AIProvider)
 

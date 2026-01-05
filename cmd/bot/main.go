@@ -105,8 +105,7 @@ func main() {
 	rcm, err := state.NewRuntimeConfigManager(dbClient.DB)
 	if err != nil {
 		logger.Error("Failed to initialize RuntimeConfigManager", zap.Error(err))
-		// Continue anyway for port testing
-		// os.Exit(1)
+		os.Exit(1)
 	}
 
 	// Initialize AI Service
