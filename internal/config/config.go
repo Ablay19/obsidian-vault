@@ -17,9 +17,10 @@ import (
 func LoadConfig() {
 	// ... (existing godotenv and viper setup remains the same)
 
-	// Load secrets from Vault
+	// Load secrets from Vault (optional)
 	if err := loadSecretsFromVault(); err != nil {
 		fmt.Printf("Could not load secrets from Vault. Falling back to environment variables: %v\n", err)
+		// Continue with environment variables instead of exiting
 	}
 
 	// ... (rest of the viper setup and unmarshalling remains the same)
@@ -29,8 +30,10 @@ func loadSecretsFromVault() error {
 	vaultAddr := os.Getenv("VAULT_ADDR")
 	vaultToken := os.Getenv("VAULT_TOKEN")
 
+	// If Vault credentials not set, that's okay for development
 	if vaultAddr == "" || vaultToken == "" {
-		return fmt.Errorf("VAULT_ADDR and VAULT_TOKEN must be set")
+		fmt.Printf("Vault credentials not found, using environment variables only\n")
+		return nil // Don't return error, just skip Vault loading
 	}
 
 	config := &api.Config{

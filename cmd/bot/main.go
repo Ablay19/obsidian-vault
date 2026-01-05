@@ -101,6 +101,9 @@ func main() {
 
 	logger.Info("Database connected successfully")
 
+	// Load configuration
+	config.LoadConfig()
+
 	// Initialize RuntimeConfigManager
 	rcm, err := state.NewRuntimeConfigManager(dbClient.DB)
 	if err != nil {
@@ -186,5 +189,9 @@ func main() {
 		}
 	}()
 
+	// Wait for shutdown signal
 	setupGracefulShutdown(server, logger)
+
+	// Block main() from exiting
+	select {}
 }
