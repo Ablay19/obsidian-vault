@@ -43,8 +43,8 @@ func TestAIIntegration_RefreshProviders(t *testing.T) {
 	rcm.ResetState()
 
 	providerConfigs := map[string]config.ProviderConfig{
-		"Gemini": {
-			ProviderName: "Gemini",
+		"gemini": {
+			Model: "gemini-pro",
 		},
 	}
 	switchingRules := config.SwitchingRules{

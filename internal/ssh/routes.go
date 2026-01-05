@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	"go.uber.org/zap"
 )
 
@@ -48,32 +47,24 @@ func (h *UserAPIHandler) AddUser(c *gin.Context) {
 	}
 
 	// TODO: Implement proper password hashing (e.g., bcrypt)
-	hashedPassword := req.Password // Placeholder for now
+	// hashedPassword := req.Password // Placeholder for now - removed unused
 
 	privateKeyBytes, err := GenerateKeyPair(req.Username)
 	if err != nil {
-		logrus.Errorf("Error generating key pair for %s: %v", req.Username, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Error generating key pair: %v", err)})
 		return
 	}
 
 	// GenerateKeyPair already saves the public key, but we need to update the password
-	var user User
-	// This is a placeholder, the original code uses gorm, but the db object is *sql.DB
-	// if err := DB.Where("username = ?", req.Username).First(&user).Error; err != nil {
-	// 	logrus.Errorf("Error retrieving user %s after key generation: %v", req.Username, err)
-	// 	c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
-	// 	return
-	// }
-	user.Password = hashedPassword
-	// DB.Save(&user)
+	// For now, just return the private key since the public key is saved in GenerateKeyPair
+	// TODO: Implement proper user lookup and password update
 
 	// Return the user details and the private key
 	response := struct {
 		User       User   `json:"user"`
 		PrivateKey string `json:"private_key"`
 	}{
-		User:       user,
+		User:       User{}, // Placeholder since we can't do proper user lookup without GORM
 		PrivateKey: string(privateKeyBytes),
 	}
 

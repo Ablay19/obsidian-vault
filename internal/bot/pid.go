@@ -2,7 +2,6 @@ package bot
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"syscall"
@@ -15,7 +14,7 @@ func CreatePIDFile() error {
 	// Check if PID file exists
 	if _, err := os.Stat(pidFile); err == nil {
 		// PID file exists, check if the process is running
-		pidBytes, err := ioutil.ReadFile(pidFile)
+		pidBytes, err := os.ReadFile(pidFile)
 		if err != nil {
 			return fmt.Errorf("failed to read existing PID file: %w", err)
 		}
@@ -37,7 +36,7 @@ func CreatePIDFile() error {
 
 	// Create a new PID file
 	pid := os.Getpid()
-	if err := ioutil.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0644); err != nil {
+	if err := os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0644); err != nil {
 		return fmt.Errorf("failed to create PID file: %w", err)
 	}
 	return nil

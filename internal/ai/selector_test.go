@@ -8,7 +8,7 @@ import (
 func TestSelectProvider(t *testing.T) {
 	profiles := map[string]config.ProviderConfig{
 		"gemini": {
-			ProviderName:         "gemini",
+			Model:                "gemini-pro",
 			InputCostPerToken:    0.0001,
 			OutputCostPerToken:   0.0002,
 			MaxInputTokens:       8000,
@@ -17,7 +17,7 @@ func TestSelectProvider(t *testing.T) {
 			AccuracyPctThreshold: 0.95,
 		},
 		"groq": {
-			ProviderName:         "groq",
+			Model:                "mixtral-8x7b-32768",
 			InputCostPerToken:    0.00005,
 			OutputCostPerToken:   0.0001,
 			MaxInputTokens:       4000,
@@ -42,15 +42,15 @@ func TestSelectProvider(t *testing.T) {
 	// Test case 2: Groq is too slow, Gemini is selected
 	rules.LatencyTarget = 400
 	selected = select_provider(3000, 1, 0.5, profiles, rules)
-	if selected != "gemini" {
-		t.Errorf("Expected gemini, got %s", selected)
+	if selected != "gemini-pro" {
+		t.Errorf("Expected gemini-pro, got %s", selected)
 	}
 
 	// Test case 3: Neither meets accuracy, default is selected
 	rules.LatencyTarget = 1000
 	rules.AccuracyThreshold = 0.98
 	selected = select_provider(3000, 1, 0.5, profiles, rules)
-	if selected != "gemini" {
-		t.Errorf("Expected gemini (default), got %s", selected)
+	if selected != "gemini-pro" {
+		t.Errorf("Expected gemini-pro (default), got %s", selected)
 	}
 }
