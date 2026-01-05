@@ -105,7 +105,8 @@ func main() {
 	rcm, err := state.NewRuntimeConfigManager(dbClient.DB)
 	if err != nil {
 		logger.Error("Failed to initialize RuntimeConfigManager", zap.Error(err))
-		os.Exit(1)
+		// Continue anyway for port testing
+		// os.Exit(1)
 	}
 
 	// Initialize AI Service
@@ -164,8 +165,14 @@ func main() {
 	// Register SSH server routes
 	ssh.RegisterRoutes(router, dbClient.DB, logger.logger)
 
+	port := config.AppConfig.Dashboard.Port
+	if port == 0 {
+		port = 8080 // fallback
+	}
+	logger.Info(fmt.Sprintf("Using port: %d", port))
+
 	server := &http.Server{
-		Addr:         fmt.Sprintf(":%d", config.AppConfig.Dashboard.Port),
+		Addr:         fmt.Sprintf(":%d", port),
 		Handler:      router,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,

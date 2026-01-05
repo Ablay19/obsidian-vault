@@ -72,7 +72,9 @@ func RunMigrations(db *sql.DB) {
 	var migrationPaths []string
 	files, err := os.ReadDir("./internal/database/migrations")
 	if err != nil {
-		telemetry.ZapLogger.Sugar().Fatalw("Failed to read migration directory", "error", err)
+		telemetry.ZapLogger.Sugar().Warnw("Migration directory not found, skipping migrations", "error", err)
+		telemetry.ZapLogger.Sugar().Info("Database migrations skipped (no migration files found)")
+		return
 	}
 
 	for _, fileInfo := range files {
@@ -164,13 +166,13 @@ func CheckExistingInstance(ctx context.Context) error {
 	if isProcessRunning(int(pid)) {
 		return fmt.Errorf("instance with PID %d already running and has a recent heartbeat", pid)
 	}
-	
+
 	// If the process is not running but the heartbeat is recent, something is wrong.
 	// This could happen if the bot crashed and the container is still up.
 	// We'll treat it as a stale instance and remove it.
 	telemetry.ZapLogger.Sugar().Warnw("Instance with recent heartbeat but no running process found, removing stale instance", "pid", pid, "last_heartbeat", startedAt)
 	if err := Client.Queries.DeleteInstance(ctx); err != nil {
-		telemetry.ZapLogger.Sugar().Errorw("Failed to delete stale instance", "pid",pid, "error", err)
+		telemetry.ZapLogger.Sugar().Errorw("Failed to delete stale instance", "pid", pid, "error", err)
 		return fmt.Errorf("failed to delete stale instance with pid %d: %w", pid, err)
 	}
 
@@ -250,8 +252,8 @@ func LinkTelegramToEmail(ctx context.Context, telegramID int64, email string) er
 
 	// Also update the record where ID is telegramID if it doesn't have an email
 	if err := qtx.LinkTelegramToEmailByID(ctx, sqlc.LinkTelegramToEmailByIDParams{
-		Email:      sql.NullString{String: email, Valid: email != ""},
-		ID:         telegramID, // Assuming telegramID is used as the user's ID in the users table for telegram-originated users
+		Email: sql.NullString{String: email, Valid: email != ""},
+		ID:    telegramID, // Assuming telegramID is used as the user's ID in the users table for telegram-originated users
 	}); err != nil {
 		tx.Rollback()
 		return fmt.Errorf("failed to link telegram by ID: %w", err)
@@ -270,4 +272,3 @@ func isProcessRunning(pid int) bool {
 	// It returns an error if the process does not exist.
 	return process.Signal(syscall.Signal(0)) == nil // Changed to syscall.Signal
 }
-

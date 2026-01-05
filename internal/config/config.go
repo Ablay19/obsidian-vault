@@ -72,7 +72,7 @@ func init() {
 
 	// 2. Set Defaults
 	viper.SetDefault("providers.gemini.model", "gemini-pro")
-	// ... (rest of the defaults remain the same)
+	viper.SetDefault("dashboard.port", 8080)
 
 	// 3. Setup environment variable support
 	viper.AutomaticEnv()
