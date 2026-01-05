@@ -8,8 +8,6 @@ import (
 	"io"
 	"net/http"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 // CloudflareProvider implements AIProvider interface for Cloudflare Workers
