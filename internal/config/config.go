@@ -15,15 +15,17 @@ import (
 
 // LoadConfig loads the configuration from a file, environment variables, and Vault.
 func LoadConfig() {
-	// ... (existing godotenv and viper setup remains the same)
-
 	// Load secrets from Vault (optional)
 	if err := loadSecretsFromVault(); err != nil {
 		fmt.Printf("Could not load secrets from Vault. Falling back to environment variables: %v\n", err)
 		// Continue with environment variables instead of exiting
 	}
 
-	// ... (rest of the viper setup and unmarshalling remains the same)
+	// Unmarshal into AppConfig struct
+	if err := viper.Unmarshal(&AppConfig); err != nil {
+		fmt.Printf("Unable to decode into struct: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 func loadSecretsFromVault() error {
@@ -93,10 +95,7 @@ func init() {
 		}
 	}
 
-	// 5. Load secrets from Vault
-	if err := loadSecretsFromVault(); err != nil {
-		fmt.Printf("Could not load secrets from Vault. Falling back to environment variables: %v\n", err)
-	}
+	
 
 	// 6. Unmarshal into AppConfig struct
 	if err := viper.Unmarshal(&AppConfig); err != nil {

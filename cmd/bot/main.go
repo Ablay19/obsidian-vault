@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/auth"
+	"obsidian-automation/internal/bot"
 	"obsidian-automation/internal/config"
 	"obsidian-automation/internal/dashboard"
 	"obsidian-automation/internal/dashboard/ws"
@@ -87,6 +88,9 @@ func setupGracefulShutdown(srv *http.Server, logger *AppLogger) {
 func main() {
 	logger := NewAppLogger(os.Getenv("ENABLE_COLORFUL_LOGS") == "true")
 
+	// Load configuration FIRST
+	config.LoadConfig()
+
 	// Initialize telemetry
 	if _, err := telemetry.Init("obsidian-bot"); err != nil {
 		logger.Error("Failed to initialize telemetry", zap.Error(err))
@@ -100,9 +104,6 @@ func main() {
 	defer dbClient.DB.Close()
 
 	logger.Info("Database connected successfully")
-
-	// Load configuration
-	config.LoadConfig()
 
 	// Initialize RuntimeConfigManager
 	rcm, err := state.NewRuntimeConfigManager(dbClient.DB)
@@ -179,6 +180,14 @@ func main() {
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 	}
+
+	// Start Telegram bot in a goroutine
+	go func() {
+		logger.Info("Starting Telegram bot...")
+		if err := bot.Run(dbClient.DB, aiService, rcm, wsManager); err != nil {
+			logger.Error("Failed to start Telegram bot", zap.Error(err))
+		}
+	}()
 
 	// Start server in a goroutine
 	go func() {

@@ -3,7 +3,7 @@ services:
     name: obsidian-automation-bot
     env: go
     plan: free
-    buildCommand: go build .
+    buildCommand: go build -o obsidian-automation ./cmd/bot/main.go
     startCommand: ./obsidian-automation
     envVars:
       - key: TELEGRAM_BOT_TOKEN

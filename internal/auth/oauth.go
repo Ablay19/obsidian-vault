@@ -53,6 +53,11 @@ type Logger interface {
 
 // NewOAuthService creates a new OAuth service
 func NewOAuthService(config OAuthConfig, logger Logger) (*OAuthService, error) {
+	// Allow empty config for development mode
+	if config.ClientID == "" {
+		logger.Info("OAuth service initialized with empty config (development mode)")
+	}
+
 	oauthConfig := &oauth2.Config{
 		ClientID:     config.ClientID,
 		ClientSecret: config.ClientSecret,

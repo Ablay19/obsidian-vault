@@ -8,19 +8,23 @@ import (
 	"net/url"
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/auth"
+	"obsidian-automation/internal/config"
 	"obsidian-automation/internal/dashboard/ws"
 	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/gcp"
+	"obsidian-automation/internal/pipeline"
 	"obsidian-automation/internal/security"
 	"obsidian-automation/internal/state"
 	"obsidian-automation/internal/status"
 	"obsidian-automation/internal/telemetry"
+	"obsidian-automation/internal/whatsapp"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 type ProcessedFile struct {
@@ -37,12 +41,13 @@ type ProcessedFile struct {
 
 // Dashboard holds dependencies for the dashboard server.
 type Dashboard struct {
-	aiService   *ai.AIService
-	rcm         *state.RuntimeConfigManager
-	db          *sql.DB
-	authService *auth.AuthService
-	wsManager   *ws.Manager
-	rateLimiter *security.RateLimiter
+	aiService       *ai.AIService
+	rcm             *state.RuntimeConfigManager
+	db              *sql.DB
+	authService     *auth.AuthService
+	wsManager       *ws.Manager
+	rateLimiter     *security.RateLimiter
+	whatsappHandler *whatsapp.Handler
 }
 
 // NewDashboard creates a new Dashboard instance.
@@ -51,13 +56,35 @@ func NewDashboard(aiService *ai.AIService, rcm *state.RuntimeConfigManager, db *
 	if redisAddr == "" {
 		redisAddr = "localhost:6379"
 	}
+
+	// Initialize WhatsApp service
+	whatsappConfig := whatsapp.Config{
+		AccessToken: config.AppConfig.WhatsApp.AccessToken,
+		VerifyToken: config.AppConfig.WhatsApp.VerifyToken,
+		AppSecret:   config.AppConfig.WhatsApp.AppSecret,
+	}
+
+	// Create a simple pipeline for WhatsApp (can be enhanced later)
+	whatsappPipeline := pipeline.NewPipeline(1, 10, nil)
+	
+	whatsappService := whatsapp.NewService(
+		whatsappConfig,
+		whatsappPipeline,
+		telemetry.ZapLogger,
+		whatsapp.NewFileSystemStorage("attachments/whatsapp"),
+		whatsapp.NewValidator(),
+	)
+
+	whatsappHandler := whatsapp.NewHandler(whatsappService, telemetry.ZapLogger)
+
 	return &Dashboard{
-		aiService:   aiService,
-		rcm:         rcm,
-		db:          db,
-		authService: authService,
-		wsManager:   wsManager,
-		rateLimiter: security.NewRedisRateLimiter(redisAddr, 100, time.Minute), // 100 req/min default
+		aiService:       aiService,
+		rcm:             rcm,
+		db:              db,
+		authService:     authService,
+		wsManager:       wsManager,
+		rateLimiter:     security.NewRedisRateLimiter(redisAddr, 100, time.Minute), // 100 req/min default
+		whatsappHandler: whatsappHandler,
 	}
 }
 
@@ -83,6 +110,8 @@ func (d *Dashboard) RegisterRoutes(router *gin.Engine) {
 		v1 := api.Group("/v1")
 		{
 			v1.POST("/auth/telegram/webhook", d.handleTelegramWebhook)
+			v1.POST("/auth/whatsapp/webhook", d.handleWhatsAppWebhook)
+			v1.GET("/auth/whatsapp/webhook", d.handleWhatsAppWebhookVerify)
 		}
 
 		// GCP Discovery routes
@@ -722,4 +751,14 @@ func (d *Dashboard) handleTelegramWebhook(c *gin.Context) {
 	}
 
 	c.Redirect(http.StatusFound, "/?linked=true")
+}
+
+// handleWhatsAppWebhook handles POST requests to WhatsApp webhook
+func (d *Dashboard) handleWhatsAppWebhook(c *gin.Context) {
+	d.whatsappHandler.ServeHTTP(c.Writer, c.Request)
+}
+
+// handleWhatsAppWebhookVerify handles GET requests for WhatsApp webhook verification
+func (d *Dashboard) handleWhatsAppWebhookVerify(c *gin.Context) {
+	d.whatsappHandler.ServeHTTP(c.Writer, c.Request)
 }

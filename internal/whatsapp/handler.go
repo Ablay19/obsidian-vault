@@ -1,6 +1,9 @@
 package whatsapp
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -102,21 +105,20 @@ func (h *Handler) validateSignature(signature string, payload []byte) bool {
 	if !strings.HasPrefix(signature, "sha256=") {
 		return false
 	}
+	actualSignature := strings.TrimPrefix(signature, "sha256=")
 
-	// For now, we'll use a simple validation. In a real implementation,
-	// you should use the app secret from your configuration.
-	// This is a placeholder that should be replaced with proper secret management.
-	h.logger.Warn("Signature validation not properly implemented - please implement with app secret")
+	// Get app secret from service configuration
+	secret := h.service.GetConfig().AppSecret
+	if secret == "" {
+		h.logger.Warn("No app secret configured for WhatsApp signature validation")
+		return false
+	}
 
-	// TODO: Implement proper signature validation with app secret
-	// secret := h.service.GetConfig().AppSecret
-	// mac := hmac.New(sha256.New, []byte(secret))
-	// mac.Write(payload)
-	// expectedSignature := hex.EncodeToString(mac.Sum(nil))
-	// actualSignature := strings.TrimPrefix(signature, "sha256=")
-	// return hmac.Equal([]byte(actualSignature), []byte(expectedSignature))
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(payload)
+	expectedSignature := hex.EncodeToString(mac.Sum(nil))
 
-	return true
+	return hmac.Equal([]byte(actualSignature), []byte(expectedSignature))
 }
 
 // WhatsAppWebhookHandler is a compatibility function that can be used with the existing system

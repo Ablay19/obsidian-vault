@@ -145,6 +145,11 @@ func NewService(
 	}
 }
 
+// GetConfig returns the service configuration
+func (s *service) GetConfig() Config {
+	return s.config
+}
+
 // VerifyWebhook handles webhook verification
 func (s *service) VerifyWebhook(ctx context.Context, token, challenge string) (bool, string, error) {
 	if token == s.config.VerifyToken {

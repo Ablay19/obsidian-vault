@@ -218,7 +218,7 @@ func validateGoogleClientID(clientID string) error {
 		return fmt.Errorf("Google Client ID too short")
 	}
 
-	if !regexp.MustCompile(`^[0-9.-]+$`).MatchString(clientID) {
+	if !regexp.MustCompile(`^[0-9a-zA-Z.-]+$`).MatchString(clientID) {
 		return fmt.Errorf("Google Client ID format appears invalid")
 	}
 

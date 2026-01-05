@@ -213,15 +213,12 @@ func (s *AuthService) GinMiddleware() gin.HandlerFunc {
 
 		// Check for dev bypass
 		if os.Getenv("ENVIRONMENT_MODE") == "dev" {
-			// If we are in dev mode and have no session, we'll allow a "dev-session"
-			_, err := s.VerifySession(c.Request)
-			if err != nil {
-				telemetry.ZapLogger.Sugar().Info("Dev mode detected: Bypassing real OAuth")
-				devSession, _ := s.CreateDevSession()
-				c.Set("session", devSession)
-				c.Next()
-				return
-			}
+			// If we are in dev mode, always allow dev session
+			telemetry.ZapLogger.Sugar().Info("Dev mode detected: Using development session")
+			devSession, _ := s.CreateDevSession()
+			c.Set("session", devSession)
+			c.Next()
+			return
 		}
 
 		session, err := s.VerifySession(c.Request)
