@@ -16,6 +16,7 @@ primary_technologies:
   - "Templ"
   - "HTMX"
   - "Alpine.js"
+  - "Bubbletea"
 entrypoint: "cmd/bot/main.go"
 documentation:
   - "GEMINI.md"
@@ -42,6 +43,7 @@ This project is a Go-based automation system that bridges the gap between messag
     *   Creates Markdown notes and high-fidelity PDFs (default).
     *   **Git Sync**: Automatically commits and pushes new notes to a Git repository.
     *   **Real-time Dashboard**: HTMX-powered SPA for management, featuring real-time chat history and provider control.
+-   **Interactive CLI**: A `bubbletea`-based terminal user interface for managing the bot, including views for bot status, AI providers, and user management.
 
 ## 3. Key Files and Directories
 
@@ -51,6 +53,7 @@ This project is a Go-based automation system that bridges the gap between messag
 -   `internal/bot/`: Telegram specific logic and pipeline adapters.
 -   `internal/ai/`: Multi-provider AI service with failover logic.
 -   `internal/dashboard/`: UI components using Templ, HTMX, and Alpine.js.
+-   `cmd/cli/tui/`: The `bubbletea`-based TUI for the CLI.
 
 ## 4. Roadmap & Next Steps
 
@@ -66,18 +69,24 @@ This project is a Go-based automation system that bridges the gap between messag
 -   `make logs`: Tails the live logs from the running container.
 -   `make build`: Forces a rebuild of the Docker image.
 -   `make help`: Shows a list of all available `make` commands.
+-   `go run ./cmd/cli tui`: Starts the interactive CLI.
+-   `go run ./cmd/cli add-user <username>`: Adds a new SSH user.
 
 ## 5. Detailed Data Flow
 
-1.  **Message Reception**: The bot's main loop in `internal/bot/main.go` receives an update from the Telegram API.
-2.  **Message Handling**: The appropriate handler (`handleCommand`, `handlePhoto`, `handleDocument`) is called based on the message type.
-3.  **File Download**: If the message contains a file, it's downloaded to `./vault/attachments`.
-4.  **Duplicate Check**: The file's SHA256 hash is checked against the `processed_files` table in the database to prevent reprocessing.
-5.  **Text Extraction**: Text is extracted using Tesseract (for images) or `pdftotext` (for PDFs).
-6.  **AI Processing**: The extracted text is sent to the active AI provider (`internal/ai/ai_service.go`) to generate a summary and structured data (category, topics).
-7.  **Note Creation**: A new Markdown note is created in the `./vault/Inbox` directory (or a categorized subdirectory).
-8.  **Response to User**: The AI-generated summary is streamed back to the user in real-time.
-9.  **Dashboard**: The web dashboard at `http://localhost:8080` continuously polls API endpoints in `internal/dashboard/dashboard.go` to display real-time status.
+1.  **Service Startup**: The main application in `cmd/bot/main.go` starts all the services:
+    *   Web dashboard and API server.
+    *   SSH server for secure remote access.
+    *   Telegram bot listener.
+2.  **Message Reception**: The bot's main loop receives an update from the Telegram API.
+3.  **Message Handling**: The appropriate handler (`handleCommand`, `handlePhoto`, `handleDocument`) is called based on the message type.
+4.  **File Download**: If the message contains a file, it's downloaded to `./vault/attachments`.
+5.  **Duplicate Check**: The file's SHA256 hash is checked against the `processed_files` table in the database to prevent reprocessing.
+6.  **Text Extraction**: Text is extracted using Tesseract (for images) or `pdftotext` (for PDFs).
+7.  **AI Processing**: The extracted text is sent to the active AI provider (`internal/ai/ai_service.go`) to generate a summary and structured data (category, topics).
+8.  **Note Creation**: A new Markdown note is created in the `./vault/Inbox` directory (or a categorized subdirectory).
+9.  **Response to User**: The AI-generated summary is streamed back to the user in real-time.
+10. **Dashboard**: The web dashboard at `http://localhost:8080` continuously polls API endpoints in `internal/dashboard/dashboard.go` to display real-time status.
 
 ## 6. Key Structs and Interfaces
 
@@ -95,6 +104,7 @@ This project is a Go-based automation system that bridges the gap between messag
 -   User-facing errors (e.g., invalid command) result in a message sent to the user.
 -   Critical errors on startup (e.g., failed to connect to the database) will cause the application to exit.
 -   The Gemini provider includes automatic API key rotation to handle `429` quota errors.
+-   **Instance Management**: A heartbeat-based mechanism is used to detect and clean up stale bot instances, preventing deadlocks during restarts in containerized environments.
 
 ## 8. Configuration in Depth
 

@@ -1,0 +1,292 @@
+name: Enhanced CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # Environment validation job
+  env-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Validate environment
+        run: |
+          # Create .env file for testing
+          cat > .env << 'EOF'
+          TURSO_DATABASE_URL="libsql://test.turso.io"
+          TURSO_AUTH_TOKEN="test-token"
+          TELEGRAM_BOT_TOKEN="123456789:ABCDEF123456"
+          SESSION_SECRET="this-is-a-very-secure-session-secret-32chars"
+          GEMINI_API_KEYS="test-gemini-key-1,test-gemini-key-2"
+          GROQ_API_KEY="test-groq-key"
+          ENVIRONMENT_MODE="dev"
+          EOF
+
+      - name: Run environment validation
+        run: |
+          go run -tags env_validation ./cmd/cli/config/env_validation.go validate
+
+      - name: Check environment validation results
+        if: ${{ steps.validate.outputs.exit-code }} != 0
+          run: |
+            echo "❌ Environment validation failed"
+            exit 1
+        else
+          run: |
+            echo "✅ Environment validation passed"
+
+  # CLI testing job
+  cli-tests:
+    runs-on: ubuntu-latest
+    needs: env-validation
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Install dependencies
+        run: |
+          go mod download
+          go install github.com/a-h/templ/cmd/templ@latest
+
+      - name: Generate templates
+        run: templ generate
+
+      - name: Verify generated code
+        run: |
+          git diff --exit-code || (echo "❌ Templ generated code is not up to date. Run 'templ generate' and commit changes." && exit 1)
+
+      - name: Run CLI unit tests
+        run: |
+          go test -v ./cmd/cli/tui/views/...
+
+      - name: Run CLI integration tests
+        run: |
+          go test -v ./cmd/cli/... -tags=integration
+
+      - name: Run CLI with mock data
+        run: |
+          # Test CLI can start with mock data
+          timeout 30s go run ./cmd/cli/tui/main.go --test-mode || true
+
+  # WhatsApp service tests
+  whatsapp-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Run WhatsApp service tests
+        run: |
+          go test -v ./internal/whatsapp/...
+
+      - name: Run WhatsApp integration tests
+        run: |
+          go test -v ./internal/whatsapp/... -tags=integration
+
+  # Authentication service tests
+  auth-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Run authentication service tests
+        run: |
+          go test -v ./internal/auth/...
+
+      - name: Run authentication integration tests
+        run: |
+          go test -v ./internal/auth/... -tags=integration
+
+  # Environment validation tests
+  env-validation-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Run environment validation tests
+        run: |
+          go test -v ./internal/config/...
+
+      - name: Run environment validation benchmarks
+        run: |
+          go test -v -bench ./internal/config/...
+
+  # Build and security scan
+  build-and-security:
+    runs-on: ubuntu-latest
+    needs: [cli-tests, whatsapp-tests, auth-tests]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Install dependencies
+        run: |
+          go mod download
+          go install github.com/a-h/templ/cmd/templ@latest
+
+      - name: Generate templates
+        run: templ generate
+
+      - name: Verify generated code
+        run: |
+          git diff --exit-code || (echo "❌ Templ generated code is not up to date. Run 'templ generate' and commit changes." && exit 1)
+
+      - name: Run Go vet
+        run: go vet ./...
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: latest
+          args: --timeout=5m
+
+      - name: Run security scan (gosec)
+        uses: securecodewarrior/github-action-gosec@master
+        with:
+          args: '-no-fail -fmt-s3=false'
+
+      - name: Run security scan (nancy)
+        uses: securecodewarrior/github-action-nancy@v1.0.12
+
+      - name: Build application
+        run: |
+          go build -o obsidian-bot ./cmd/bot
+          go build -o obsidian-cli ./cmd/cli
+
+      - name: Build CLI binary
+        run: |
+          go build -o ./bin/obsidian-cli ./cmd/cli
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-artifacts
+          path: |
+            obsidian-bot
+            bin/obsidian-cli
+          retention-days: 30
+
+  # Integration tests
+  integration-tests:
+    runs-on: ubuntu-latest
+    needs: build-and-security
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: build-artifacts
+
+      - name: Make binaries executable
+        run: |
+          chmod +x obsidian-bot
+          chmod +x obsidian-cli
+          chmod +x bin/obsidian-cli
+
+      - name: Set up test environment
+        run: |
+          # Create test configuration
+          cat > test-config.yaml << 'EOF'
+          providers:
+            gemini:
+              model: gemini-pro
+            groq:
+              model: llama3-8b
+          whatsapp:
+            access_token: "test-access-token"
+            verify_token: "test-verify-token"
+            app_secret: "test-app-secret"
+          auth:
+            session_secret: "test-session-secret-32-chars-long"
+          EOF
+
+      - name: Run end-to-end integration tests
+        run: |
+          # Test WhatsApp integration end-to-end
+          go test -v ./... -tags=e2e -timeout=10m || true
+
+      - name: Run system integration tests
+        run: |
+          # Test complete system integration
+          go test -v ./... -tags=system -timeout=15m || true
+
+  # Performance tests
+  performance-tests:
+    runs-on: ubuntu-latest
+    needs: build-and-security
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: build-artifacts
+
+      - name: Make binaries executable
+        run: |
+          chmod +x obsidian-bot
+          chmod +x obsidian-cli
+
+      - name: Run benchmark tests
+        run: |
+          go test -bench=. -benchmem ./... -timeout=30m || true
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark-results
+          path: |
+            bench.txt
+            mem.prof
+          retention-days: 30

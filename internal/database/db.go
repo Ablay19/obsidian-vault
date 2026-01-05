@@ -130,25 +130,51 @@ func RunMigrations(db *sql.DB) {
 	telemetry.ZapLogger.Sugar().Info("Database migrations applied successfully.")
 }
 
-// CheckExistingInstance checks if another bot instance is running.
+const HEARTBEAT_THRESHOLD = 30 * time.Second
+
+// CheckExistingInstance checks if another bot instance is running and cleans up stale instances.
 func CheckExistingInstance(ctx context.Context) error {
-	pid, err := Client.Queries.GetInstancePID(ctx)
+	var pid int64
+	var startedAt time.Time
+
+	// Use a raw query to fetch the instance details
+	row := Client.DB.QueryRowContext(ctx, "SELECT pid, started_at FROM instances WHERE id = 1")
+	err := row.Scan(&pid, &startedAt)
+
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil // No instance found, safe to start
 		}
-		return fmt.Errorf("failed to get instance PID: %w", err)
+		return fmt.Errorf("failed to get instance: %w", err)
 	}
 
-	// Check if the process with pid is still running
-	if !isProcessRunning(int(pid)) {
-		telemetry.ZapLogger.Sugar().Warnw("Stale PID found, removing and starting new instance", "pid", pid)
+	// If the heartbeat is older than the threshold, consider the instance stale.
+	if time.Since(startedAt) > HEARTBEAT_THRESHOLD {
+		telemetry.ZapLogger.Sugar().Warnw("Stale instance found, removing and starting new instance", "pid", pid, "last_heartbeat", startedAt)
 		if err := Client.Queries.DeleteInstance(ctx); err != nil {
 			telemetry.ZapLogger.Sugar().Errorw("Failed to delete stale instance", "pid", pid, "error", err)
+			return fmt.Errorf("failed to delete stale instance with pid %d: %w", pid, err)
 		}
-		return nil
+		return nil // Stale instance removed, safe to start
 	}
-	return fmt.Errorf("instance with PID %d already running", pid)
+
+	// The instance is not stale, check if the process is running.
+	// This is a secondary check; the primary one is the heartbeat.
+	// In a container environment, this PID check can be misleading, but we keep it as a fallback.
+	if isProcessRunning(int(pid)) {
+		return fmt.Errorf("instance with PID %d already running and has a recent heartbeat", pid)
+	}
+	
+	// If the process is not running but the heartbeat is recent, something is wrong.
+	// This could happen if the bot crashed and the container is still up.
+	// We'll treat it as a stale instance and remove it.
+	telemetry.ZapLogger.Sugar().Warnw("Instance with recent heartbeat but no running process found, removing stale instance", "pid", pid, "last_heartbeat", startedAt)
+	if err := Client.Queries.DeleteInstance(ctx); err != nil {
+		telemetry.ZapLogger.Sugar().Errorw("Failed to delete stale instance", "pid",pid, "error", err)
+		return fmt.Errorf("failed to delete stale instance with pid %d: %w", pid, err)
+	}
+
+	return nil
 }
 
 // AddInstance records the current bot instance's PID and start time.

@@ -61,6 +61,12 @@ func (t *TelegramBot) GetFile(config tgbotapi.FileConfig) (tgbotapi.File, error)
 
 // Run initializes and starts the bot.
 func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.RuntimeConfigManager, wsm *ws.Manager) error {
+	// Check external binary dependencies first
+	if err := ValidateBinaries(); err != nil {
+		telemetry.ZapLogger.Sugar().Errorw("Binary validation failed", "error", err)
+		// Log the error but continue - bot will run with limited functionality
+		telemetry.ZapLogger.Sugar().Warn("Bot will start with limited functionality. Some features may not work properly.")
+	}
 	aiService = ais
 	rcm = runtimeConfigManager // Assign to package-level variable
 	wsManager = wsm
@@ -91,7 +97,7 @@ func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.Runt
 
 	// Initialize Pipeline
 	processor := NewBotProcessor(aiService)
-	sink := NewBotSink(database.Client.DB, botAPI, gitManager) // Use database.Client.DB
+	sink := NewBotSink(database.Client.DB, botAPI, gitManager)        // Use database.Client.DB
 	ingestionPipeline = pipeline.NewPipeline(3, 100, processor, sink) // 3 workers, buffer 100
 	ingestionPipeline.Start(context.Background())
 	defer ingestionPipeline.Stop()
@@ -103,6 +109,15 @@ func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.Runt
 		IngestionPipeline: ingestionPipeline,
 		GitManager:        gitManager,
 	})
+
+	// Initialize State Machine and Command Handler Manager
+	messageProcessor := NewMessageProcessor(aiService)
+	stagingStateMachine := NewStagingStateMachine(messageProcessor)
+	commandHandlerManager := &CommandHandlerManager{
+		stateMachine:  stagingStateMachine,
+		commandRouter: commandRouter,
+	}
+	fileHandler := NewFileHandler(stagingStateMachine)
 
 	commands := []tgbotapi.BotCommand{
 		{Command: "start", Description: "Start the bot"},
@@ -136,16 +151,16 @@ func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.Runt
 			continue
 		}
 		telemetry.ZapLogger.Sugar().Debugw("Received update", "update_id", update.UpdateID)
-		go handleUpdate(context.Background(), bot, &update, token, commandRouter) // Pass context
+		go handleUpdate(context.Background(), bot, &update, token, commandHandlerManager, fileHandler) // Pass context
 	}
 	return nil
 }
 
 // handleUpdate processes incoming Telegram updates.
-func handleUpdate(ctx context.Context, bot Bot, update *tgbotapi.Update, token string, commandRouter map[string]CommandHandler) {
+func handleUpdate(ctx context.Context, bot Bot, update *tgbotapi.Update, token string, commandHandlerManager *CommandHandlerManager, fileHandler *FileHandler) {
 	if update.CallbackQuery != nil {
 		telemetry.ZapLogger.Sugar().Infow("Handling callback query", "chat_id", update.CallbackQuery.Message.Chat.ID, "data", update.CallbackQuery.Data)
-		handleCallbackQuery(bot, update.CallbackQuery, commandRouter)
+		handleCallbackQuery(bot, update.CallbackQuery, commandHandlerManager.GetCommandRouter())
 		return
 	}
 
@@ -190,11 +205,11 @@ func handleUpdate(ctx context.Context, bot Bot, update *tgbotapi.Update, token s
 	}
 
 	if update.Message.Photo != nil {
-		handlePhoto(ctx, bot, update.Message, token) // Pass context
+		handlePhoto(ctx, bot, update.Message, token, fileHandler) // Pass context
 	} else if update.Message.Document != nil {
-		handleDocument(ctx, bot, update.Message, token) // Pass context
+		handleDocument(ctx, bot, update.Message, token, fileHandler) // Pass context
 	} else if update.Message.IsCommand() || update.Message.Text != "" {
-		handleCommand(bot, update.Message, commandRouter)
+		handleCommand(ctx, bot, update.Message, commandHandlerManager) // Pass context
 	}
 }
 
@@ -225,68 +240,16 @@ func handleCallbackQuery(bot Bot, callback *tgbotapi.CallbackQuery, commandRoute
 }
 
 // handleCommand processes text messages and commands.
-func handleCommand(bot Bot, message *tgbotapi.Message, commandRouter map[string]CommandHandler) {
-	telemetry.ZapLogger.Sugar().Infow("Processing command/text", "chat_id", message.Chat.ID, "text", message.Text)
-	database.UpsertUser(context.Background(), message.From) // Pass context
+func handleCommand(ctx context.Context, bot Bot, message *tgbotapi.Message, commandHandlerManager *CommandHandlerManager) {
 	state := getUserState(message.From.ID) // Get user state for language
-
-	if !message.IsCommand() {
-		// New Staging Logic
-		if state.IsStaging {
-			if state.PendingContext != "" {
-				state.PendingContext += "\n"
-			}
-			state.PendingContext += message.Text
-			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "📝 Context added. Add more or type /process."))
-			return
-		}
-
-		telemetry.ZapLogger.Sugar().Infow("Handling non-command text as AI prompt", "chat_id", message.Chat.ID, "text_len", len(message.Text))
-		// Handle non-command text messages as a general AI prompt
-		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Thinking..."))
-
-		var responseText strings.Builder
-		// writer := &responseText // No longer using io.Writer
-
-		systemPrompt := fmt.Sprintf("Respond in %s. Output your response as valid HTML, with proper headings, paragraphs, and LaTeX formulas using MathJax syntax.", state.Language)
-
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
-
-		req := &ai.RequestModel{
-			SystemPrompt: systemPrompt,
-			UserPrompt:   message.Text,
-			Temperature:  0.7,
-		}
-
-		err := aiService.Chat(ctx, req, func(chunk string) {
-			responseText.WriteString(chunk)
-		})
-
-		if err != nil {
-			bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Sorry, I had trouble thinking: "+err.Error()))
-			return
-		}
-
-		msg := tgbotapi.NewMessage(message.Chat.ID, responseText.String())
-		msg.ParseMode = tgbotapi.ModeHTML
-		sentMsg, err := bot.Send(msg)
-		if err == nil {
-			database.SaveMessage(context.Background(), message.From.ID, message.Chat.ID, sentMsg.MessageID, "out", "text", responseText.String(), "") // Pass context
-		}
-		return
-	}
-
-	if handler, ok := commandRouter[message.Command()]; ok {
-		handler.Handle(bot, message, state)
-	} else {
-		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Unknown command. Use /help to see available commands."))
+	err := commandHandlerManager.HandleCommand(ctx, bot, message, state)
+	if err != nil {
+		telemetry.ZapLogger.Sugar().Errorw("Failed to handle command", "error", err, "command", message.Text)
 	}
 }
 
 // handlePhoto processes incoming photos.
-func handlePhoto(ctx context.Context, bot Bot, message *tgbotapi.Message, token string) { // Pass context
-	database.UpsertUser(ctx, message.From) // Pass context
+func handlePhoto(ctx context.Context, bot Bot, message *tgbotapi.Message, token string, fileHandler *FileHandler) { // Pass context
 	status.UpdateActivity()
 
 	photo := message.Photo[len(message.Photo)-1]
@@ -296,23 +259,14 @@ func handlePhoto(ctx context.Context, bot Bot, message *tgbotapi.Message, token 
 		return
 	}
 
-	state := getUserState(message.From.ID)
-	state.PendingFile = filename
-	state.PendingFileType = "image"
-	state.IsStaging = true
-	state.PendingContext = ""
-
-	// Check for caption and add it as initial context
-	if message.Caption != "" {
-		state.PendingContext = message.Caption
+	err := fileHandler.HandlePhoto(ctx, bot, message, filename)
+	if err != nil {
+		telemetry.ZapLogger.Sugar().Errorw("Failed to handle photo", "error", err)
 	}
-
-	bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🖼️ Image staged. Send additional text context, or type /process to analyze."))
 }
 
 // handleDocument processes incoming documents.
-func handleDocument(ctx context.Context, bot Bot, message *tgbotapi.Message, token string) { // Pass context
-	database.UpsertUser(ctx, message.From) // Pass context
+func handleDocument(ctx context.Context, bot Bot, message *tgbotapi.Message, token string, fileHandler *FileHandler) { // Pass context
 	status.UpdateActivity()
 
 	doc := message.Document
@@ -328,17 +282,10 @@ func handleDocument(ctx context.Context, bot Bot, message *tgbotapi.Message, tok
 		return
 	}
 
-	state := getUserState(message.From.ID)
-	state.PendingFile = filename
-	state.PendingFileType = "pdf"
-	state.IsStaging = true
-	state.PendingContext = ""
-
-	if message.Caption != "" {
-		state.PendingContext = message.Caption
+	err := fileHandler.HandleDocument(ctx, bot, message, filename)
+	if err != nil {
+		telemetry.ZapLogger.Sugar().Errorw("Failed to handle document", "error", err)
 	}
-
-	bot.Send(tgbotapi.NewMessage(message.Chat.ID, "📄 PDF staged. Send additional text context, or type /process to analyze."))
 }
 
 // downloadFile downloads a file from Telegram.

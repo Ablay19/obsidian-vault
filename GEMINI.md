@@ -21,17 +21,19 @@ The project is designed to be robust and resilient, featuring automatic API key 
 ### Bot & User Interaction
 - **Multi-Platform Support**: Interact with the bot via Telegram and WhatsApp.
 - **Web Dashboard**: A web-based interface for monitoring bot status, managing AI providers, and viewing system information.
+- **Interactive CLI**: A `bubbletea`-based terminal user interface for managing the bot, including views for bot status, AI providers, and user management.
 - **Interactive Commands**: A rich set of slash commands for managing the bot and accessing features.
 - **Command Autocompletion**: Registers its command list with Telegram, providing users with an easy-to-use command menu.
 
 ### Robustness & Configuration
 - **Automatic Key Rotation**: Automatically detects API quota errors and switches to the next available key.
+- **Heartbeat-based Instance Management**: The bot uses a heartbeat mechanism to detect and clean up stale instances, ensuring high availability and preventing deadlocks in containerized environments.
 - **Database-Driven State**: Bot instance and chat history are managed in a Turso database.
 - **Type-Safe Database Layer**: Uses `sqlc` to generate Go code from SQL queries, ensuring type safety.
 
 ## 3. Architecture
 
-The bot's architecture is centered around a main Go application running inside a Docker container, backed by a Turso database.
+The bot's architecture is centered around a main Go application running inside a Docker container, backed by a Turso database. A separate CLI application is provided for management tasks.
 
 ```mermaid
 graph TD
@@ -39,6 +41,7 @@ graph TD
         A[User on Telegram]
         B[User on WhatsApp]
         UDB[User on Web Browser (Dashboard)]
+        CLIUser[User on Terminal]
     end
 
     subgraph "Go Application (Docker)"
@@ -50,6 +53,11 @@ graph TD
         H[internal/health: Health & Control]
         Dash[internal/dashboard: Web UI & API]
         Stat[internal/status: Shared Bot Status]
+        SSH[internal/ssh: SSH Server]
+    end
+    
+    subgraph "CLI Application"
+        CLIBin[cmd/cli: Standalone TUI & User Management]
     end
 
     subgraph "AI Providers"
@@ -63,8 +71,9 @@ graph TD
 
     A -- "Text, Images, PDFs, Commands" --> C
     B -- "Webhook" --> C
-    C -- "Starts Bot & Dashboard" --> D
-    C -- "Starts Bot & Dashboard" --> Dash
+    C -- "Starts Services" --> D
+    C -- "Starts Services" --> Dash
+    C -- "Starts Services" --> SSH
     D -- "Uses" --> E
     D -- "Uses" --> F
     D -- "Uses" --> G
@@ -77,6 +86,11 @@ graph TD
     E -- "API Requests" --> J
     G -- "SQL Queries" --> K
     D -- "SQL Queries" --> K
+    SSH -- "Manages Users" --> K
+    
+    CLIUser -- "Runs" --> CLIBin
+    CLIBin -- "Manages Users" --> K
+    
     Stat -- "Bot Status/Activity" --> H(Health Endpoint)
     H -- "Reads" --> Stat
 ```

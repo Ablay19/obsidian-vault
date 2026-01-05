@@ -62,14 +62,6 @@ var completionCmd = &cobra.Command{
 	},
 }
 
-var sshCmd = &cobra.Command{
-	Use:   "ssh",
-	Short: "Start the SSH server",
-	Run: func(cmd *cobra.Command, args []string) {
-		ssh.StartServer()
-	},
-}
-
 var addUserCmd = &cobra.Command{
 	Use:   "add-user [username]",
 	Short: "Add a new SSH user and generate a key pair",
@@ -99,8 +91,7 @@ func init() {
 	rootCmd.AddCommand(tuiCmd)
 	rootCmd.AddCommand(emailCmd)
 	rootCmd.AddCommand(completionCmd)
-	rootCmd.AddCommand(sshCmd)
-	sshCmd.AddCommand(addUserCmd)
+	rootCmd.AddCommand(addUserCmd)
 }
 
 func Execute() {
