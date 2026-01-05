@@ -83,6 +83,8 @@ func (s *AIService) InitializeProviders(ctx context.Context) {
 					provider = NewHuggingFaceProvider(keyState.Value, modelName)
 				case "OpenRouter":
 					provider = NewOpenRouterProvider(keyState.Value, modelName, nil)
+				case "Cloudflare":
+					provider = NewCloudflareProvider(keyState.Value)
 				default:
 					zap.S().Warn("Unknown provider", "name", providerName)
 					continue
