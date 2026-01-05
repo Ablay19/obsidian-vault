@@ -11,14 +11,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"obsidian-automation/internal/ai"
+	"obsidian-automation/internal/auth"
 	"obsidian-automation/internal/config"
 	"obsidian-automation/internal/dashboard"
+	"obsidian-automation/internal/dashboard/ws"
 	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/ssh"
 	"obsidian-automation/internal/state"
-	"obsidian-automation/internal/ai"
-	"obsidian-automation/internal/auth"
-	"obsidian-automation/internal/dashboard/ws"
+	"obsidian-automation/internal/telemetry"
 )
 
 // AppLogger wraps zap logger with color support
@@ -86,7 +87,11 @@ func setupGracefulShutdown(srv *http.Server, logger *AppLogger) {
 func main() {
 	logger := NewAppLogger(os.Getenv("ENABLE_COLORFUL_LOGS") == "true")
 
-
+	// Initialize telemetry
+	if _, err := telemetry.Init("obsidian-bot"); err != nil {
+		logger.Error("Failed to initialize telemetry", zap.Error(err))
+		os.Exit(1)
+	}
 
 	logger.Info("Starting Obsidian Bot API Server")
 

@@ -9,7 +9,6 @@ import (
 	"github.com/hashicorp/vault/api"
 	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
-	"go.uber.org/zap"
 )
 
 // ... (struct definitions remain the same)
@@ -20,7 +19,7 @@ func LoadConfig() {
 
 	// Load secrets from Vault
 	if err := loadSecretsFromVault(); err != nil {
-		zap.S().Warnw("Could not load secrets from Vault. Falling back to environment variables.", "error", err)
+		fmt.Printf("Could not load secrets from Vault. Falling back to environment variables: %v\n", err)
 	}
 
 	// ... (rest of the viper setup and unmarshalling remains the same)
@@ -53,10 +52,10 @@ func loadSecretsFromVault() error {
 
 	for key, value := range secret.Data {
 		viper.Set(key, value)
-		zap.S().Debugf("Loaded secret from Vault: %s", key)
+		fmt.Printf("Loaded secret from Vault: %s\n", key)
 	}
 
-	zap.S().Info("Successfully loaded secrets from Vault.")
+	fmt.Println("Successfully loaded secrets from Vault.")
 	return nil
 }
 
@@ -66,9 +65,9 @@ var AppConfig Config
 func init() {
 	// 1. Load .env file using godotenv (actually sets OS environment variables)
 	if err := godotenv.Load(); err != nil {
-		zap.S().Debug("No .env file found or error loading it", "error", err)
+		fmt.Printf("No .env file found or error loading it: %v\n", err)
 	} else {
-		zap.S().Info(".env file loaded into environment successfully")
+		fmt.Println(".env file loaded into environment successfully")
 	}
 
 	// 2. Set Defaults
@@ -85,20 +84,21 @@ func init() {
 	viper.AddConfigPath(".")
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			zap.S().Info("config.yaml not found, using defaults")
+			fmt.Println("config.yaml not found, using defaults")
 		} else {
-			zap.S().Error("Error reading config.yaml", "error", err)
+			fmt.Printf("Error reading config.yaml: %v\n", err)
 		}
 	}
 
 	// 5. Load secrets from Vault
 	if err := loadSecretsFromVault(); err != nil {
-		zap.S().Warnw("Could not load secrets from Vault. Falling back to environment variables.", "error", err)
+		fmt.Printf("Could not load secrets from Vault. Falling back to environment variables: %v\n", err)
 	}
 
 	// 6. Unmarshal into AppConfig struct
 	if err := viper.Unmarshal(&AppConfig); err != nil {
-		zap.S().Fatalw("Unable to decode into struct", "error", err)
+		fmt.Printf("Unable to decode into struct: %v\n", err)
+		os.Exit(1)
 	}
 }
 
