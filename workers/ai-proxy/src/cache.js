@@ -6,6 +6,7 @@ export class CacheManager {
   
   async get(key) {
     try {
+      if (!this.kv) return null;
       const value = await this.kv.get(key, { type: 'json' });
       if (!value) return null;
       
@@ -24,6 +25,7 @@ export class CacheManager {
   
   async set(key, value, ttlSeconds = 3600) {
     try {
+      if (!this.kv) return;
       const cacheEntry = {
         ...value,
         expiresAt: Date.now() + (ttlSeconds * 1000),

@@ -1,7 +1,8 @@
 // Intelligent Cost Optimization for AI Provider Selection
 export class CostOptimizer {
-  constructor(env) {
+  constructor(env, providers) {
     this.env = env;
+    this.providers = providers.providers;
     this.usage = new Map(); // Track usage for rate limiting
     this.performance = new Map(); // Track actual performance
     this.costs = new Map(); // Track cost metrics
@@ -11,6 +12,7 @@ export class CostOptimizer {
     const promptLength = prompt.length;
     const estimatedTokens = Math.ceil(promptLength / 4); // Rough estimate
     
+    console.log('Available providers:', JSON.stringify(this.providers, null, 2));
     const availableProviders = Object.entries(this.providers || {})
       .map(([name, config]) => ({
         name,

@@ -15,15 +15,21 @@ routes = [
   { pattern = "staging-api.obsidian-bot.com/ai/*", zone_name = "obsidian-bot.com" }
 ]
 
+[ai]
+binding = "AI"
+
 [[env.production.kv_namespaces]]
 binding = "AI_CACHE"
-id = "your-kv-namespace-id"
-preview_id = "your-preview-kv-namespace-id"
+id = "2e2bcb7bcb99485caa26f879ceee877e"
+preview_id = "4358c9cbbac94600817f0c23e3061eb8"
 
 [[env.production.r2_buckets]]
 binding = "MEDIA_STORAGE"
 bucket_name = "obsidian-bot-media"
 
-[vars]
+[env.production.vars]
 ENVIRONMENT = "production"
 LOG_LEVEL = "info"
+
+[env.production.ai]
+binding = "AI"

@@ -6,12 +6,12 @@ export class AIProviders {
       gemini: {
         name: 'gemini',
         endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent',
-        apiKey: env.GEMINI_API_KEY,
+        apiKey: env.GEMINI_API_KEYS,
         model: 'gemini-pro',
         maxTokens: 8192,
         costPerToken: 0.000125,
         latency: 800,
-        enabled: env.GEMINI_API_KEY ? true : false
+        enabled: env.GEMINI_API_KEYS ? true : false
       },
       groq: {
         name: 'groq',
@@ -36,12 +36,32 @@ export class AIProviders {
       gpt4: {
         name: 'gpt4',
         endpoint: 'https://api.openai.com/v1/chat/completions',
-        apiKey: env.OPENAI_API_KEY,
+        apiKey: env.GPT4_API_KEY,
         model: 'gpt-4-turbo-preview',
         maxTokens: 8192,
         costPerToken: 0.00003,
         latency: 600,
-        enabled: env.OPENAI_API_KEY ? true : false
+        enabled: env.GPT4_API_KEY ? true : false
+      },
+      cloudflare: {
+        name: 'cloudflare',
+        endpoint: '@cf/meta/llama-3-8b-instruct',
+        apiKey: null, // No API key needed for CF models
+        model: '@cf/meta/llama-3-8b-instruct',
+        maxTokens: 8192,
+        costPerToken: 0, // Free with Workers
+        latency: 200,
+        enabled: true // Always available
+      },
+      llama3: {
+        name: 'llama3',
+        endpoint: '@cf/meta/llama-3-8b-instruct',
+        apiKey: null, // No API key needed for CF models
+        model: '@cf/meta/llama-3-8b-instruct',
+        maxTokens: 8192,
+        costPerToken: 0, // Free with Workers
+        latency: 200,
+        enabled: true // Always available
       }
     };
   }

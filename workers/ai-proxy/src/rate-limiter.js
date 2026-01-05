@@ -6,6 +6,7 @@ export class RateLimiter {
   
   async check(key, requests, windowSeconds) {
     try {
+      if (!this.kv) return true; // Allow all if no KV binding
       const now = Date.now();
       const windowStart = now - (windowSeconds * 1000);
       const rateKey = `rate:${key}:${Math.floor(now / (windowSeconds * 1000))}`;

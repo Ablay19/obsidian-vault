@@ -8,10 +8,10 @@ import { Analytics } from './analytics.js';
 class AIRequestProcessor {
   constructor(env) {
     this.env = env;
-    this.cache = new CacheManager(env.AI_CACHE);
+    this.cache = new CacheManager(env.AI_CACHE || null);
     this.providers = new AIProviders(env);
-    this.limiter = new RateLimiter(env.AI_CACHE);
-    this.optimizer = new CostOptimizer(env);
+    this.limiter = new RateLimiter(env.AI_CACHE || null);
+    this.optimizer = new CostOptimizer(env, this.providers);
     this.analytics = new Analytics(env);
   }
 
@@ -125,6 +125,7 @@ class AIRequestProcessor {
   async executeRequestWithRetry(prompt, provider, originalRequest) {
     const maxRetries = 3;
     const baseDelay = 1000;
+    const startTime = Date.now();
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -158,6 +159,19 @@ class AIRequestProcessor {
   }
   
   async executeRequest(prompt, provider, originalRequest) {
+    if (provider.name === 'cloudflare' || provider.name === 'llama3') {
+      // Use Cloudflare AI directly
+      try {
+        const response = await this.env.AI.run(provider.model, {
+          prompt: prompt
+        });
+        return response.response || '';
+      } catch (error) {
+        console.error('Cloudflare AI error:', error);
+        throw new Error(`Cloudflare AI error: ${error.message}`);
+      }
+    }
+    
     const headers = {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${provider.apiKey}`,
@@ -203,6 +217,11 @@ class AIRequestProcessor {
           messages: [{ role: 'user', content: prompt }],
           max_tokens: provider.maxTokens
         };
+      case 'cloudflare':
+      case 'llama3':
+        return {
+          prompt: prompt
+        };
       default:
         throw new Error(`Unsupported provider: ${provider.name}`);
     }
@@ -217,6 +236,9 @@ class AIRequestProcessor {
         return data.choices?.[0]?.message?.content || '';
       case 'claude':
         return data.content?.[0]?.text || '';
+      case 'cloudflare':
+      case 'llama3':
+        return data.response || '';
       default:
         throw new Error(`Cannot extract response from provider: ${provider.name}`);
     }
@@ -301,6 +323,27 @@ export default {
       }), {
         headers: { 'Content-Type': 'application/json' }
       });
+    }
+    
+    // AI binding test endpoint
+    if (request.url.includes('/ai-test')) {
+      try {
+        const aiBinding = !!env.AI;
+        const models = env.AI ? await env.AI.list() : null;
+        return new Response(JSON.stringify({
+          hasAIBinding: aiBinding,
+          availableModels: models
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return new Response(JSON.stringify({
+          error: error.message
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
     }
     
     return new Response('Not Found', { status: 404 });
