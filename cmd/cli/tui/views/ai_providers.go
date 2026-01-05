@@ -6,7 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+
 )
 
 // AIProvidersModel represents the AI providers view
@@ -223,6 +223,4 @@ type providersMsg struct {
 	providers []AIProvider
 }
 
-type errorMsgMsg struct {
-	err string
-}
+

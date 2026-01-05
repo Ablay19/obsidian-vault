@@ -102,12 +102,13 @@ func (app *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Handle application-level messages
 	if message, ok := msg.(Message); ok {
-		return app.handleAppMessage(message)
+		return app, app.handleAppMessage(message)
 	}
 
 	// Handle navigation from menu
 	if navMsg, ok := msg.(views.NavigationMsg); ok {
-		return app.router.NavigateTo(navMsg.Target)
+		cmd := app.router.NavigateTo(navMsg.Target)
+		return app, cmd
 	}
 
 	// Update current view through router
@@ -133,7 +134,7 @@ func (app *AppModel) View() string {
 	return app.router.View()
 }
 
-// handleAppMessage handles application-specific messages
+	// handleAppMessage handles application-specific messages
 func (app *AppModel) handleAppMessage(msg Message) tea.Cmd {
 	switch msg.Type {
 	case "quit":
@@ -144,10 +145,9 @@ func (app *AppModel) handleAppMessage(msg Message) tea.Cmd {
 		if viewType, ok := msg.Content.(views.ViewType); ok {
 			return app.router.NavigateTo(viewType)
 		}
-
 	case "refresh_current":
 		// Send refresh to current view
-		return app.sendToCurrentView("refresh")
+		return app.sendToCurrentView("refresh", nil)
 
 	case "error":
 		if errorMsg, ok := msg.Content.(string); ok {

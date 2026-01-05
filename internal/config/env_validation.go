@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-	"time"
+
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -316,9 +316,9 @@ func TestEnvValidator_ValidateEnvironment(t *testing.T) {
 		{
 			name: "valid environment",
 			setup: func() {
-				os.Set("TURSO_DATABASE_URL", "libsql://test.turso.io")
-				os.Set("TELEGRAM_BOT_TOKEN", "123456789:ABCDEF123456")
-				os.Set("SESSION_SECRET", "this-is-a-very-secure-session-secret-32chars")
+				os.Setenv("TURSO_DATABASE_URL", "libsql://test.turso.io")
+				os.Setenv("TELEGRAM_BOT_TOKEN", "123456789:ABCDEF123456")
+				os.Setenv("SESSION_SECRET", "this-is-a-very-secure-session-secret-32chars")
 			},
 			validator: NewEnvValidator(),
 			wantValid: true,
@@ -335,7 +335,7 @@ func TestEnvValidator_ValidateEnvironment(t *testing.T) {
 		{
 			name: "invalid Turso URL",
 			setup: func() {
-				os.Set("TURSO_DATABASE_URL", "invalid-url")
+				os.Setenv("TURSO_DATABASE_URL", "invalid-url")
 			},
 			validator: NewEnvValidator(),
 			wantValid: false,
@@ -343,7 +343,7 @@ func TestEnvValidator_ValidateEnvironment(t *testing.T) {
 		{
 			name: "short session secret",
 			setup: func() {
-				os.Set("SESSION_SECRET", "short")
+				os.Setenv("SESSION_SECRET", "short")
 			},
 			validator: NewEnvValidator(),
 			wantValid: false,
@@ -371,7 +371,7 @@ func TestEnvValidator_ValidateEnvironmentForTesting(t *testing.T) {
 	validator := NewEnvValidator()
 
 	// Set minimal test environment
-	os.Set("SESSION_SECRET", "test-secret-that-is-long-enough-32")
+	os.Setenv("SESSION_SECRET", "test-secret-that-is-long-enough-32")
 	defer os.Unsetenv("SESSION_SECRET")
 
 	result := validator.ValidateEnvironmentForTesting()
@@ -392,10 +392,10 @@ func TestProductionWarnings(t *testing.T) {
 	validator := NewEnvValidator()
 
 	// Set production environment with insecure defaults
-	os.Set("ENVIRONMENT_MODE", "prod")
-	os.Set("VAULT_TOKEN", "root")
-	os.Set("SESSION_SECRET", "change-me-to-something-very-secure")
-	os.Set("TURSO_DATABASE_URL", "libsql://test.turso.io")
+	os.Setenv("ENVIRONMENT_MODE", "prod")
+	os.Setenv("VAULT_TOKEN", "root")
+	os.Setenv("SESSION_SECRET", "change-me-to-something-very-secure")
+	os.Setenv("TURSO_DATABASE_URL", "libsql://test.turso.io")
 
 	defer func() {
 		os.Unsetenv("ENVIRONMENT_MODE")
@@ -430,9 +430,9 @@ func BenchmarkEnvValidation(b *testing.B) {
 	validator := NewEnvValidator()
 
 	// Setup environment once
-	os.Set("TURSO_DATABASE_URL", "libsql://test.turso.io")
-	os.Set("TELEGRAM_BOT_TOKEN", "123456789:ABCDEF123456")
-	os.Set("SESSION_SECRET", "this-is-a-very-secure-session-secret-32chars")
+	os.Setenv("TURSO_DATABASE_URL", "libsql://test.turso.io")
+	os.Setenv("TELEGRAM_BOT_TOKEN", "123456789:ABCDEF123456")
+	os.Setenv("SESSION_SECRET", "this-is-a-very-secure-session-secret-32chars")
 	defer func() {
 		os.Unsetenv("TURSO_DATABASE_URL")
 		os.Unsetenv("TELEGRAM_BOT_TOKEN")

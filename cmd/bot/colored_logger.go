@@ -1,17 +1,8 @@
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	"time"
 
-	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	"obsidian-automation/internal/ai"
-	"obsidian-automation/internal/auth"
-	"obsidian-automation/internal/config"
-	"obsidian-automation/internal/database"
 )
 
 // ColorfulLogger adds colored output to zap logger
@@ -33,7 +24,7 @@ func (l *ColorfulLogger) Info(msg string, fields ...zap.Field) {
 }
 
 func (l *ColorfulLogger) Infof(template string, args ...interface{}) {
-	l.logger.Infof(template, args...)
+	l.logger.Sugar().Infof(template, args...)
 }
 
 func (l *ColorfulLogger) Warn(msg string, fields ...zap.Field) {
@@ -55,7 +46,7 @@ func (l *ColorfulLogger) DPanic(msg string, fields ...zap.Field) {
 }
 
 func (l *ColorfulLogger) DPanicf(template string, args ...interface{}) {
-	l.logger.DPanic(template, args...)
+	l.logger.Sugar().DPanicf(template, args...)
 }
 
 // Color constants for different log levels

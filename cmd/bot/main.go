@@ -15,6 +15,10 @@ import (
 	"obsidian-automation/internal/dashboard"
 	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/ssh"
+	"obsidian-automation/internal/state"
+	"obsidian-automation/internal/ai"
+	"obsidian-automation/internal/auth"
+	"obsidian-automation/internal/dashboard/ws"
 )
 
 // AppLogger wraps zap logger with color support
@@ -25,7 +29,11 @@ type AppLogger struct {
 
 // NewAppLogger creates a new colored logger
 func NewAppLogger(enableColors bool) *AppLogger {
-	logger := zap.NewProduction()
+	logger, err := zap.NewProduction()
+	if err != nil {
+		fmt.Printf("Failed to create Zap logger: %v\n", err)
+		os.Exit(1)
+	}
 	return &AppLogger{
 		logger:       logger,
 		enableColors: enableColors,
@@ -78,29 +86,35 @@ func setupGracefulShutdown(srv *http.Server, logger *AppLogger) {
 func main() {
 	logger := NewAppLogger(os.Getenv("ENABLE_COLORFUL_LOGS") == "true")
 
-	cfg, err := config.Load()
-	if err != nil {
-		logger.Error("Failed to load configuration", zap.Error(err))
-		os.Exit(1)
-	}
 
-	logger.Info("Starting Obsidian Bot API Server", zap.String("version", cfg.Version))
+
+	logger.Info("Starting Obsidian Bot API Server")
 
 	// Initialize database
-	db, err := database.NewConnection(cfg.Database.Path)
-	if err != nil {
-		logger.Error("Failed to connect to database", zap.Error(err))
-		os.Exit(1)
-	}
-	defer db.Close()
+	dbClient := database.OpenDB()
+	defer dbClient.DB.Close()
 
 	logger.Info("Database connected successfully")
 
-	// Run database migrations
-	if err := database.RunMigrations(db); err != nil {
-		logger.Error("Failed to run migrations", zap.Error(err))
+	// Initialize RuntimeConfigManager
+	rcm, err := state.NewRuntimeConfigManager(dbClient.DB)
+	if err != nil {
+		logger.Error("Failed to initialize RuntimeConfigManager", zap.Error(err))
 		os.Exit(1)
 	}
+
+	// Initialize AI Service
+	aiService := ai.NewAIService(context.Background(), rcm, config.AppConfig.ProviderProfiles, config.AppConfig.SwitchingRules)
+
+	// Initialize Auth Service
+	authService := auth.NewAuthService(config.AppConfig)
+
+	// Initialize WebSocket Manager
+	wsManager := ws.NewManager()
+	go wsManager.Start()
+
+	// Run database migrations
+	database.RunMigrations(dbClient.DB)
 
 	logger.Info("Database migrations completed")
 
@@ -137,13 +151,16 @@ func main() {
 		)
 	})
 
+	// Initialize Dashboard
+	dashboardService := dashboard.NewDashboard(aiService, rcm, dbClient.DB, authService, wsManager)
+
 	// Register dashboard routes
-	dashboard.RegisterRoutes(router, db, logger)
+	dashboardService.RegisterRoutes(router)
 	// Register SSH server routes
-	ssh.RegisterRoutes(router, db, logger)
+	ssh.RegisterRoutes(router, dbClient.DB, logger.logger)
 
 	server := &http.Server{
-		Addr:         fmt.Sprintf(":%s", cfg.Server.Port),
+		Addr:         fmt.Sprintf(":%d", config.AppConfig.Dashboard.Port),
 		Handler:      router,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
@@ -151,7 +168,7 @@ func main() {
 
 	// Start server in a goroutine
 	go func() {
-		logger.Info(fmt.Sprintf("Server starting on port %s", cfg.Server.Port))
+		logger.Info(fmt.Sprintf("Server starting on port %d", config.AppConfig.Dashboard.Port))
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Error("Server failed to start", zap.Error(err))
 			os.Exit(1)

@@ -5,7 +5,7 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"obsidian-automation/cmd/cli/tui/views"
+
 )
 
 // Run starts the CLI application

@@ -6,7 +6,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+
+
 )
 
 // StatusModel represents the status view
@@ -48,10 +49,9 @@ type StatusMetrics struct {
 // NewStatus creates a new status model
 func NewStatus(styles Styles) StatusModel {
 	s := spinner.New()
-	spinner.Style = spinner.WithStyles(spinner.Styles{
-		Spinner: styles.Loading,
-	})
-
+	s.Spinner = spinner.Line
+	s.Style = styles.Loading
+	
 	return StatusModel{
 		styles:     styles,
 		spinner:    s,
@@ -259,6 +259,40 @@ func (m StatusModel) renderMetrics() string {
 	}
 
 	return result
+}
+
+// fetchStatusCmd fetches real status data
+func (m StatusModel) fetchStatusCmd() tea.Cmd {
+	return func() tea.Msg {
+		// Mock data for demonstration
+		// TODO: Replace with actual status fetching logic
+		time.Sleep(2 * time.Second) // Simulate network delay
+
+		mockStatus := &StatusData{
+			BotStatus:      "Running",
+			AIService:      "Healthy",
+			DatabaseStatus: "Connected",
+			LastActivity:   time.Now().Add(-5 * time.Minute),
+			Services: []*ServiceStatus{
+				{Name: "Telegram API", Status: "Healthy", LastCheck: time.Now()},
+				{Name: "WhatsApp API", Status: "Healthy", LastCheck: time.Now()},
+				{Name: "AI Provider 1", Status: "Healthy", LastCheck: time.Now()},
+			},
+			Metrics: &StatusMetrics{
+				Uptime:       "2d 10h",
+				MessageCount: 1234,
+				ErrorCount:   5,
+				MemoryUsage:  "128MB",
+			},
+		}
+
+		// Simulate potential error
+		// if time.Now().Second()%2 == 0 {
+		// 	return statusErrorMsg{err: fmt.Errorf("simulated fetch error")}
+		// }
+
+		return statusDataMsg{data: mockStatus}
+	}
 }
 
 // Command messages

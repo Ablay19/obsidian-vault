@@ -123,7 +123,9 @@ func (r *Router) Update(msg tea.Msg) tea.Cmd {
 
 	// Update current model
 	if model, ok := currentRoute.Model.(tea.Model); ok {
-		return model.Update(msg)
+		var cmd tea.Cmd
+		currentRoute.Model, cmd = model.Update(msg)
+		return cmd
 	}
 
 	return nil

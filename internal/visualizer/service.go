@@ -4,9 +4,48 @@ import (
 	"context"
 	"fmt"
 	"time"
+	"encoding/json"
 
 	"go.uber.org/zap"
 )
+
+// StorageInterface defines the storage interface for analysis results
+type StorageInterface interface {
+	StoreAnalysis(ctx context.Context, result *AnalysisResult) error
+}
+
+// AIConfig defines the AI configuration interface
+type AIConfig interface {
+	// Add methods here if needed
+}
+
+// Problem defines the problem to be analyzed
+type Problem struct {
+	ID          string
+	Title       string
+	Description string
+	Domain      string
+	Severity    string
+	Code        string
+	Screenshots []string
+	Context     map[string]interface{}
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+// AnalysisResult defines the result of the analysis
+type AnalysisResult struct {
+	ProblemID        string
+	Patterns         []string
+	RootCauses       []string
+	Complexity       string
+	Impact           string
+	Domain           string
+	SuggestedActions []string
+	RelatedIssues    []string
+	Confidence       float64
+	AnalyzedAt       time.Time
+}
 
 // Service is the main problem analyzer service
 type Service struct {
@@ -34,7 +73,7 @@ func (s *Service) AnalyzeProblem(ctx context.Context, problem *Problem) (*Analys
 	)
 
 	// Prepare analysis prompt
-	analysisPrompt := s.buildAnalysisPrompt(problem)
+	_ = s.buildAnalysisPrompt(problem)
 
 	// TODO: Integrate with AI provider
 	// For now, return a mock analysis
@@ -70,6 +109,7 @@ func (s *Service) AnalyzeProblem(ctx context.Context, problem *Problem) (*Analys
 
 // buildAnalysisPrompt creates the AI prompt for problem analysis
 func (s *Service) buildAnalysisPrompt(problem *Problem) string {
+	contextBytes, _ := json.Marshal(problem.Context)
 	return fmt.Sprintf(`Analyze the following problem and provide detailed analysis:
 
 PROBLEM:
@@ -78,8 +118,7 @@ Description: %s
 Domain: %s
 Severity: %s
 Code Provided: %s
-
-Context: %%!v(json.Marshal(problem.Context))
+Context: %s
 
 TASKS:
 1. Identify patterns and anti-patterns
@@ -100,7 +139,7 @@ RESPONSE FORMAT:
 	"related_issues": ["issue1", "issue2"],
 	"confidence": 0.85
 }
-`, problem.Title, problem.Description, problem.Domain, problem.Severity, problem.Code, problem.Context)
+`, problem.Title, problem.Description, problem.Domain, problem.Severity, problem.Code, string(contextBytes))
 }
 
 // identifyPatterns extracts common patterns from the problem

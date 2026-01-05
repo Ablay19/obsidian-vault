@@ -6,7 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+
 )
 
 // UserModel represents the user management view
@@ -213,6 +213,4 @@ type usersMsg struct {
 	users []UserRow
 }
 
-type errorMsgMsg struct {
-	err string
-}
+

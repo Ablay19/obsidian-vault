@@ -102,6 +102,26 @@ func init() {
 	}
 }
 
+type ProviderConfig struct {
+	Model                string  `mapstructure:"model"`
+	Latency              int     `mapstructure:"latency"`
+	Accuracy             float64 `mapstructure:"accuracy"`
+	MaxTokens            int     `mapstructure:"max_tokens"`
+	RateLimit            int     `mapstructure:"rate_limit"`
+	Concurrency          int     `mapstructure:"concurrency"`
+	SupportsStreaming    bool    `mapstructure:"supports_streaming"`
+	IsDefault            bool    `mapstructure:"is_default"`
+	Enabled              bool    `mapstructure:"enabled"`
+	Blocked              bool    `mapstructure:"blocked"`
+	InputCostPerToken    float64 `mapstructure:"input_cost_per_token"`
+	OutputCostPerToken   float64 `mapstructure:"output_cost_per_token"`
+	MaxInputTokens       int     `mapstructure:"max_input_tokens"`
+	MaxOutputTokens      int     `mapstructure:"max_output_tokens"`
+	LatencyMsThreshold   int     `mapstructure:"latency_ms_threshold"`
+	AccuracyPctThreshold float64 `mapstructure:"accuracy_pct_threshold"`
+}
+
+// SwitchingRules defines the rules for switching between AI providers.
 type SwitchingRules struct {
 	DefaultProvider   string  `mapstructure:"default_provider"`
 	LatencyTarget     int     `mapstructure:"latency_target"`
