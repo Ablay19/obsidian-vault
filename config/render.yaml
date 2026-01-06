@@ -3,12 +3,27 @@ services:
     name: obsidian-automation-bot
     env: go
     plan: free
-    buildCommand: go build -o obsidian-automation ./cmd/bot/main.go
-    startCommand: ./obsidian-automation
+    buildCommand: go build -o obsidian-bot ./cmd/bot/main.go
+    startCommand: ./obsidian-bot
     envVars:
       - key: TELEGRAM_BOT_TOKEN
         fromSecret: true
-      - key: GEMINI_API_KEYS
+      - key: GEMINI_API_KEY
         fromSecret: true
       - key: GROQ_API_KEY
         fromSecret: true
+      - key: TURSO_DATABASE_URL
+        fromSecret: true
+      - key: TURSO_AUTH_TOKEN
+        fromSecret: true
+      - key: SESSION_SECRET
+        fromSecret: true
+      - key: CLOUDFLARE_WORKER_URL
+        fromSecret: false
+        value: "https://your-worker.workers.dev"
+      - key: ENABLE_GOOGLE_LOGGING
+        fromSecret: false
+        value: "false"
+      - key: GOOGLE_CLOUD_PROJECT
+        fromSecret: false
+        value: ""

@@ -10,19 +10,59 @@ doc/
 pdfs/
 specs/
 vault/
+logs/
+scripts/
+node_modules/
+vendor/
 
-# Ignore specific files and patterns
+# Ignore large files and binaries
+*.db
+*.sqlite
+*.sqlite3
+obsidian-automation*
+obsidian-bot*
+telegram-bot*
+termux-*
+bot
+test*.go
+
+# Ignore configuration and secrets files
+*.env
+*.env.*
+id_rsa*
+credentials.json
+service-account-key*.json
+
+# Ignore build and cache files
 *.log*
-*.md
-*.sh
 *.test
-.env
-noname.gv
-obsidian-automation
-obsidian-automation-bot
-stats.json
-telegram-bot
+*.prof
+*.out
+.DS_Store
+Thumbs.db
 
-# Keep specific files
-!GEMINI.md
+# Ignore temporary and development files
+tmp/
+temp/
+coverage.out
+noname.gv
+stats.json
+
+# Ignore Docker-specific files
+Dockerfile.dev
+docker-compose.override.yml
+.dockerignore
+
+# Keep important files (exceptions)
+!*.md
+!Dockerfile*
+!docker-compose*.yml
+!config.yml
+!go.mod
+!go.sum
+!cmd/
+!internal/
+!workers/
+
+# Keep startup scripts
 !start.sh
