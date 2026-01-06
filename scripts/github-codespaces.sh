@@ -79,9 +79,36 @@ create_codespace() {
     sleep 5
     
     # Get Codespace information
-    local codespace_info=$(gh codespace view "$codespace_name" --json)
-    local codespace_id=$(echo "$codespace_info" | jq -r '.id')
-    local container_id=$(echo "$codespace_info" | jq -r '.container.id')
+    if ! command -v jq &> /dev/null; then
+        print_error "jq is required but not installed. Please install jq first."
+        return 1
+    fi
+    
+    local codespace_info
+    if ! codespace_info=$(gh codespace view "$codespace_name" --json 2>/dev/null); then
+        print_error "Failed to get codespace information. Check if codespace exists."
+        return 1
+    fi
+    
+    # Validate JSON response
+    if ! echo "$codespace_info" | jq . >/dev/null 2>&1; then
+        print_error "Invalid JSON response from GitHub API"
+        return 1
+    fi
+    
+    local codespace_id=$(echo "$codespace_info" | jq -r '.id' 2>/dev/null)
+    local container_id=$(echo "$codespace_info" | jq -r '.container.id' 2>/dev/null)
+    
+    # Validate extracted values
+    if [[ -z "$codespace_id" || "$codespace_id" == "null" ]]; then
+        print_error "Failed to extract codespace ID from response"
+        return 1
+    fi
+    
+    if [[ -z "$container_id" || "$container_id" == "null" ]]; then
+        print_error "Failed to extract container ID from response"
+        return 1
+    fi
     
     print_status "Codespace ID: $codespace_id"
     print_status "Container ID: $container_id"

@@ -37,8 +37,8 @@ binding = "AI"
 # KV Namespaces for state management
 [[env.production.kv_namespaces]]
 binding = "BOT_STATE"
-id = "your-bot-state-kv-id"
-preview_id = "your-bot-state-preview-id"
+id = "BOT_STATE_KV_ID"  # Set this in Cloudflare dashboard
+preview_id = "BOT_STATE_PREVIEW_ID"  # Set this in Cloudflare dashboard
 
 [[env.production.kv_namespaces]]
 binding = "AI_CACHE"
@@ -54,24 +54,26 @@ bucket_name = "obsidian-bot-media"
 [[env.production.d1_databases]]
 binding = "BOT_DATABASE"
 database_name = "obsidian-bot"
-database_id = "your-database-id"
+database_id = "BOT_DATABASE_ID"  # Set this in Cloudflare dashboard
 
 # Environment Variables
 [env.production.vars]
 ENVIRONMENT = "production"
 LOG_LEVEL = "info"
-WEBHOOK_SECRET = "your-webhook-secret"
+# WEBHOOK_SECRET should be set as a secret in Cloudflare dashboard
 FALLBACK_AI_ENABLED = "true"
 AI_ENABLED = "true"
+# Add your Telegram bot token as a secret in Cloudflare dashboard
+# TELEGRAM_BOT_TOKEN = "your-telegram-bot-token"
 
 [env.staging.vars]
 ENVIRONMENT = "staging"
 LOG_LEVEL = "debug"
-WEBHOOK_SECRET = "your-staging-webhook-secret"
+# WEBHOOK_SECRET should be set as a secret in Cloudflare dashboard
 FALLBACK_AI_ENABLED = "true"
 
 [env.development.vars]
 ENVIRONMENT = "development"
 LOG_LEVEL = "debug"
-WEBHOOK_SECRET = "dev-webhook-secret"
+# WEBHOOK_SECRET should be set as a secret in Cloudflare dashboard
 FALLBACK_AI_ENABLED = "true"

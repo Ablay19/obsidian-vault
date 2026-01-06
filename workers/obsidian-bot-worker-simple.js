@@ -1,9 +1,37 @@
 // Simplified Cloudflare Worker for Obsidian Bot
 // Built-in Telegram handling with AI capabilities
 
-// Configuration from wrangler.toml
-const BOT_TOKEN = env.TELEGRAM_BOT_TOKEN;
-const WEBHOOK_SECRET = env.WEBHOOK_SECRET;
+import { BotUtils } from './bot-utils.js';
+
+// Environment variable validation
+function validateEnvironment(env) {
+    const required = ['TELEGRAM_BOT_TOKEN'];
+    const missing = required.filter(key => !env[key]);
+    
+    if (missing.length > 0) {
+        throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+    }
+    
+    return {
+        BOT_TOKEN: env.TELEGRAM_BOT_TOKEN,
+        WEBHOOK_SECRET: env.WEBHOOK_SECRET || 'default-secret'
+    };
+}
+
+// Configuration from wrangler.toml with validation
+let BOT_TOKEN, WEBHOOK_SECRET;
+
+// Simple in-memory state (production would use KV)
+const userState = new Map();
+    
+    return {
+        BOT_TOKEN: env.TELEGRAM_BOT_TOKEN,
+        WEBHOOK_SECRET: env.WEBHOOK_SECRET || 'default-secret'
+    };
+}
+
+// Configuration from wrangler.toml with validation
+let BOT_TOKEN, WEBHOOK_SECRET;
 
 // Simple in-memory state (production would use KV)
 const userState = new Map();
@@ -19,14 +47,27 @@ class BotUtils {
         }));
     }
 
+    static sanitizeInput(text) {
+        if (typeof text !== 'string') return '';
+        // Remove potentially harmful characters
+        return text
+            .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
+            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove more control chars
+            .substring(0, 4000); // Limit length
+    }
+
     static async sendTelegramMessage(chatId, text) {
         try {
+            // Sanitize inputs
+            const sanitizedText = this.sanitizeInput(text);
+            const sanitizedChatId = this.sanitizeInput(chatId.toString());
+            
             const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    chat_id: chatId,
-                    text: text,
+                    chat_id: sanitizedChatId,
+                    text: sanitizedText,
                     parse_mode: 'Markdown'
                 })
             });
@@ -263,6 +304,23 @@ class BotUtils {
 // Main worker handler
 export default {
     async fetch(request, env) {
+        // Validate environment on first request
+        if (!BOT_TOKEN) {
+            try {
+                const config = validateEnvironment(env);
+                BOT_TOKEN = config.BOT_TOKEN;
+                WEBHOOK_SECRET = config.WEBHOOK_SECRET;
+            } catch (error) {
+                return new Response(JSON.stringify({
+                    success: false,
+                    error: error.message,
+                    timestamp: new Date().toISOString()
+                }), {
+                    status: 500,
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
+        }
         await BotUtils.log(`${request.method} ${request.url}`, 'info');
 
         try {
@@ -297,7 +355,7 @@ export default {
                     });
                 }
 
-                const result = await BotUtils.processAIRequest(prompt, provider);
+                const result = await BotUtils.processAIRequest(prompt, env, provider);
                 return new Response(JSON.stringify(result), {
                     status: result.success ? 200 : 500,
                     headers: { 'Content-Type': 'application/json' }

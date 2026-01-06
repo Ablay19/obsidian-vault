@@ -29,11 +29,11 @@ type CloudflareResponse struct {
 // NewCloudflareProvider creates a new Cloudflare Worker provider
 func NewCloudflareProvider(workerURL string) *CloudflareProvider {
 	return &CloudflareProvider{
-		endpoint: workerURL + "/ai/proxy/cloudflare",
+		endpoint: workerURL + "/ai",
 		client: &http.Client{
 			Timeout: 60 * time.Second,
 		},
-		model: "@cf/meta/llama-3-8b-instruct",
+		model: "@cf/meta/llama-3.3-70b-instruct",
 	}
 }
 
@@ -58,7 +58,7 @@ func (p *CloudflareProvider) GenerateCompletion(ctx context.Context, req *Reques
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	httpReq.Header.Set("Content-Type", "text/plain")
+	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("User-Agent", "ObsidianBot/1.0")
 
 	// Send request

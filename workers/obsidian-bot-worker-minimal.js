@@ -20,17 +20,35 @@ export default {
         // AI endpoint - using only Workers AI
         if (request.method === 'POST' && url.pathname === '/ai') {
             try {
-                const { prompt } = await request.json();
+                const body = await request.json();
                 
-                if (!prompt) {
+                // Validate JSON payload
+                if (!body || typeof body !== 'object') {
                     return new Response(JSON.stringify({
                         success: false,
-                        error: 'Prompt is required'
+                        error: 'Invalid JSON payload'
                     }), {
                         status: 400,
                         headers: { 'Content-Type': 'application/json' }
                     });
                 }
+                
+                const { prompt } = body;
+                
+                if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+                    return new Response(JSON.stringify({
+                        success: false,
+                        error: 'Valid prompt string is required'
+                    }), {
+                        status: 400,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+                
+                // Sanitize prompt
+                const sanitizedPrompt = prompt
+                    .replace(/[\x00-\x1F\x7F]/g, '')
+                    .substring(0, 4000);
 
                 if (!env.AI) {
                     return new Response(JSON.stringify({
@@ -44,7 +62,7 @@ export default {
 
                 // Use Cloudflare Workers AI
                 const response = await env.AI.run('@cf/meta/llama-3.3-70b-instruct', {
-                    prompt: prompt,
+                    prompt: sanitizedPrompt,
                     max_tokens: 1000,
                     temperature: 0.7
                 });
