@@ -1,0 +1,212 @@
+# Obsidian Bot Kubernetes Deployment
+# Production-ready configuration with auto-scaling and monitoring
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: obsidian-bot
+  namespace: obsidian-system
+  labels:
+    app: obsidian-bot
+    version: v1.0.0
+    component: core
+    managed-by: kubectl
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: obsidian-bot
+  template:
+    metadata:
+      labels:
+        app: obsidian-bot
+        version: v1.0.0
+        component: core
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+        cloud.google.com/logging-enable: "true"
+        cloud.google.com/service-account: "obsidian-bot-sa"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      serviceAccountName: obsidian-bot-sa
+      containers:
+      - name: obsidian-bot
+        image: obsidian-bot:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        env:
+        # Core Configuration
+        - name: ENVIRONMENT
+          value: "production"
+        - name: PORT
+          value: "8080"
+        - name: LOG_LEVEL
+          value: "INFO"
+        
+        # Database Configuration
+        - name: TURSO_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: obsidian-bot-secrets
+              key: turso-database-url
+        - name: TURSO_AUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: obsidian-bot-secrets
+              key: turso-auth-token
+        
+        # Telegram Configuration
+        - name: TELEGRAM_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: obsidian-bot-secrets
+              key: telegram-bot-token
+        
+        # AI Provider Configuration
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: obsidian-bot-secrets
+              key: gemini-api-key
+        - name: GROQ_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: obsidian-bot-secrets
+              key: groq-api-key
+        - name: CLOUDFLARE_WORKER_URL
+          valueFrom:
+            configMapKeyRef:
+              name: obsidian-bot-config
+              key: cloudflare-worker-url
+        
+        # Google Cloud Configuration
+        - name: GOOGLE_CLOUD_PROJECT
+          valueFrom:
+            configMapKeyRef:
+              name: obsidian-bot-config
+              key: google-cloud-project
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: "/app/credentials/google-cloud-credentials.json"
+        - name: ENABLE_GOOGLE_LOGGING
+          valueFrom:
+            configMapKeyRef:
+              name: obsidian-bot-config
+              key: enable-google-logging
+        
+        # Security Configuration
+        - name: SESSION_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: obsidian-bot-secrets
+              key: session-secret
+        
+        volumeMounts:
+        - name: google-cloud-credentials
+          mountPath: /app/credentials
+          readOnly: true
+        - name: obsidian-data
+          mountPath: /app/data
+        - name: obsidian-attachments
+          mountPath: /app/attachments
+        - name: obsidian-vault
+          mountPath: /app/vault
+        - name: obsidian-logs
+          mountPath: /app/logs
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        livenessProbe:
+          httpGet:
+            path: /api/services/status
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        
+        readinessProbe:
+          httpGet:
+            path: /api/services/status
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1
+        
+        startupProbe:
+          httpGet:
+            path: /api/services/status
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+          successThreshold: 1
+      
+      volumes:
+      - name: google-cloud-credentials
+        secret:
+          secretName: obsidian-bot-gcp-credentials
+          items:
+          - key: credentials.json
+            path: google-cloud-credentials.json
+      - name: obsidian-data
+        persistentVolumeClaim:
+          claimName: obsidian-data-pvc
+      - name: obsidian-attachments
+        persistentVolumeClaim:
+          claimName: obsidian-attachments-pvc
+      - name: obsidian-vault
+        persistentVolumeClaim:
+          claimName: obsidian-vault-pvc
+      - name: obsidian-logs
+        persistentVolumeClaim:
+          claimName: obsidian-logs-pvc
+      
+      nodeSelector:
+        kubernetes.io/os: linux
+        cloud.google.com/gke-nodepool: default-pool
+      
+      tolerations:
+      - key: "kubernetes.io/arch"
+        operator: "Equal"
+        value: "amd64"
+        effect: "NoSchedule"
+      
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - obsidian-bot
+              topologyKey: kubernetes.io/hostname

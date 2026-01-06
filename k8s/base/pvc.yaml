@@ -1,0 +1,76 @@
+# Persistent Volume Claims for Obsidian Bot
+# Storage for application data, attachments, and logs
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: obsidian-data-pvc
+  namespace: obsidian-system
+  labels:
+    app: obsidian-bot
+    component: storage
+    storage-type: "database"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: obsidian-attachments-pvc
+  namespace: obsidian-system
+  labels:
+    app: obsidian-bot
+    component: storage
+    storage-type: "attachments"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 50Gi
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: obsidian-vault-pvc
+  namespace: obsidian-system
+  labels:
+    app: obsidian-bot
+    component: storage
+    storage-type: "vault"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 20Gi
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: obsidian-logs-pvc
+  namespace: obsidian-system
+  labels:
+    app: obsidian-bot
+    component: storage
+    storage-type: "logs"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 5Gi

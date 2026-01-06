@@ -1,0 +1,131 @@
+# ServiceAccount and RBAC for Obsidian Bot
+# Kubernetes role-based access control
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: obsidian-bot-sa
+  namespace: obsidian-system
+  labels:
+    app: obsidian-bot
+    component: rbac
+  annotations:
+    iam.gke.io/gcp-service-account: obsidian-bot-sa@obsidian-bot-prod.iam.gserviceaccount.com
+
+---
+
+# Role for pod and service access
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: obsidian-bot-role
+  namespace: obsidian-system
+  labels:
+    app: obsidian-bot
+    component: rbac
+rules:
+  # Pod access
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "pods/status"]
+    verbs: ["get", "list", "watch"]
+  
+  # Service access
+  - apiGroups: [""]
+    resources: ["services", "services/status"]
+    verbs: ["get", "list", "watch"]
+  
+  # ConfigMap access
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  
+  # Secret access (limited)
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+    resourceNames: ["obsidian-bot-secrets", "obsidian-bot-gcp-credentials"]
+  
+  # PVC access
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch"]
+  
+  # Events access
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+  
+  # Apps API access
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "replicasets/status", "deployments/status"]
+    verbs: ["get", "list", "watch"]
+  
+  # Metrics access (if using Prometheus)
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list"]
+
+---
+
+# RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: obsidian-bot-rolebinding
+  namespace: obsidian-system
+  labels:
+    app: obsidian-bot
+    component: rbac
+subjects:
+  - kind: ServiceAccount
+    name: obsidian-bot-sa
+    namespace: obsidian-system
+roleRef:
+  kind: Role
+  name: obsidian-bot-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+
+# ClusterRole for cluster-wide access
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: obsidian-bot-cluster-role
+  labels:
+    app: obsidian-bot
+    component: rbac
+rules:
+  # Node access for metrics
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+  
+  # Cluster-wide metrics
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list"]
+  
+  # Custom metrics
+  - apiGroups: ["custom.metrics.k8s.io"]
+    resources: ["*"]
+    verbs: ["get", "list"]
+
+---
+
+# ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: obsidian-bot-cluster-rolebinding
+  labels:
+    app: obsidian-bot
+    component: rbac
+subjects:
+  - kind: ServiceAccount
+    name: obsidian-bot-sa
+    namespace: obsidian-system
+roleRef:
+  kind: ClusterRole
+  name: obsidian-bot-cluster-role
+  apiGroup: rbac.authorization.k8s.io

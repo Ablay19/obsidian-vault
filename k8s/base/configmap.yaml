@@ -1,0 +1,129 @@
+# ConfigMap for Obsidian Bot Configuration
+# Non-sensitive configuration data
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: obsidian-bot-config
+  namespace: obsidian-system
+  labels:
+    app: obsidian-bot
+    component: core
+data:
+  # Application Configuration
+  config.yml: |
+    providers:
+      gemini:
+        model: gemini-1.5-pro-latest
+        enabled: "true"
+      groq:
+        model: llama-3.1-8b-instant
+        enabled: "true"
+      cloudflare:
+        model: "@cf/meta/llama-3.3-70b-instruct"
+        enabled: "true"
+    
+    ai_selection:
+      strategy: "round_robin"
+      fallback_enabled: "true"
+      max_retries: 3
+      timeout_seconds: 30
+    
+    classification:
+      enabled: "true"
+      auto_categorize: "true"
+      confidence_threshold: 0.7
+      patterns:
+        technical: ["api", "code", "database", "deployment", "kubernetes"]
+        business: ["revenue", "profit", "customer", "market", "strategy"]
+        personal: ["meeting", "schedule", "task", "personal", "reminder"]
+    
+    language_detection:
+      enabled: "true"
+      default_language: "en"
+      supported_languages:
+        en: "English"
+        es: "Spanish"
+        fr: "French"
+        de: "German"
+        it: "Italian"
+        pt: "Portuguese"
+    
+    file_processing:
+      max_file_size_mb: 20
+      supported_formats: ["txt", "pdf", "jpg", "jpeg", "png", "webp"]
+      ocr_enabled: "true"
+      extract_metadata: "true"
+    
+    rate_limiting:
+      requests_per_minute: 100
+      burst_limit: 20
+      user_rate_limits: "true"
+    
+    monitoring:
+      metrics_enabled: "true"
+      health_check_interval: "30s"
+      log_retention_days: 30
+  
+  # Kubernetes Configuration
+  cloudflare-worker-url: "https://your-worker.workers.dev"
+  google-cloud-project: "obsidian-bot-prod"
+  enable-google-logging: "true"
+  redis-url: "redis://obsidian-redis:6379"
+  
+  # Docker Configuration
+  docker-registry: "gcr.io"
+  image-tag: "latest"
+  pull-policy: "IfNotPresent"
+  
+  # Monitoring Configuration
+  prometheus-enabled: "true"
+  prometheus-port: "8080"
+  prometheus-path: "/metrics"
+  
+  # Resource Configuration
+  default-memory-request: "256Mi"
+  default-cpu-request: "250m"
+  default-memory-limit: "512Mi"
+  default-cpu-limit: "500m"
+
+---
+
+# ConfigMap for Logging Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: obsidian-bot-logging
+  namespace: obsidian-system
+  labels:
+    app: obsidian-bot
+    component: logging
+data:
+  log4j.xml: |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <Configuration status="WARN">
+      <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+          <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
+        </Console>
+      </Appenders>
+      <Loggers>
+        <Root level="info">
+          <AppenderRef ref="Console"/>
+        </Root>
+      </Loggers>
+    </Configuration>
+  
+  logback.xml: |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <configuration>
+      <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+          <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+      </appender>
+      
+      <root level="INFO">
+        <appender-ref ref="STDOUT" />
+      </root>
+    </configuration>

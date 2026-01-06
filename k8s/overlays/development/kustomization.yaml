@@ -1,0 +1,91 @@
+# Development overlay for Obsidian Bot
+# Development environment configurations
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: obsidian-bot-development
+  namespace: obsidian-development
+
+resources:
+# Base configurations
+- ../../base/deployment.yaml
+- ../../base/service.yaml
+- ../../base/configmap.yaml
+- ../../base/secrets.yaml
+- ../../base/rbac.yaml
+
+patches:
+# Development deployment patch
+- patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: obsidian-bot
+    spec:
+      replicas: 1
+      template:
+        spec:
+          containers:
+          - name: obsidian-bot
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+              limits:
+                memory: "256Mi"
+                cpu: "250m"
+            env:
+            - name: ENVIRONMENT
+              value: "development"
+            - name: LOG_LEVEL
+              value: "DEBUG"
+            - name: ENABLE_GOOGLE_LOGGING
+              value: "false"
+            - name: RATE_LIMIT_ENABLED
+              value: "false"
+            - name: ENABLE_PROFILING
+              value: "true"
+  target:
+    name: obsidian-bot
+
+# Development service patch - for local access
+- patch: |-
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: obsidian-bot-service
+    spec:
+      type: NodePort
+      ports:
+      - port: 80
+        targetPort: 8080
+        nodePort: 30080
+  target:
+    name: obsidian-bot-service
+
+namespace: obsidian-development
+
+images:
+# Development image - local build
+- name: obsidian-bot
+  newTag: latest
+  newRegistry: obsidian-bot-local
+
+configMapGenerator:
+# Development-specific configurations
+- name: obsidian-bot-development-config
+  literals:
+  - ENVIRONMENT=development
+  - LOG_LEVEL=DEBUG
+  - ENABLE_GOOGLE_LOGGING=false
+  - RATE_LIMIT_PER_MINUTE=1000
+  - ENABLE_METRICS=true
+  - ENABLE_PROFILING=true
+  - DEBUG_MODE=true
+
+replicas:
+# Development replica count
+- name: obsidian-bot
+  count: 1

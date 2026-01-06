@@ -1,0 +1,141 @@
+# Production overlay for Obsidian Bot
+# Production-specific configurations and optimizations
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: obsidian-bot-production
+  namespace: obsidian-system
+
+resources:
+# Base configurations
+- ../base/deployment.yaml
+- ../base/service.yaml
+- ../base/configmap.yaml
+- ../base/secrets.yaml
+- ../base/pvc.yaml
+- ../base/rbac.yaml
+- ../base/autoscaling.yaml
+- ../base/network-policy.yaml
+
+patches:
+# Production deployment patch
+- patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: obsidian-bot
+    spec:
+      replicas: 3
+      template:
+        spec:
+          containers:
+          - name: obsidian-bot
+            resources:
+              requests:
+                memory: "512Mi"
+                cpu: "500m"
+              limits:
+                memory: "1Gi"
+                cpu: "1000m"
+            env:
+            - name: ENVIRONMENT
+              value: "production"
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: ENABLE_GOOGLE_LOGGING
+              value: "true"
+            - name: RATE_LIMIT_ENABLED
+              value: "true"
+            - name: METRICS_ENABLED
+              value: "true"
+  target:
+    name: obsidian-bot
+
+# Production service patch
+- patch: |-
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: obsidian-bot-service
+    spec:
+      type: ClusterIP
+      sessionAffinity: ClientIP
+      sessionAffinityConfig:
+        clientIP:
+          timeoutSeconds: 3600
+  target:
+    name: obsidian-bot-service
+
+# Production HPA patch
+- patch: |-
+    apiVersion: autoscaling/v2
+    kind: HorizontalPodAutoscaler
+    metadata:
+      name: obsidian-bot-hpa
+    spec:
+      minReplicas: 3
+      maxReplicas: 20
+  target:
+    name: obsidian-bot-hpa
+
+# Production PVC patch for larger storage
+- patch: |-
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: obsidian-data-pvc
+    spec:
+      resources:
+        requests:
+          storage: 50Gi
+  target:
+    name: obsidian-data-pvc
+
+- patch: |-
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: obsidian-attachments-pvc
+    spec:
+      resources:
+        requests:
+          storage: 200Gi
+  target:
+    name: obsidian-attachments-pvc
+
+- patch: |-
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: obsidian-vault-pvc
+    spec:
+      resources:
+        requests:
+          storage: 50Gi
+  target:
+    name: obsidian-vault-pvc
+
+images:
+# Production image registry
+- name: obsidian-bot
+  newTag: v1.0.0
+  newRegistry: gcr.io/obsidian-bot-prod
+
+configMapGenerator:
+# Production-specific configurations
+- name: obsidian-bot-production-config
+  literals:
+  - ENVIRONMENT=production
+  - LOG_LEVEL=INFO
+  - ENABLE_GOOGLE_LOGGING=true
+  - GOOGLE_CLOUD_PROJECT=obsidian-bot-prod
+  - RATE_LIMIT_PER_MINUTE=200
+  - ENABLE_METRICS=true
+  - ENABLE_PROFILING=false
+
+replicas:
+# Production replica count
+- name: obsidian-bot
+  count: 3

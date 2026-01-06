@@ -1,0 +1,59 @@
+# Obsidian Bot Service Manifest
+# Exposes the bot API and dashboard to the cluster
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: obsidian-bot-service
+  namespace: obsidian-system
+  labels:
+    app: obsidian-bot
+    component: core
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP
+  selector:
+    app: obsidian-bot
+
+---
+
+# Ingress for external access (if using Ingress controller)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: obsidian-bot-ingress
+  namespace: obsidian-system
+  labels:
+    app: obsidian-bot
+    component: core
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+spec:
+  tls:
+  - hosts:
+    - obsidian-bot.yourdomain.com
+    secretName: obsidian-bot-tls
+  rules:
+  - host: obsidian-bot.yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: obsidian-bot-service
+            port:
+              number: 80

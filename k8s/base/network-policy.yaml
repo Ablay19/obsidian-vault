@@ -1,0 +1,107 @@
+# Network Policies for Obsidian Bot
+# Controls network traffic for security
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: obsidian-bot-netpol
+  namespace: obsidian-system
+  labels:
+    app: obsidian-bot
+    component: security
+spec:
+  podSelector:
+    matchLabels:
+      app: obsidian-bot
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow traffic from ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080
+  
+  # Allow traffic from monitoring systems
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    - namespaceSelector:
+        matchLabels:
+          name: prometheus
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 9090
+  
+  # Allow traffic from within same namespace
+  - from:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8080
+  
+  egress:
+  # Allow DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  
+  # Allow HTTPS to external APIs
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 8443
+  
+  # Allow HTTP to external APIs
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 8080
+  
+  # Allow database connections
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: obsidian-system
+    ports:
+    - protocol: TCP
+      port: 6379  # Redis
+  
+  # Allow communication with Google Cloud APIs
+  - to:
+    - ipBlock:
+        cidr: 108.170.220.0/23  # Google Cloud API range
+    ports:
+    - protocol: TCP
+      port: 443
+
+---
+
+# Pod Disruption Budget for high availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: obsidian-bot-pdb
+  namespace: obsidian-system
+  labels:
+    app: obsidian-bot
+    component: availability
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: obsidian-bot

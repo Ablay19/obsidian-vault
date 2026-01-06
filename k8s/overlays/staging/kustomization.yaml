@@ -1,0 +1,88 @@
+# Staging overlay for Obsidian Bot
+# Staging environment configurations
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: obsidian-bot-staging
+  namespace: obsidian-staging
+
+resources:
+# Base configurations
+- ../../base/deployment.yaml
+- ../../base/service.yaml
+- ../../base/configmap.yaml
+- ../../base/secrets.yaml
+- ../../base/pvc.yaml
+- ../../base/rbac.yaml
+- ../../base/autoscaling.yaml
+
+patches:
+# Staging deployment patch
+- patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: obsidian-bot
+    spec:
+      replicas: 2
+      template:
+        spec:
+          containers:
+          - name: obsidian-bot
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "250m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"
+            env:
+            - name: ENVIRONMENT
+              value: "staging"
+            - name: LOG_LEVEL
+              value: "DEBUG"
+            - name: ENABLE_GOOGLE_LOGGING
+              value: "false"
+            - name: RATE_LIMIT_ENABLED
+              value: "false"
+  target:
+    name: obsidian-bot
+
+# Staging HPA patch
+- patch: |-
+    apiVersion: autoscaling/v2
+    kind: HorizontalPodAutoscaler
+    metadata:
+      name: obsidian-bot-hpa
+    spec:
+      minReplicas: 1
+      maxReplicas: 5
+  target:
+    name: obsidian-bot-hpa
+
+namespace: obsidian-staging
+
+images:
+# Staging image tag
+- name: obsidian-bot
+  newTag: staging
+  newRegistry: gcr.io/obsidian-bot-staging
+
+configMapGenerator:
+# Staging-specific configurations
+- name: obsidian-bot-staging-config
+  literals:
+  - ENVIRONMENT=staging
+  - LOG_LEVEL=DEBUG
+  - ENABLE_GOOGLE_LOGGING=false
+  - GOOGLE_CLOUD_PROJECT=obsidian-bot-staging
+  - RATE_LIMIT_PER_MINUTE=500
+  - ENABLE_METRICS=true
+  - ENABLE_PROFILING=true
+
+replicas:
+# Staging replica count
+- name: obsidian-bot
+  count: 2
