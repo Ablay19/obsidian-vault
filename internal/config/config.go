@@ -95,8 +95,6 @@ func init() {
 		}
 	}
 
-	
-
 	// 6. Unmarshal into AppConfig struct
 	if err := viper.Unmarshal(&AppConfig); err != nil {
 		fmt.Printf("Unable to decode into struct: %v\n", err)

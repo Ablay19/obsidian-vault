@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"obsidian-automation/internal/telemetry"
 
-	"golang.org/x/crypto/ssh"
 	sqlite "github.com/glebarez/sqlite" // Use glebarez/sqlite
+	"golang.org/x/crypto/ssh"
 	"gorm.io/gorm"
 )
 
@@ -44,7 +44,7 @@ func GenerateKeyPair(username string) (privateKey []byte, err error) {
 
 	privateKey = pem.EncodeToMemory(
 		&pem.Block{
-			Type: "RSA PRIVATE KEY",
+			Type:  "RSA PRIVATE KEY",
 			Bytes: x509.MarshalPKCS1PrivateKey(key),
 		},
 	)
@@ -54,55 +54,51 @@ func GenerateKeyPair(username string) (privateKey []byte, err error) {
 		return nil, err
 	}
 
-		user := User{Username: username, PublicKey: string(ssh.MarshalAuthorizedKey(publicKey))}
+	user := User{Username: username, PublicKey: string(ssh.MarshalAuthorizedKey(publicKey))}
 
-		if DB == nil {
+	if DB == nil {
 
-			telemetry.ZapLogger.Sugar().Error("GORM DB is nil in GenerateKeyPair!")
+		telemetry.ZapLogger.Sugar().Error("GORM DB is nil in GenerateKeyPair!")
 
-			return nil, fmt.Errorf("SSH database is not initialized")
+		return nil, fmt.Errorf("SSH database is not initialized")
 
-		}
+	}
 
-	
+	var existingUser User
 
-		var existingUser User
+	result := DB.Where("username = ?", username).First(&existingUser)
 
-		result := DB.Where("username = ?", username).First(&existingUser)
+	if result.Error == gorm.ErrRecordNotFound {
 
-	
+		// User does not exist, create new
 
-		if result.Error == gorm.ErrRecordNotFound {
+		if err := DB.Create(&user).Error; err != nil {
 
-			// User does not exist, create new
-
-			if err := DB.Create(&user).Error; err != nil {
-
-				return nil, fmt.Errorf("failed to create SSH user: %w", err)
-
-			}
-
-			telemetry.ZapLogger.Sugar().Infow("Created new SSH user", "username", username)
-
-		} else if result.Error != nil {
-
-			// Other database error
-
-			return nil, fmt.Errorf("database error checking for existing user: %w", result.Error)
-
-		} else {
-
-			// User exists, update public key
-
-			if err := DB.Model(&existingUser).Update("public_key", user.PublicKey).Error; err != nil {
-
-				return nil, fmt.Errorf("failed to update public key for existing user: %w", err)
-
-			}
-
-			telemetry.ZapLogger.Sugar().Infow("Updated public key for existing SSH user", "username", username)
+			return nil, fmt.Errorf("failed to create SSH user: %w", err)
 
 		}
 
-		return privateKey, nil
+		telemetry.ZapLogger.Sugar().Infow("Created new SSH user", "username", username)
+
+	} else if result.Error != nil {
+
+		// Other database error
+
+		return nil, fmt.Errorf("database error checking for existing user: %w", result.Error)
+
+	} else {
+
+		// User exists, update public key
+
+		if err := DB.Model(&existingUser).Update("public_key", user.PublicKey).Error; err != nil {
+
+			return nil, fmt.Errorf("failed to update public key for existing user: %w", err)
+
+		}
+
+		telemetry.ZapLogger.Sugar().Infow("Updated public key for existing SSH user", "username", username)
+
+	}
+
+	return privateKey, nil
 }

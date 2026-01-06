@@ -1,0 +1,271 @@
+package components
+
+import (
+	"obsidian-automation/internal/config"
+	"fmt"
+)
+
+// EnhancedLogin provides multiple authentication methods including test users
+templ EnhancedLogin(errorMsg string) {
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Login - Obsidian Bot Dashboard</title>
+		<link rel="stylesheet" href="/static/enhanced-style.css" />
+		<script src="//unpkg.com/alpinejs" defer></script>
+	</head>
+	<body class="login-page" x-data="{
+		authMethod: 'google',
+		testEmail: '',
+		testPassword: '',
+		loading: false,
+		errorMessage: '{ errorMsg }',
+		
+		init() {
+			// Clear error after 5 seconds
+			if (this.errorMessage) {
+				setTimeout(() => this.errorMessage = '', 5000);
+			}
+		},
+		
+		async loginWithGoogle() {
+			this.loading = true;
+			window.location.href = '/auth/google';
+		},
+		
+		async loginWithTest() {
+			if (!this.testEmail || !this.testPassword) {
+				this.errorMessage = 'Email and password are required';
+				return;
+			}
+			
+			this.loading = true;
+			try {
+				// Create test authentication request
+				const response = await fetch('/auth/test-login', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						email: this.testEmail,
+						password: this.testPassword
+					})
+				});
+				
+				const data = await response.json();
+				
+				if (response.ok) {
+					// Redirect to dashboard
+					window.location.href = '/dashboard';
+				} else {
+					this.errorMessage = data.error || 'Login failed';
+				}
+			} catch (error) {
+				this.errorMessage = 'Network error. Please try again.';
+			} finally {
+				this.loading = false;
+			}
+		},
+		
+		switchMethod(method) {
+			this.authMethod = method;
+			this.errorMessage = '';
+		}
+	}">
+		<div class="login-container">
+			<div class="login-card">
+				<!-- Header -->
+				<header class="login-header">
+					<div class="login-logo">
+						<span class="material-icons-outlined">smart_toy</span>
+						<h1>Obsidian Bot</h1>
+					</div>
+					<p class="login-subtitle">Advanced AI-Powered Dashboard</p>
+				</header>
+
+				<!-- Error Message -->
+				<div x-show="errorMessage" 
+					 x-transition:enter="transition-opacity duration-300"
+					 x-transition:enter-start="opacity-0"
+					 x-transition:enter-end="opacity-100"
+					 x-transition:leave="transition-opacity duration-300"
+					 x-transition:leave-start="opacity-100"
+					 x-transition:leave-end="opacity-0"
+					 class="login-error"
+					 role="alert">
+					<span class="material-icons-outlined">error</span>
+					<span x-text="errorMessage"></span>
+				</div>
+
+				<!-- Authentication Method Tabs -->
+				<div class="auth-tabs" role="tablist">
+					<button @click="switchMethod('google')"
+							:class="authMethod === 'google' ? 'active' : ''"
+							role="tab"
+							:aria-selected="authMethod === 'google'"
+							aria-controls="google-tab">
+						<span class="material-icons-outlined">account_circle</span>
+						Google
+					</button>
+					<button @click="switchMethod('test')"
+							:class="authMethod === 'test' ? 'active' : ''"
+							role="tab"
+							:aria-selected="authMethod === 'test'"
+							aria-controls="test-tab">
+						<span class="material-icons-outlined">verified_user</span>
+						Test Users
+					</button>
+				</div>
+
+				<!-- Google Authentication Tab -->
+				<div x-show="authMethod === 'google'" 
+					 x-transition:enter="transition-opacity duration-300"
+					 x-transition:enter-start="opacity-0"
+					 x-transition:enter-end="opacity-100"
+					 x-transition:leave="transition-opacity duration-300"
+					 x-transition:leave-start="opacity-100"
+					 x-transition:leave-end="opacity-0"
+					 id="google-tab"
+					 role="tabpanel"
+					 class="auth-tab">
+					<div class="auth-content">
+						<p class="auth-description">
+							Sign in with your Google account to access the dashboard.
+						</p>
+						
+						<button @click="loginWithGoogle()" 
+								:disabled="loading"
+								class="btn btn-primary btn-large btn-google">
+							<span x-show="!loading" class="material-icons-outlined">login</span>
+							<span x-show="loading" class="loading-spinner"></span>
+							<span x-text="loading ? 'Signing in...' : 'Sign in with Google'"></span>
+						</button>
+						
+						<div class="auth-note">
+							<span class="material-icons-outlined">info</span>
+							You'll be redirected to Google for authentication.
+						</div>
+					</div>
+				</div>
+
+				<!-- Test Users Tab -->
+				<div x-show="authMethod === 'test'" 
+					 x-transition:enter="transition-opacity duration-300"
+					 x-transition:enter-start="opacity-0"
+					 x-transition:enter-end="opacity-100"
+					 x-transition:leave="transition-opacity duration-300"
+					 x-transition:leave-start="opacity-100"
+					 x-transition:leave-end="opacity-0"
+					 id="test-tab"
+					 role="tabpanel"
+					 class="auth-tab">
+					<div class="auth-content">
+						<p class="auth-description">
+							Use test accounts for development and testing purposes.
+						</p>
+						
+						<form @submit.prevent="loginWithTest()" class="login-form">
+							<div class="form-group">
+								<label for="test-email" class="form-label">Email</label>
+								<input type="email" 
+									   id="test-email"
+									   x-model="testEmail"
+									   placeholder="test@example.com"
+									   class="form-input"
+									   required
+									   :disabled="loading">
+								<span class="input-icon material-icons-outlined">email</span>
+							</div>
+							
+							<div class="form-group">
+								<label for="test-password" class="form-label">Password</label>
+								<input type="password" 
+									   id="test-password"
+									   x-model="testPassword"
+									   placeholder="Enter password"
+									   class="form-input"
+									   required
+									   :disabled="loading">
+								<span class="input-icon material-icons-outlined">lock</span>
+							</div>
+							
+							<button type="submit" 
+									:disabled="loading"
+									class="btn btn-primary btn-large">
+								<span x-show="!loading" class="material-icons-outlined">login</span>
+								<span x-show="loading" class="loading-spinner"></span>
+								<span x-text="loading ? 'Signing in...' : 'Sign In'"></span>
+							</button>
+						</form>
+						
+						<div class="test-users-info">
+							<h4>Available Test Accounts:</h4>
+							<div class="test-accounts">
+								<div class="test-account">
+									<strong>Developer:</strong>
+									<code>abdoullahelvogani@gmail.com</code>
+								</div>
+								<div class="test-account">
+									<strong>Test User:</strong>
+									<code>test@obsidian.bot</code>
+								</div>
+								<div class="test-account">
+									<strong>Local Admin:</strong>
+									<code>admin@local.dev</code>
+								</div>
+							</div>
+							<div class="test-note">
+								<span class="material-icons-outlined">security</span>
+								Password for all accounts: <code>test123</code>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<!-- Environment Notice -->
+				<div class="environment-notice">
+					<span class="material-icons-outlined">info</span>
+					<span class="notice-text">
+						<strong>Environment:</strong> { config.GetEnvironment() }
+					</span>
+				</div>
+
+				<!-- Footer -->
+				<footer class="login-footer">
+					<div class="footer-links">
+						<a href="/docs" class="footer-link">Documentation</a>
+						<a href="https://github.com/Ablay19/obsidian-vault" target="_blank" class="footer-link">
+							<span class="material-icons-outlined">code</span>
+							GitHub
+						</a>
+					</div>
+					<div class="footer-copyright">
+						© 2026 Obsidian Bot. All rights reserved.
+					</div>
+				</footer>
+			</div>
+		</div>
+
+		<!-- Background Animation -->
+		<div class="login-background">
+			<div class="bg-animation bg-1"></div>
+			<div class="bg-animation bg-2"></div>
+			<div class="bg-animation bg-3"></div>
+		</div>
+
+		<script>
+			// Add some interactivity
+			document.addEventListener('DOMContentLoaded', () => {
+				// Focus first input on page load
+				setTimeout(() => {
+					const firstInput = document.querySelector('input[type="email"], input[type="text"]');
+					if (firstInput) {
+						firstInput.focus();
+					}
+				}, 100);
+			});
+		</script>
+	</body>
+	</html>
+}

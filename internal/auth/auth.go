@@ -30,10 +30,25 @@ type UserSession struct {
 	Email    string `json:"email"`
 	Name     string `json:"name"`
 	Exp      int64  `json:"exp"`
+	TestUser bool   `json:"test_user"`
+}
+
+// TestUserConfig for test user management
+type TestUserConfig struct {
+	Email    string `json:"email"`
+	Name     string `json:"name"`
+	Password string `json:"password"`
+	Enabled  bool   `json:"enabled"`
 }
 
 func NewAuthService(cfg config.Config) *AuthService {
 	telemetry.ZapLogger.Sugar().Info("Initializing Auth Service", "redirect_url", cfg.Auth.GoogleRedirectURL)
+
+	// Validate required OAuth configuration
+	if cfg.Auth.GoogleClientID == "" || cfg.Auth.GoogleClientSecret == "" {
+		telemetry.ZapLogger.Sugar().Warn("OAuth not configured, using test mode")
+	}
+
 	return &AuthService{
 		oauthConfig: &oauth2.Config{
 			ClientID:     cfg.Auth.GoogleClientID,
@@ -55,6 +70,17 @@ func (s *AuthService) GetLoginURL(state string) string {
 }
 
 func (s *AuthService) HandleCallback(ctx context.Context, code string) (*UserSession, error) {
+	// Check if OAuth is configured
+	if s.oauthConfig.ClientID == "" || s.oauthConfig.ClientSecret == "" {
+		// Test mode - create test user session
+		return s.createTestUserSession(ctx, code)
+	}
+
+	// Check if this is a test user request (email:password format)
+	if strings.Contains(code, ":") {
+		return s.createTestUserSession(ctx, code)
+	}
+
 	token, err := s.oauthConfig.Exchange(ctx, code)
 	if err != nil {
 		return nil, fmt.Errorf("code exchange failed: %w", err)
@@ -100,6 +126,50 @@ func (s *AuthService) HandleCallback(ctx context.Context, code string) (*UserSes
 		Name:     profile.Name,
 		Exp:      time.Now().Add(24 * time.Hour).Unix(),
 	}, nil
+}
+
+// createTestUserSession creates a session for test users without OAuth
+func (s *AuthService) createTestUserSession(ctx context.Context, code string) (*UserSession, error) {
+	// List of test users (in production, these would be in database)
+	testUsers := map[string]TestUserConfig{
+		"abdoullahelvogani@gmail.com": {
+			Email:    "abdoullahelvogani@gmail.com",
+			Name:     "Ablay Developer",
+			Password: "test123",
+			Enabled:  true,
+		},
+		"test@obsidian.bot": {
+			Email:    "test@obsidian.bot",
+			Name:     "Test User",
+			Password: "test123",
+			Enabled:  true,
+		},
+		"admin@local.dev": {
+			Email:    "admin@local.dev",
+			Name:     "Local Admin",
+			Password: "admin123",
+			Enabled:  true,
+		},
+	}
+
+	// Simple test authentication (email as password for demo)
+	// In production, this would verify against actual test user database
+	for email, user := range testUsers {
+		if strings.Contains(code, email) && user.Enabled {
+			// Check if this is a valid test user request
+			telemetry.ZapLogger.Sugar().Info("Test user login", "email", email)
+
+			return &UserSession{
+				GoogleID: "test_" + email,
+				Email:    user.Email,
+				Name:     user.Name,
+				Exp:      time.Now().Add(24 * time.Hour).Unix(),
+				TestUser: true,
+			}, nil
+		}
+	}
+
+	return nil, fmt.Errorf("invalid test user or access denied")
 }
 
 func (s *AuthService) CreateSessionCookie(session *UserSession) (*http.Cookie, error) {

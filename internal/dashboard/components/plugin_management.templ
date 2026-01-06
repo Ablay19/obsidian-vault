@@ -1,0 +1,430 @@
+package components
+
+import (
+	"fmt"
+	"obsidian-automation/internal/auth"
+	"context"
+)
+
+// PluginManagementPanel provides a comprehensive plugin system
+templ PluginManagementPanel(ctx context.Context) {
+	<section class="plugin-panel" aria-labelledby="plugin-title">
+		<header class="panel-header">
+			<h2 id="plugin-title" class="panel-title">
+				<span class="material-icons-outlined">extension</span>
+				Plugin Management
+			</h2>
+			<div class="panel-controls">
+				<button @click="installPlugin()" 
+						class="btn btn-primary">
+					<span class="material-icons-outlined">add</span>
+					Install Plugin
+				</button>
+				<button @click="refreshPlugins()" 
+						class="btn btn-secondary">
+					<span class="material-icons-outlined">refresh</span>
+					Refresh
+				</button>
+			</div>
+		</header>
+
+		<div class="plugin-content" x-data="{
+			plugins: [],
+			categories: ['All', 'Analytics', 'Security', 'UI', 'Integration', 'Development'],
+			selectedCategory: 'All',
+			searchTerm: '',
+			installing: false,
+			
+			init() {
+				this.loadPlugins();
+			},
+			
+			async loadPlugins() {
+				try {
+					const response = await fetch('/api/plugins');
+					const data = await response.json();
+					this.plugins = data.plugins || [];
+				} catch (error) {
+					console.error('Failed to load plugins:', error);
+					dashboardUtils.showNotification('Failed to load plugins', 'error');
+				}
+			},
+			
+			get filteredPlugins() {
+				return this.plugins.filter(plugin => {
+					const matchesCategory = this.selectedCategory === 'All' || 
+						plugin.category === this.selectedCategory;
+					const matchesSearch = plugin.name.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
+						plugin.description.toLowerCase().includes(this.searchTerm.toLowerCase());
+					return matchesCategory && matchesSearch;
+				});
+			},
+			
+			async installPlugin() {
+				const pluginUrl = prompt('Enter plugin URL:');
+				if (!pluginUrl) return;
+				
+				this.installing = true;
+				try {
+					const response = await fetch('/api/plugins/install', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ url: pluginUrl })
+					});
+					
+					if (response.ok) {
+						dashboardUtils.showNotification('Plugin installed successfully', 'success');
+						await this.loadPlugins();
+					} else {
+						throw new Error('Installation failed');
+					}
+				} catch (error) {
+					dashboardUtils.showNotification('Failed to install plugin', 'error');
+				} finally {
+					this.installing = false;
+				}
+			},
+			
+			async togglePlugin(pluginName, enabled) {
+				try {
+					const response = await fetch('/api/plugins/toggle', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ name: pluginName, enabled })
+					});
+					
+					if (response.ok) {
+						dashboardUtils.showNotification(
+							`Plugin ${enabled ? 'enabled' : 'disabled'}`, 
+							'success'
+						);
+					} else {
+						throw new Error('Toggle failed');
+					}
+				} catch (error) {
+					dashboardUtils.showNotification('Failed to toggle plugin', 'error');
+				}
+			},
+			
+			async uninstallPlugin(pluginName) {
+				if (!confirm(`Are you sure you want to uninstall ${pluginName}?`)) {
+					return;
+				}
+				
+				try {
+					const response = await fetch('/api/plugins/uninstall', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ name: pluginName })
+					});
+					
+					if (response.ok) {
+						dashboardUtils.showNotification('Plugin uninstalled', 'success');
+						await this.loadPlugins();
+					} else {
+						throw new Error('Uninstallation failed');
+					}
+				} catch (error) {
+					dashboardUtils.showNotification('Failed to uninstall plugin', 'error');
+				}
+			},
+			
+			refreshPlugins() {
+				this.loadPlugins();
+				dashboardUtils.showNotification('Plugin list refreshed', 'info');
+			}
+		}">
+			<!-- Search and Filter -->
+			<div class="plugin-controls">
+				<div class="search-box">
+					<input type="text" 
+						   x-model="searchTerm"
+						   placeholder="Search plugins..."
+						   class="form-input"
+						   aria-label="Search plugins">
+					<span class="material-icons-outlined">search</span>
+				</div>
+				
+				<div class="category-filter">
+					<select x-model="selectedCategory" 
+							class="form-select"
+							aria-label="Filter by category">
+						<template x-for="category in categories">
+							<option :value="category" x-text="category"></option>
+						</template>
+					</select>
+				</div>
+			</div>
+
+			<!-- Plugin Installation Progress -->
+			<div x-show="installing" class="plugin-installing">
+				<div class="loading-spinner"></div>
+				<span>Installing plugin...</span>
+			</div>
+
+			<!-- Plugin Grid -->
+			<div class="plugin-grid">
+				<template x-for="plugin in filteredPlugins">
+					<div class="plugin-card" 
+						 :class="{ 'plugin-disabled': !plugin.enabled }">
+						<div class="plugin-header">
+							<div class="plugin-info">
+								<h3 x-text="plugin.name"></h3>
+								<span class="plugin-version" x-text="plugin.version"></span>
+								<span class="plugin-category" x-text="plugin.category"></span>
+							</div>
+							<div class="plugin-actions">
+								<button @click="togglePlugin(plugin.name, !plugin.enabled)"
+										class="btn btn-sm"
+										:class="plugin.enabled ? 'btn-warning' : 'btn-success'"
+										:aria-pressed="plugin.enabled">
+									<span class="material-icons-outlined" 
+										  x-text="plugin.enabled ? 'pause' : 'play_arrow'"></span>
+								</button>
+								<button @click="uninstallPlugin(plugin.name)"
+										class="btn btn-sm btn-error">
+									<span class="material-icons-outlined">delete</span>
+								</button>
+							</div>
+						</div>
+						
+						<div class="plugin-description">
+							<p x-text="plugin.description"></p>
+						</div>
+						
+						<div class="plugin-meta">
+							<div class="plugin-author">
+								<span class="material-icons-outlined">person</span>
+								<span x-text="plugin.author"></span>
+							</div>
+							<div class="plugin-downloads">
+								<span class="material-icons-outlined">download</span>
+								<span x-text="plugin.downloads.toLocaleString()"></span>
+							</div>
+							<div class="plugin-rating">
+								<span class="material-icons-outlined">star</span>
+								<span x-text="plugin.rating"></span>
+							</div>
+						</div>
+					</div>
+				</template>
+			</div>
+
+			<!-- Empty State -->
+			<div x-show="filteredPlugins.length === 0" class="empty-state">
+				<span class="material-icons-outlined">extension_off</span>
+				<h3>No plugins found</h3>
+				<p>Try adjusting your search or filter criteria.</p>
+			</div>
+		</div>
+	</section>
+}
+
+// WhatsAppIntegrationPanel provides multiple WhatsApp instance management
+templ WhatsAppIntegrationPanel() {
+	<section class="whatsapp-panel" aria-labelledby="whatsapp-title">
+		<header class="panel-header">
+			<h2 id="whatsapp-title" class="panel-title">
+				<span class="material-icons-outlined">whatsapp</span>
+				WhatsApp Integration
+			</h2>
+			<div class="panel-controls">
+				<button @click="addInstance()" 
+						class="btn btn-primary">
+					<span class="material-icons-outlined">add</span>
+					Add Instance
+				</button>
+				<button @click="testAllInstances()" 
+						class="btn btn-secondary">
+					<span class="material-icons-outlined">check_circle</span>
+					Test All
+				</button>
+			</div>
+		</header>
+
+		<div class="whatsapp-content" x-data="{
+			instances: [],
+			addingInstance: false,
+			
+			init() {
+				this.loadInstances();
+			},
+			
+			async loadInstances() {
+				try {
+					const response = await fetch('/api/whatsapp/instances');
+					const data = await response.json();
+					this.instances = data.instances || [];
+				} catch (error) {
+					console.error('Failed to load instances:', error);
+					dashboardUtils.showNotification('Failed to load WhatsApp instances', 'error');
+				}
+			},
+			
+			async addInstance() {
+				this.addingInstance = true;
+				try {
+					const response = await fetch('/api/whatsapp/instances', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							name: prompt('Instance name:'),
+							phone: prompt('Phone number:'),
+							webhook: prompt('Webhook URL:'),
+							accessToken: prompt('Access token:')
+						})
+					});
+					
+					if (response.ok) {
+						dashboardUtils.showNotification('WhatsApp instance added', 'success');
+						await this.loadInstances();
+					} else {
+						throw new Error('Failed to add instance');
+					}
+				} catch (error) {
+					dashboardUtils.showNotification('Failed to add WhatsApp instance', 'error');
+				} finally {
+					this.addingInstance = false;
+				}
+			},
+			
+			async testInstance(instanceId) {
+				try {
+					const response = await fetch(`/api/whatsapp/instances/${instanceId}/test`);
+					const data = await response.json();
+					
+					if (data.success) {
+						dashboardUtils.showNotification('Instance test successful', 'success');
+					} else {
+						dashboardUtils.showNotification(`Instance test failed: ${data.error}`, 'error');
+					}
+				} catch (error) {
+					dashboardUtils.showNotification('Failed to test instance', 'error');
+				}
+			},
+			
+			async testAllInstances() {
+				for (const instance of this.instances) {
+					await this.testInstance(instance.id);
+					// Add delay to avoid rate limiting
+					await new Promise(resolve => setTimeout(resolve, 1000));
+				}
+			},
+			
+			async toggleInstance(instanceId, enabled) {
+				try {
+					const response = await fetch(`/api/whatsapp/instances/${instanceId}/toggle`, {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ enabled })
+					});
+					
+					if (response.ok) {
+						dashboardUtils.showNotification(
+							`Instance ${enabled ? 'enabled' : 'disabled'}`, 
+							'success'
+						);
+						await this.loadInstances();
+					} else {
+						throw new Error('Toggle failed');
+					}
+				} catch (error) {
+					dashboardUtils.showNotification('Failed to toggle instance', 'error');
+				}
+			},
+			
+			async removeInstance(instanceId) {
+				if (!confirm('Are you sure you want to remove this WhatsApp instance?')) {
+					return;
+				}
+				
+				try {
+					const response = await fetch(`/api/whatsapp/instances/${instanceId}`, {
+						method: 'DELETE'
+					});
+					
+					if (response.ok) {
+						dashboardUtils.showNotification('WhatsApp instance removed', 'success');
+						await this.loadInstances();
+					} else {
+						throw new Error('Removal failed');
+					}
+				} catch (error) {
+					dashboardUtils.showNotification('Failed to remove instance', 'error');
+				}
+			}
+		}">
+			<!-- WhatsApp Instances Grid -->
+			<div class="whatsapp-grid">
+				<template x-for="instance in instances">
+					<div class="whatsapp-instance-card" 
+						 :class="{ 'instance-disabled': !instance.enabled }">
+						<div class="instance-header">
+							<div class="instance-info">
+								<h3 x-text="instance.name"></h3>
+								<span class="instance-phone" x-text="instance.phone"></span>
+								<span class="instance-status" 
+									  :class="instance.status.toLowerCase()"
+									  x-text="instance.status"></span>
+							</div>
+							<div class="instance-actions">
+								<button @click="toggleInstance(instance.id, !instance.enabled)"
+										class="btn btn-sm"
+										:class="instance.enabled ? 'btn-warning' : 'btn-success'"
+										:aria-pressed="instance.enabled">
+									<span class="material-icons-outlined" 
+										  x-text="instance.enabled ? 'pause' : 'play_arrow'"></span>
+								</button>
+								<button @click="testInstance(instance.id)"
+										class="btn btn-sm btn-secondary">
+									<span class="material-icons-outlined">check</span>
+								</button>
+								<button @click="removeInstance(instance.id)"
+										class="btn btn-sm btn-error">
+									<span class="material-icons-outlined">delete</span>
+								</button>
+							</div>
+						</div>
+						
+						<div class="instance-details">
+							<div class="instance-metric">
+								<span class="metric-label">Messages Today</span>
+								<span class="metric-value" x-text="instance.messagesToday || 0"></span>
+							</div>
+							<div class="instance-metric">
+								<span class="metric-label">Active Chats</span>
+								<span class="metric-value" x-text="instance.activeChats || 0"></span>
+							</div>
+							<div class="instance-metric">
+								<span class="metric-label">Response Time</span>
+								<span class="metric-value" x-text="(instance.responseTime || 0) + 'ms'"></span>
+							</div>
+							<div class="instance-metric">
+								<span class="metric-label">Last Activity</span>
+								<span class="metric-value" x-text="instance.lastActivity || 'Never'"></span>
+							</div>
+						</div>
+						
+						<div class="instance-webhook">
+							<span class="metric-label">Webhook</span>
+							<code x-text="instance.webhook"></code>
+						</div>
+					</div>
+				</template>
+			</div>
+
+			<!-- Add Instance Progress -->
+			<div x-show="addingInstance" class="instance-adding">
+				<div class="loading-spinner"></div>
+				<span>Adding WhatsApp instance...</span>
+			</div>
+
+			<!-- Empty State -->
+			<div x-show="instances.length === 0" class="empty-state">
+				<span class="material-icons-outlined">smartphone</span>
+				<h3>No WhatsApp instances</h3>
+				<p>Add your first WhatsApp instance to get started.</p>
+			</div>
+		</div>
+	</section>
+}

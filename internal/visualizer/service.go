@@ -2,9 +2,9 @@ package visualizer
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
-	"encoding/json"
 
 	"go.uber.org/zap"
 )

@@ -16,75 +16,474 @@ func getSessionUser(ctx context.Context) *auth.UserSession {
 
 templ Layout(initialTab string, content templ.Component) {
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Obsidian Bot Dashboard</title>
-
+    <title>Obsidian Bot Dashboard - Enhanced</title>
+    <meta name="description" content="Advanced AI-powered Obsidian automation dashboard with real-time monitoring" />
+    <meta name="keywords" content="obsidian, ai, automation, dashboard, bot, whatsapp" />
+    
+    <!-- Preconnect for performance -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-
+    
+    <!-- Enhanced Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+    
+    <!-- Performance optimizations -->
+    <link rel="dns-prefetch" href="//api.github.com">
+    <link rel="dns-prefetch" href="//cdn.jsdelivr.net">
+    
+    <!-- Modern CSS Framework -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Defer Alpine to ensure app.js loads first or concurrently but executes after -->
-    <script src="//unpkg.com/alpinejs" defer></script> 
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Tailwind config for custom design system
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'sans': ['Inter', 'system-ui'],
+                        'mono': ['JetBrains Mono', 'monospace']
+                    },
+                    colors: {
+                        'accent': {
+                            'primary': '#0066ff',
+                            'secondary': '#00d4ff'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+	<!-- Core Libraries -->
+    <script src="//unpkg.com/alpinejs" defer></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10/dist/htmx.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <!-- Alpine.js Plugins -->
+    <script>
+        // Initialize useful Alpine.js plugins
+        document.addEventListener('alpine:init', () => {
+            // Plugin: Focus trap for modals
+            Alpine.directive('focus-trap', (el, { expression }) => ({
+                init() {
+                    const focusableElements = el.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+                    
+                    const keydownHandler = (e) => {
+                        if (e.key === 'Escape') {
+                            expression(); // Close modal
+                            return;
+                        }
+                        
+                        if (e.key === 'Tab') {
+                            e.preventDefault();
+                            const currentFocus = document.activeElement;
+                            const currentIndex = Array.from(focusableElements).indexOf(currentFocus);
+                            
+                            if (e.shiftKey) {
+                                // Shift + Tab (previous)
+                                const prevIndex = currentIndex <= 0 ? focusableElements.length - 1 : currentIndex - 1;
+                                focusableElements[prevIndex]?.focus();
+                            } else {
+                                // Tab (next)
+                                const nextIndex = currentIndex >= focusableElements.length - 1 ? 0 : currentIndex + 1;
+                                focusableElements[nextIndex]?.focus();
+                            }
+                        }
+                    };
+                    
+                    el.addEventListener('keydown', keydownHandler);
+                    
+                    // Focus first element when opened
+                    focusableElements[0]?.focus();
+                },
+                destroy() {
+                    el.removeEventListener('keydown', keydownHandler);
+                }
+            }));
+
+            // Plugin: Lazy load images
+            Alpine.directive('lazy-load', (el, { expression }) => ({
+                init() {
+                    const observer = new IntersectionObserver((entries) => {
+                        entries.forEach(entry => {
+                            if (entry.isIntersecting) {
+                                const img = entry.target;
+                                img.src = img.dataset.src;
+                                img.classList.remove('lazy-placeholder');
+                                observer.unobserve(img);
+                            }
+                        });
+                    });
+                    
+                    if (el.dataset.src) {
+                        observer.observe(el);
+                    }
+                }
+            }));
+
+            // Plugin: Auto-save form data
+            Alpine.store('autoSave', {
+                data: {},
+                save(key, value) {
+                    this.data[key] = value;
+                    localStorage.setItem(`autosave-${key}`, JSON.stringify(value));
+                },
+                load(key) {
+                    const saved = localStorage.getItem(`autosave-${key}`);
+                    return saved ? JSON.parse(saved) : null;
+                },
+                clear(key) {
+                    delete this.data[key];
+                    localStorage.removeItem(`autosave-${key}`);
+                }
+            });
+
+            // Plugin: Copy to clipboard
+            Alpine.magic('clipboard', () => ({
+                copy: async (text) => {
+                    try {
+                        await navigator.clipboard.writeText(text);
+                        return true;
+                    } catch (err) {
+                        console.error('Failed to copy text: ', err);
+                        return false;
+                    }
+                }
+            }));
+
+            // Plugin: Debounce utility
+            Alpine.magic('debounce', () => (fn, delay = 300) => {
+                let timeoutId;
+                return (...args) => {
+                    clearTimeout(timeoutId);
+                    timeoutId = setTimeout(() => fn.apply(this, args), delay);
+                };
+            });
+
+            // Plugin: Format utilities
+            Alpine.magic('format', () => ({
+                bytes: (bytes) => {
+                    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                    if (bytes === 0) return '0 Bytes';
+                    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+                    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+                },
+                number: (num, decimals = 2) => {
+                    return new Intl.NumberFormat('en-US', {
+                        minimumFractionDigits: decimals,
+                        maximumFractionDigits: decimals
+                    }).format(num);
+                },
+                date: (date, options = {}) => {
+                    return new Intl.DateTimeFormat('en-US', {
+                        dateStyle: 'medium',
+                        timeStyle: 'short',
+                        ...options
+                    }).format(date);
+                }
+            }));
+
+            console.log('🔌 Alpine.js plugins initialized');
+        });
+    </script>
+    
+    <!-- Notification System -->
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
-    <link rel="stylesheet" href="/static/style.css">
     
-    <!-- Load custom app logic -->
+    <!-- Enhanced Stylesheets -->
+    <link rel="stylesheet" href="/static/enhanced-style.css" />
+    <link rel="stylesheet" href="/static/style.css" />
+    
+    <!-- PWA Support -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0066ff">
+    
+    <!-- Security Headers -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' cdn.tailwindcss.com unpkg.com cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' fonts.googleapis.com cdn.jsdelivr.net; font-src fonts.gstatic.com;">
+    
+    <!-- Load enhanced utilities first -->
+    <script src="/static/enhanced-app.js"></script>
     <script src="/static/app.js"></script>
+    
+    <!-- Server State Injection -->
     <script>
-        // Inject server-side initial state
         window.initialTab = "{ initialTab }";
+        window.csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+        window.apiBase = '/api/v1';
+    </script>
+    
+    <!-- Structured Data for SEO -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Obsidian Bot Dashboard",
+        "description": "Advanced AI-powered automation dashboard",
+        "url": window.location.origin,
+        "applicationCategory": "ProductivityApplication"
+    }
     </script>
 </head>
 
-<body class="bg-[#0a0a0c] text-gray-300 font-['JetBrains_Mono'] text-xs selection:bg-blue-500/30" x-data>
-<div class="flex min-h-screen relative">
+<body class="dashboard-layout" x-data="{
+    theme: localStorage.getItem('dashboard-theme') || 'dark',
+    sidebarOpen: window.innerWidth > 1024,
+    notifications: [],
+    loading: false,
+    
+    init() {
+        this.applyTheme();
+        this.setupKeyboardShortcuts();
+        this.setupAccessibility();
+    },
+    
+    applyTheme() {
+        document.documentElement.setAttribute('data-theme', this.theme);
+        document.documentElement.classList.toggle('dark', this.theme === 'dark');
+    },
+    
+    toggleTheme() {
+        this.theme = this.theme === 'dark' ? 'light' : 'dark';
+        this.applyTheme();
+        localStorage.setItem('dashboard-theme', this.theme);
+        dashboardUtils.showNotification(`Theme changed to ${this.theme}`, 'info');
+    },
+    
+    toggleSidebar() {
+        this.sidebarOpen = !this.sidebarOpen;
+    },
+    
+    setupKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+                e.preventDefault();
+                this.toggleTheme();
+            }
+            if (e.ctrlKey && e.shiftKey && e.key === '/') {
+                e.preventDefault();
+                this.showHelp();
+            }
+        });
+    },
+    
+    setupAccessibility() {
+        // Skip to main content
+        const skipLink = document.createElement('a');
+        skipLink.href = '#main-content';
+        skipLink.className = 'skip-link';
+        skipLink.textContent = 'Skip to main content';
+        skipLink.onclick = (e) => {
+            e.preventDefault();
+            document.getElementById('main-content')?.focus();
+        };
+        document.body.insertBefore(skipLink, document.body.firstChild);
+    },
+    
+    showHelp() {
+        dashboardUtils.showNotification(`
+            <strong>Keyboard Shortcuts:</strong><br>
+            <kbd>Ctrl+Shift+T</kbd> - Toggle theme<br>
+            <kbd>Ctrl+Shift+/</kbd> - Show help<br>
+            <kbd>Ctrl+Shift+S</kbd> - Toggle sidebar<br>
+            <kbd>Esc</kbd> - Close modals
+        `, 'info', 10000);
+    }
+}">
+    <!-- Skip to Main Content (Accessibility) -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
     <!-- Mobile Sidebar Backdrop -->
-    <div x-show="$store.app.sidebarOpen" 
-         x-transition.opacity 
-         @click="$store.app.toggleSidebar()"
-         class="fixed inset-0 bg-black/50 z-20 lg:hidden backdrop-blur-sm"></div>
+    <div x-show="sidebarOpen" 
+         x-transition:enter="transition-opacity duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition-opacity duration-300"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         @click="toggleSidebar()"
+         class="fixed inset-0 bg-black/50 z-20 lg:hidden backdrop-blur-sm"
+         aria-label="Close sidebar"></div>
 
-    <!-- Sidebar Component -->
-    @Sidebar(getSessionUser(ctx))
+    <!-- Enhanced Sidebar Component -->
+    <aside x-show="sidebarOpen"
+            x-transition:enter="transition-transform duration-300"
+            x-transition:enter-start="transform -translate-x-full"
+            x-transition:enter-end="transform translate-x-0"
+            x-transition:leave="transition-transform duration-300"
+            x-transition:leave-start="transform translate-x-0"
+            x-transition:leave-end="transform -translate-x-full"
+            class="dashboard-sidebar lg:transform-none"
+            role="navigation"
+            aria-label="Main navigation">
+        @Sidebar(getSessionUser(ctx))
+    </aside>
 
-    <!-- Main Content -->
-    <main class="flex-grow overflow-y-auto w-full">
+    <!-- Main Content Area -->
+    <main id="main-content" 
+          class="dashboard-main" 
+          tabindex="-1"
+          role="main">
+        <!-- Enhanced Header -->
         @Header()
 
-        <div id="main-content" 
-             class="p-4 lg:p-8 space-y-6 max-w-7xl mx-auto"
+        <!-- Dynamic Content Area -->
+        <div class="content-wrapper"
              hx-trigger="refresh"
-             x-init="$store.app.syncUI()">
+             x-init="$store.app?.syncUI?.()">
              
-             <!-- Content Injection -->
-             @content
+            <!-- Loading State -->
+            <div x-show="loading" class="loading-overlay">
+                <div class="loading-spinner"></div>
+                <span class="loading-text">Loading...</span>
+            </div>
+            
+            <!-- Content Injection -->
+            @content
         </div>
 
-        <footer class="px-8 py-12 border-t border-gray-800 text-center space-y-2">
-            <div class="text-gray-600 font-bold uppercase tracking-[0.3em] text-[10px]">Obsidian Bot Dashboard © 2026</div>
-            <div class="flex justify-center items-center space-x-4 text-[10px] text-gray-500">
-                <a href="/api/services/status" target="_blank" class="hover:text-blue-400 transition-colors">SYSTEM_STATUS</a>
-                <span class="text-gray-800">/</span>
-                <a href="https://github.com/yourusername/obsidian-bot" target="_blank" class="hover:text-blue-400 transition-colors">SOURCE_CODE</a>
+        <!-- Enhanced Footer -->
+        <footer class="dashboard-footer">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <strong>Obsidian Bot Dashboard</strong>
+                    <span class="footer-copyright">© 2026</span>
+                </div>
+                
+                <nav class="footer-links" aria-label="Footer navigation">
+                    <a href="/api/services/status" 
+                       target="_blank" 
+                       class="footer-link"
+                       aria-label="View system status">
+                        <span class="material-icons-outlined">monitor_heart</span>
+                        System Status
+                    </a>
+                    <a href="https://github.com/Ablay19/obsidian-vault" 
+                       target="_blank" 
+                       class="footer-link"
+                       aria-label="View source code">
+                        <span class="material-icons-outlined">code</span>
+                        Source Code
+                    </a>
+                    <a href="/docs" 
+                       class="footer-link"
+                       aria-label="View documentation">
+                        <span class="material-icons-outlined">description</span>
+                        Documentation
+                    </a>
+                </nav>
+                
+                <div class="footer-meta">
+                    <div id="connection-status" class="connection-quality connection-good">
+                        📡 Good Connection
+                    </div>
+                    <button @click="showHelp()" 
+                            class="help-button"
+                            aria-label="Show keyboard shortcuts">
+                        <span class="material-icons-outlined">help_outline</span>
+                    </button>
+                </div>
             </div>
         </footer>
     </main>
-</div>
-<script>
-    // Global helper for HTMX polling logic, bridging to Alpine store
-    function shouldPoll() {
-        if (!Alpine || !Alpine.store('app')) return true;
-        return Alpine.store('app').shouldPoll();
-    }
-</script>
+
+    <!-- Theme Toggle Button -->
+    <button @click="toggleTheme()"
+            class="theme-toggle"
+            aria-label="Toggle theme"
+            title="Toggle theme (Ctrl+Shift+T)">
+        <span x-show="theme === 'dark'">🌙</span>
+        <span x-show="theme === 'light'">☀️</span>
+    </button>
+
+    <!-- Performance Panel (Enhanced) -->
+    <div id="performance-panel" class="performance-panel hidden">
+        <div class="panel-header">
+            <h4>Performance Monitor</h4>
+            <button @click="$el.parentElement.classList.toggle('hidden')" 
+                    class="panel-close"
+                    aria-label="Close performance panel">×</button>
+        </div>
+        <div id="performance-stats" class="panel-content"></div>
+    </div>
+
+    <!-- Global Keyboard Shortcuts Help -->
+    <div x-show="$store.help?.visible" 
+         x-transition:enter="transition-opacity duration-200"
+         class="shortcuts-help">
+        <div class="shortcuts-content">
+            <h3>Keyboard Shortcuts</h3>
+            <dl class="shortcuts-list">
+                <div class="shortcut-item">
+                    <dt><kbd>Ctrl+Shift+T</kbd></dt>
+                    <dd>Toggle theme</dd>
+                </div>
+                <div class="shortcut-item">
+                    <dt><kbd>Ctrl+Shift+/</kbd></dt>
+                    <dd>Show help</dd>
+                </div>
+                <div class="shortcut-item">
+                    <dt><kbd>Ctrl+Shift+S</kbd></dt>
+                    <dd>Toggle sidebar</dd>
+                </div>
+                <div class="shortcut-item">
+                    <dt><kbd>Esc</kbd></dt>
+                    <dd>Close modals</dd>
+                </div>
+            </dl>
+        </div>
+    </div>
+
+    <!-- Global Scripts -->
+    <script>
+        // Enhanced initialization
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize dashboard utilities
+            if (window.dashboardUtils) {
+                dashboardUtils.init();
+            }
+            
+            // Setup HTMX enhancements
+            htmx.on('htmx:afterRequest', function(evt) {
+                document.querySelector('[x-data]')?.loading = false;
+            });
+            
+            htmx.on('htmx:beforeRequest', function(evt) {
+                document.querySelector('[x-data]')?.loading = true;
+            });
+            
+            // Auto-hide performance panel on mobile
+            if (window.innerWidth < 768) {
+                document.getElementById('performance-panel')?.classList.add('hidden');
+            }
+        });
+        
+        // Global error handling
+        window.addEventListener('error', function(e) {
+            if (window.dashboardUtils) {
+                dashboardUtils.handleError(e.error, 'javascript');
+            }
+        });
+        
+        // Performance monitoring
+        if ('performance' in window && performance.timing) {
+            window.addEventListener('load', () => {
+                const loadTime = performance.timing.loadEventEnd - performance.timing.navigationStart;
+                console.log(`Page load time: ${loadTime}ms`);
+                
+                // Show notification for slow loads
+                if (loadTime > 3000) {
+                    dashboardUtils?.showNotification('Slow page load detected', 'warning');
+                }
+            });
+        }
+    });
+    </script>
 </body>
 </html>
 }

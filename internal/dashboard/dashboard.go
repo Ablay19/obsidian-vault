@@ -102,7 +102,7 @@ func (d *Dashboard) RegisterRoutes(router *gin.Engine) {
 	// Auth routes (unprotected)
 	authRoutes := router.Group("/auth")
 	{
-		authRoutes.GET("/login", d.handleLoginPage)
+		authRoutes.GET("/login", d.handleEnhancedLoginPage)
 		authRoutes.GET("/google/login", d.handleGoogleLogin)
 		authRoutes.GET("/dev/login", d.handleDevLogin)
 		authRoutes.GET("/google/callback", d.handleGoogleCallback)
@@ -774,4 +774,24 @@ func (d *Dashboard) handleWhatsAppWebhook(c *gin.Context) {
 // handleWhatsAppWebhookVerify handles GET requests for WhatsApp webhook verification
 func (d *Dashboard) handleWhatsAppWebhookVerify(c *gin.Context) {
 	d.whatsappHandler.ServeHTTP(c.Writer, c.Request)
+}
+
+// handleEnhancedLoginPage serves the enhanced login page with multiple auth methods
+func (d *Dashboard) handleEnhancedLoginPage(c *gin.Context) {
+	errorMsg := c.Query("error")
+
+	// For development, show test user option
+	if os.Getenv("ENVIRONMENT_MODE") == "dev" {
+		c.HTML(http.StatusOK, "enhanced_login.html", gin.H{
+			"errorMsg":      errorMsg,
+			"showTestUsers": true,
+		})
+		return
+	}
+
+	// For production, only show Google OAuth
+	c.HTML(http.StatusOK, "enhanced_login.html", gin.H{
+		"errorMsg":      errorMsg,
+		"showTestUsers": false,
+	})
 }

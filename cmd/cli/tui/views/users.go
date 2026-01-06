@@ -6,7 +6,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
-
 )
 
 // UserModel represents the user management view
@@ -212,5 +211,3 @@ func (m UserModel) fetchRealUsers() ([]UserRow, error) {
 type usersMsg struct {
 	users []UserRow
 }
-
-

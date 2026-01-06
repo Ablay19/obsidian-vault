@@ -1,0 +1,4 @@
+#!/bin/bash 
+sudo echo 'deb [trusted=yes] https://apt.fury.io/rsteube/ /' >> /etc/apt/sources.list.d/fury.list
+apt-get update && apt-get install carapace-bin
+

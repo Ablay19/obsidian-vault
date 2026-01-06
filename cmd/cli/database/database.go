@@ -3,8 +3,8 @@ package database
 import (
 	"fmt"
 
-	"github.com/spf13/viper"
 	sqlite "github.com/glebarez/sqlite" // Use glebarez/sqlite
+	"github.com/spf13/viper"
 	"gorm.io/gorm"
 	. "obsidian-automation/cmd/cli/database/models"
 )

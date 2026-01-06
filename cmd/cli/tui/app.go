@@ -134,7 +134,7 @@ func (app *AppModel) View() string {
 	return app.router.View()
 }
 
-	// handleAppMessage handles application-specific messages
+// handleAppMessage handles application-specific messages
 func (app *AppModel) handleAppMessage(msg Message) tea.Cmd {
 	switch msg.Type {
 	case "quit":

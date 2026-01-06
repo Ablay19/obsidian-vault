@@ -6,7 +6,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
-
 )
 
 // AIProvidersModel represents the AI providers view
@@ -222,5 +221,3 @@ func (m AIProvidersModel) fetchRealProviders() ([]AIProvider, error) {
 type providersMsg struct {
 	providers []AIProvider
 }
-
-

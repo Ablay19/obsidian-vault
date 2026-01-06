@@ -6,8 +6,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-
-
 )
 
 // StatusModel represents the status view
@@ -51,7 +49,7 @@ func NewStatus(styles Styles) StatusModel {
 	s := spinner.New()
 	s.Spinner = spinner.Line
 	s.Style = styles.Loading
-	
+
 	return StatusModel{
 		styles:     styles,
 		spinner:    s,

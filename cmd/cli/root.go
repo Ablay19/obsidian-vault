@@ -1,15 +1,15 @@
-package main 
+package main
 
 import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/carapace-sh/carapace"
+	"github.com/spf13/cobra"
 	"obsidian-automation/cmd/cli/config"
 	"obsidian-automation/cmd/cli/database"
-	"obsidian-automation/cmd/cli/tui"
 	"obsidian-automation/cmd/cli/email"
+	"obsidian-automation/cmd/cli/tui"
 	"obsidian-automation/internal/ssh"
 	"obsidian-automation/internal/telemetry" // Add telemetry import
 )
@@ -22,7 +22,7 @@ var rootCmd = &cobra.Command{
 		fmt.Println("### rootCmd.PersistentPreRunE called ###") // Debug print
 		// Initialize SSH DB for any command that might need it, or move to specific commands
 		// if only a subset requires it. For now, assume global.
-		ssh.InitDB() 
+		ssh.InitDB()
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
