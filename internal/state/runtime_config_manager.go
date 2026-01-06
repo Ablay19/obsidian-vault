@@ -137,6 +137,15 @@ func (rcm *RuntimeConfigManager) mergeKeysFromEnv() {
 	if validateAPIKey(openRouterAPIKey) {
 		mergeKey("OpenRouter", 0, openRouterAPIKey)
 	}
+
+	// Merge Cloudflare Worker URL
+	cloudflareWorkerURL := os.Getenv("CLOUDFLARE_WORKER_URL")
+	if cloudflareWorkerURL != "" {
+		// For Cloudflare, we validate URL format instead of API key format
+		if len(cloudflareWorkerURL) > 10 && (strings.Contains(cloudflareWorkerURL, "workers.dev") || strings.Contains(cloudflareWorkerURL, "workers.workers.dev")) {
+			mergeKey("Cloudflare", 0, cloudflareWorkerURL)
+		}
+	}
 }
 
 // initializeProviderStates sets up the Providers map based on current environment/config.
@@ -158,10 +167,11 @@ func (rcm *RuntimeConfigManager) initializeProviderStates() {
 	setProvider("Groq", viper.GetString("providers.groq.model"), os.Getenv("GROQ_API_KEY") != "")
 	setProvider("Hugging Face", viper.GetString("providers.huggingface.model"), os.Getenv("HUGGINGFACE_API_KEY") != "" || os.Getenv("HF_TOKEN") != "")
 	setProvider("OpenRouter", viper.GetString("providers.openrouter.model"), os.Getenv("OPENROUTER_API_KEY") != "")
+	setProvider("Cloudflare", "@cf/meta/llama-3-8b-instruct", os.Getenv("CLOUDFLARE_WORKER_URL") != "")
 
 	// Normalize ActiveProvider if it was lowercase
 	if rcm.config.ActiveProvider != "" {
-		for _, name := range []string{"Gemini", "Groq", "Hugging Face", "OpenRouter"} {
+		for _, name := range []string{"Gemini", "Groq", "Hugging Face", "OpenRouter", "Cloudflare"} {
 			if strings.EqualFold(rcm.config.ActiveProvider, name) {
 				rcm.config.ActiveProvider = name
 				break
@@ -176,6 +186,15 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 	rcm.config.AIEnabled = true
 	if os.Getenv("AI_ENABLED") != "" {
 		rcm.config.AIEnabled = os.Getenv("AI_ENABLED") == "true"
+	}
+
+	// Set default provider to Cloudflare if available, otherwise use environment preference
+	if os.Getenv("CLOUDFLARE_WORKER_URL") != "" {
+		rcm.config.ActiveProvider = "Cloudflare"
+	} else if os.Getenv("ACTIVE_PROVIDER") != "" {
+		rcm.config.ActiveProvider = os.Getenv("ACTIVE_PROVIDER")
+	} else if os.Getenv("GEMINI_API_KEY") != "" || os.Getenv("GEMINI_API_KEYS") != "" {
+		rcm.config.ActiveProvider = "Gemini"
 	}
 
 	// Environment
@@ -243,6 +262,22 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 			Value:     openRouterAPIKey,
 			Enabled:   true,
 			IsDefault: true,
+		}
+	}
+
+	// Cloudflare
+	cloudflareWorkerURL := os.Getenv("CLOUDFLARE_WORKER_URL")
+	if cloudflareWorkerURL != "" {
+		// Validate URL format for Cloudflare
+		if len(cloudflareWorkerURL) > 10 && (strings.Contains(cloudflareWorkerURL, "workers.dev") || strings.Contains(cloudflareWorkerURL, "workers.workers.dev")) {
+			id := generateKeyID("Cloudflare", 0)
+			rcm.config.APIKeys[id] = APIKeyState{
+				ID:        id,
+				Provider:  "Cloudflare",
+				Value:     cloudflareWorkerURL,
+				Enabled:   true,
+				IsDefault: true,
+			}
 		}
 	}
 

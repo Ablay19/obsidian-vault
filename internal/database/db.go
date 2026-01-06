@@ -16,6 +16,7 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
+	// _ "modernc.org/sqlite" // Commented out - using libsql driver instead
 )
 
 // DBClient combines the raw *sql.DB and the sqlc-generated Queries.
@@ -31,16 +32,24 @@ func OpenDB() *DBClient {
 	url := os.Getenv("TURSO_DATABASE_URL")
 	token := os.Getenv("TURSO_AUTH_TOKEN")
 
-	if url == "" || token == "" {
-		telemetry.ZapLogger.Sugar().Fatalw("TURSO_DATABASE_URL or TURSO_AUTH_TOKEN is missing",
-			"TURSO_DATABASE_URL", url != "",
-			"TURSO_AUTH_TOKEN", token != "",
-		)
+	if url == "" {
+		telemetry.ZapLogger.Sugar().Fatalw("TURSO_DATABASE_URL is missing", "url", url)
 	}
 
-	dsn := url + "?authToken=" + token
+	var db *sql.DB
+	var err error
 
-	db, err := sql.Open("libsql", dsn)
+	// Handle file:// URLs for local SQLite
+	if url == "file:./test.db" || (url == "file:./dev.db" || url == "file:./obsidian.db") {
+		db, err = sql.Open("sqlite", url)
+	} else {
+		// Handle remote Turso URLs
+		if token == "" {
+			telemetry.ZapLogger.Sugar().Fatalw("TURSO_AUTH_TOKEN is missing for remote database", "url", url)
+		}
+		dsn := url + "?authToken=" + token
+		db, err = sql.Open("libsql", dsn)
+	}
 	if err != nil {
 		telemetry.ZapLogger.Sugar().Fatalw("Failed to open database", "error", err)
 	}

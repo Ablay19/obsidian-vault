@@ -9,17 +9,18 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/uptrace/opentelemetry-go-extra/otelzap"
 	"go.uber.org/zap"
 )
 
 // Handler handles HTTP requests for WhatsApp webhooks
 type Handler struct {
 	service Service
-	logger  *zap.Logger
+	logger  *otelzap.Logger
 }
 
 // NewHandler creates a new WhatsApp handler
-func NewHandler(service Service, logger *zap.Logger) *Handler {
+func NewHandler(service Service, logger *otelzap.Logger) *Handler {
 	return &Handler{
 		service: service,
 		logger:  logger,
@@ -123,7 +124,7 @@ func (h *Handler) validateSignature(signature string, payload []byte) bool {
 
 // WhatsAppWebhookHandler is a compatibility function that can be used with the existing system
 // This maintains backward compatibility with the current routing setup
-func WhatsAppWebhookHandler(service Service, logger *zap.Logger) http.HandlerFunc {
+func WhatsAppWebhookHandler(service Service, logger *otelzap.Logger) http.HandlerFunc {
 	handler := NewHandler(service, logger)
 	return handler.ServeHTTP
 }

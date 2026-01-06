@@ -1,6 +1,9 @@
-# Makefile for Obsidian Automation Bot
+# Enhanced Makefile for Obsidian Automation
+# Combines original Docker targets with comprehensive build, test, and development tools
 
-.PHONY: all build build-ssh docker-build-all docker-push-all up ssh-up down ssh-down logs ssh-logs status ssh-status restart ssh-restart run-local sqlc-generate k8s-apply k8s-delete help
+.PHONY: help build run test lint clean docker docker-run docker-stop deploy setup env health version
+.PHONY: build-ssh docker-build-all docker-push-all up ssh-up down ssh-down logs ssh-logs status ssh-status restart ssh-restart run-local sqlc-generate k8s-apply k8s-delete
+.PHONY: build-prod dev test-coverage benchmark fmt deps security install-tools quick-dev prod-workflow all watch install uninstall release
 
 # Variables
 IMAGE_NAME      ?= obsidian-bot
@@ -16,7 +19,21 @@ SSH_DOCKERFILE      ?= Dockerfile.ssh
 SSH_PORT            ?= 2222
 SSH_API_PORT        ?= 8081
 
+# Variables
+BINARY_NAME := obsidian-automation
+BUILD_DIR := ./build
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+BUILD_TIME := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+LDFLAGS := -ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME) -X main.GitCommit=$(COMMIT)"
+
+# Go settings
+GOOS := $(shell go env GOOS)
+GOARCH := $(shell go env GOARCH)
+CGO_ENABLED := 1
+
 # Default target: show help.
+.DEFAULT_GOAL := help
 all: help
 
 # Build the main bot Docker image.
@@ -135,6 +152,114 @@ k8s-delete: ## Delete Kubernetes manifests.
 	@kubectl delete -f k8s/
 	@echo "✅ Kubernetes manifests deleted."
 
+# Enhanced build targets
+build: ## Build application
+	@echo -e "\033[34m[•]\033[0m Building application..."
+	@mkdir -p $(BUILD_DIR)
+	@go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/bot/main.go
+	@echo -e "\033[32m[✓]\033[0m Build completed: $(BUILD_DIR)/$(BINARY_NAME)"
+
+# Build production
+build-prod: ## Build optimized production binary
+	@echo -e "\033[34m[•]\033[0m Building production binary..."
+	@mkdir -p $(BUILD_DIR)
+	@CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-prod ./cmd/bot/main.go
+	@echo -e "\033[32m[✓]\033[0m Production build completed: $(BUILD_DIR)/$(BINARY_NAME)-prod"
+
+# Run target
+run: build ## Build and run application
+	@echo -e "\033[34m[•]\033[0m Starting application..."
+	@echo -e "\033[35m[ℹ]\033[0m Dashboard: http://localhost:8080"
+	@echo -e "\033[35m[ℹ]\033[0m Press Ctrl+C to stop"
+	@$(BUILD_DIR)/$(BINARY_NAME)
+
+# Run development
+dev: ## Run in development mode
+	@echo -e "\033[34m[•]\033[0m Starting development mode..."
+	@ENVIRONMENT_MODE=dev ENABLE_COLORFUL_LOGS=true ENABLE_DEBUG_LOGS=true go run ./cmd/bot/main.go
+
+# Test target
+test: ## Run all tests
+	@echo -e "\033[34m[•]\033[0m Running tests..."
+	@go test -v ./...
+
+# Test with coverage
+test-coverage: ## Run tests with coverage report
+	@echo -e "\033[34m[•]\033[0m Running tests with coverage..."
+	@go test -coverprofile=coverage.out ./...
+	@go tool cover -html=coverage.out -o coverage.html
+	@echo -e "\033[32m[✓]\033[0m Coverage report: coverage.html"
+
+# Benchmark target
+benchmark: ## Run benchmarks
+	@echo -e "\033[34m[•]\033[0m Running benchmarks..."
+	@go test -bench=. -benchmem ./...
+
+# Lint target
+lint: ## Lint code
+	@echo -e "\033[34m[•]\033[0m Linting code..."
+	@if command -v gofmt > /dev/null; then \
+		echo "Checking formatting..."; \
+		unformatted=$$(gofmt -l .); \
+		if [ -n "$$unformatted" ]; then \
+			echo "Files need formatting:"; \
+			echo "$$unformatted"; \
+			echo "Auto-formatting..."; \
+			gofmt -w .; \
+		else \
+			echo -e "\033[32m[✓]\033[0m Code is properly formatted"; \
+		fi; \
+	fi
+	@echo "Running go vet..."
+	@go vet ./...
+	@if command -v golint > /dev/null; then \
+		echo "Running golint..."; \
+		golint ./...; \
+	fi
+	@echo -e "\033[32m[✓]\033[0m Linting completed"
+
+# Clean target
+clean: ## Clean build artifacts
+	@echo -e "\033[34m[•]\033[0m Cleaning build artifacts..."
+	@rm -rf $(BUILD_DIR)
+	@rm -f $(BINARY_NAME) $(BINARY_NAME)-*
+	@rm -f coverage.out coverage.html
+	@go clean -cache
+	@go clean -testcache
+	@echo -e "\033[32m[✓]\033[0m Clean completed"
+
+# Setup target
+setup: ## Perform initial setup
+	@echo -e "\033[34m[•]\033[0m Performing initial setup..."
+	@./scripts/env-setup.sh init
+	@echo -e "\033[32m[✓]\033[0m Setup completed"
+
+# Environment configuration
+env: ## Configure environment
+	@echo -e "\033[34m[•]\033[0m Configuring environment..."
+	@./scripts/env-setup.sh config
+	@echo -e "\033[32m[✓]\033[0m Environment configured"
+
+# Health check
+health: ## Perform health check
+	@echo -e "\033[34m[•]\033[0m Performing health check..."
+	@./scripts/maintenance.sh health
+
+# Version information
+version: ## Show version information
+	@echo -e "\033[36mObsidian Automation\033[0m"
+	@echo "=================="
+	@echo "Version: $(VERSION)"
+	@echo "Build: $(BUILD_TIME)"
+	@echo "Commit: $(COMMIT)"
+	@echo "Go: $(shell go version)"
+	@echo "OS/Arch: $(GOOS)/$(GOARCH)"
+
+# Docker targets (preserving original functionality)
+docker: docker-build ## Build Docker image (alias)
+docker-run: up ## Run Docker container (alias)
+docker-stop: down ## Stop Docker container (alias)
+
 # Run locally (clearing CGO flags to avoid onnxruntime issues)
 run-local: ## Run the bot locally.
 	@CGO_LDFLAGS="" CGO_CFLAGS="" go run ./cmd/bot/main.go
@@ -144,21 +269,39 @@ sqlc-generate: ## Generate SQLC code from queries.
 	@sqlc generate
 	@echo "✅ SQLC code generated successfully."
 
-# Show this help message.
-help: ## Show this help message.
-	@echo "Usage: make [target]"
+# Enhanced help target
+help: ## Show this help message
+	@echo -e "\033[36mObsidian Automation Makefile\033[0m"
+	@echo "================================"
 	@echo ""
-	@echo "Available targets:"
+	@echo -e "\033[34mQuick Start:\033[0m"
+	@echo "  make setup      # Initial setup"
+	@echo "  make build      # Build application"
+	@echo "  make run        # Build and run"
+	@echo "  make test       # Run tests"
+	@echo ""
+	@echo -e "\033[34mDevelopment:\033[0m"
+	@echo "  make dev        # Development mode"
+	@echo "  make fmt        # Format code"
+	@echo "  make lint       # Lint code"
+	@echo "  make test-coverage # Test with coverage"
+	@echo ""
+	@echo -e "\033[34mDocker:\033[0m"
+	@echo "  make docker     # Build Docker image"
+	@echo "  make up         # Start container"
+	@echo "  make down       # Stop container"
+	@echo ""
+	@echo -e "\033[34mAll Targets:\033[0m"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo ""
-	@echo "Required Environment Variables (in .env file):"
+	@echo -e "\033[34mRequired Environment Variables (in .env file):\033[0m"
 	@echo "  TELEGRAM_BOT_TOKEN    Your Telegram bot token."
 	@echo "  TURSO_DATABASE_URL    URL for your Turso database."
 	@echo "  TURSO_AUTH_TOKEN      Auth token for your Turso database."
 	@echo "  GEMINI_API_KEYS       (Optional) Comma-separated list of Gemini API keys."
 	@echo "  GROQ_API_KEY          (Optional) Your Groq API key."
 	@echo ""
-	@echo "Optional Variables:"
+	@echo -e "\033[34mOptional Variables:\033[0m"
 	@echo "  DASHBOARD_PORT        Port for the web dashboard (default: 8080)."
 	@echo "  SSH_PORT              Port for the SSH server (default: 2222)."
 	@echo "  SSH_API_PORT          Port for the SSH server's API (default: 8081)."

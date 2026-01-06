@@ -9,6 +9,7 @@ import (
 	"obsidian-automation/internal/pipeline"
 	"time"
 
+	"github.com/uptrace/opentelemetry-go-extra/otelzap"
 	"go.uber.org/zap"
 )
 
@@ -79,13 +80,14 @@ type Service interface {
 	ProcessWebhook(ctx context.Context, payload WebhookPayload) error
 	DownloadMedia(ctx context.Context, mediaID string) (*Media, error)
 	IsConnected() bool
+	GetConfig() Config
 }
 
 // service implements the WhatsApp service interface
 type service struct {
 	config       Config
 	pipeline     PipelineInterface
-	logger       *zap.Logger
+	logger       *otelzap.Logger
 	httpClient   *http.Client
 	mediaStorage MediaStorage
 	validator    Validator
@@ -129,7 +131,7 @@ type Media struct {
 func NewService(
 	cfg Config,
 	pipeline PipelineInterface,
-	logger *zap.Logger,
+	logger *otelzap.Logger,
 	mediaStorage MediaStorage,
 	validator Validator,
 ) Service {

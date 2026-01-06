@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type ProcessedFile struct {
@@ -66,13 +65,20 @@ func NewDashboard(aiService *ai.AIService, rcm *state.RuntimeConfigManager, db *
 
 	// Create a simple pipeline for WhatsApp (can be enhanced later)
 	whatsappPipeline := pipeline.NewPipeline(1, 10, nil)
-	
+
+	// Create validator config
+	validatorConfig := whatsapp.ValidatorConfig{
+		MaxFileSize:   50 * 1024 * 1024, // 50MB
+		AllowedTypes:  []string{"image/", "text/", "application/pdf"},
+		MaxMessageAge: 24 * time.Hour,
+	}
+
 	whatsappService := whatsapp.NewService(
 		whatsappConfig,
 		whatsappPipeline,
 		telemetry.ZapLogger,
-		whatsapp.NewFileSystemStorage("attachments/whatsapp"),
-		whatsapp.NewValidator(),
+		whatsapp.NewLocalMediaStorage("attachments/whatsapp", telemetry.ZapLogger),
+		whatsapp.NewDefaultValidator(validatorConfig, telemetry.ZapLogger),
 	)
 
 	whatsappHandler := whatsapp.NewHandler(whatsappService, telemetry.ZapLogger)
@@ -264,14 +270,21 @@ func (d *Dashboard) handleAPIKeysPanel(c *gin.Context) {
 		apiKeysSlice = append(apiKeysSlice, key)
 	}
 
-	providers := []string{"Gemini", "Groq", "Hugging Face", "OpenRouter"}
+	providers := []string{"Gemini", "Groq", "Hugging Face", "OpenRouter", "Cloudflare"}
 
 	APIKeysPanel(apiKeysSlice, providers).Render(c.Request.Context(), c.Writer)
 }
 
 // handleDashboardRedirect redirects / to /dashboard/overview
 func (d *Dashboard) handleDashboardRedirect(c *gin.Context) {
-	c.Redirect(http.StatusFound, "/dashboard/overview")
+	// Prevent infinite redirect loops
+	path := c.Request.URL.Path
+	if path == "/" || path == "" {
+		c.Redirect(http.StatusFound, "/dashboard/overview")
+	} else {
+		// For any other unmatched path, redirect to overview
+		c.Redirect(http.StatusFound, "/dashboard/overview")
+	}
 }
 
 // renderDashboardPage renders the main App component with the specified active tab.

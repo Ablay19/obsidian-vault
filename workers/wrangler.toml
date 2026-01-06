@@ -30,6 +30,3 @@ bucket_name = "obsidian-bot-media"
 [env.production.vars]
 ENVIRONMENT = "production"
 LOG_LEVEL = "info"
-
-[env.production.ai]
-binding = "AI"

@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"go.uber.org/zap"
+	"github.com/uptrace/opentelemetry-go-extra/otelzap"
 )
 
 // DefaultValidator implements the Validator interface
 type DefaultValidator struct {
-	logger        *zap.Logger
+	logger        *otelzap.Logger
 	maxFileSize   int64
 	allowedTypes  []string
 	maxMessageAge time.Duration
@@ -25,7 +25,7 @@ type ValidatorConfig struct {
 }
 
 // NewDefaultValidator creates a new default validator
-func NewDefaultValidator(config ValidatorConfig, logger *zap.Logger) Validator {
+func NewDefaultValidator(config ValidatorConfig, logger *otelzap.Logger) Validator {
 	return &DefaultValidator{
 		logger:        logger,
 		maxFileSize:   config.MaxFileSize,

@@ -14,7 +14,8 @@ import (
 )
 
 var (
-	ZapLogger *otelzap.Logger
+	ZapLogger        *otelzap.Logger
+	UnderlyingLogger *zap.Logger
 )
 
 // Init initializes the OpenTelemetry SDK and the otelzap logger.
@@ -41,7 +42,8 @@ func Init(serviceName string) (*trace.TracerProvider, error) {
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 
 	// Initialize the otelzap logger.
-	ZapLogger = otelzap.New(zap.Must(zap.NewDevelopment()))
+	UnderlyingLogger = zap.Must(zap.NewDevelopment())
+	ZapLogger = otelzap.New(UnderlyingLogger)
 
 	log.Println("Telemetry initialized successfully.")
 	return tp, nil

@@ -8,17 +8,18 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/uptrace/opentelemetry-go-extra/otelzap"
 	"go.uber.org/zap"
 )
 
 // LocalMediaStorage implements MediaStorage interface using local filesystem
 type LocalMediaStorage struct {
 	basePath string
-	logger   *zap.Logger
+	logger   *otelzap.Logger
 }
 
 // NewLocalMediaStorage creates a new local media storage
-func NewLocalMediaStorage(basePath string, logger *zap.Logger) MediaStorage {
+func NewLocalMediaStorage(basePath string, logger *otelzap.Logger) MediaStorage {
 	return &LocalMediaStorage{
 		basePath: basePath,
 		logger:   logger,
@@ -87,7 +88,7 @@ func (lms *LocalMediaStorage) getExtensionFromMimeType(mimeType string) string {
 // InMemoryMediaStorage implements MediaStorage interface using in-memory storage
 type InMemoryMediaStorage struct {
 	storage map[string]StoredMedia
-	logger  *zap.Logger
+	logger  *otelzap.Logger
 }
 
 type StoredMedia struct {
@@ -99,7 +100,7 @@ type StoredMedia struct {
 }
 
 // NewInMemoryMediaStorage creates a new in-memory media storage
-func NewInMemoryMediaStorage(logger *zap.Logger) MediaStorage {
+func NewInMemoryMediaStorage(logger *otelzap.Logger) MediaStorage {
 	return &InMemoryMediaStorage{
 		storage: make(map[string]StoredMedia),
 		logger:  logger,

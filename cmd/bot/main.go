@@ -18,6 +18,7 @@ import (
 	"obsidian-automation/internal/dashboard"
 	"obsidian-automation/internal/dashboard/ws"
 	"obsidian-automation/internal/database"
+	"obsidian-automation/internal/middleware"
 	"obsidian-automation/internal/ssh"
 	"obsidian-automation/internal/state"
 	"obsidian-automation/internal/telemetry"
@@ -141,6 +142,12 @@ func main() {
 		}
 		c.Next()
 	})
+
+	// Add Google Cloud logging middleware (if enabled)
+	if os.Getenv("ENABLE_GOOGLE_LOGGING") == "true" {
+		router.Use(middleware.GoogleCloudLoggingMiddleware())
+		logger.Info("Google Cloud logging enabled")
+	}
 
 	// Add request logging middleware
 	router.Use(func(c *gin.Context) {
