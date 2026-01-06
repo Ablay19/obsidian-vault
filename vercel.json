@@ -1,0 +1,27 @@
+# Vercel Configuration
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/$1",
+      "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    }
+  ],
+  "env": {
+    "TELEGRAM_BOT_TOKEN": "@telegram_bot_token",
+    "TURSO_DATABASE_URL": "@turso_database_url", 
+    "TURSO_AUTH_TOKEN": "@turso_auth_token",
+    "GEMINI_API_KEY": "@gemini_api_key"
+  },
+  "functions": {
+    "src": "/api/.*",
+    "use": "@vercel/node"
+  }
+}

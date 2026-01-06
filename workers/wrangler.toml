@@ -1,5 +1,5 @@
 name = "obsidian-bot-workers"
-main = "obsidian-bot-worker.js"
+main = "obsidian-bot-worker-simple.js"
 compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
 
@@ -62,6 +62,7 @@ ENVIRONMENT = "production"
 LOG_LEVEL = "info"
 WEBHOOK_SECRET = "your-webhook-secret"
 FALLBACK_AI_ENABLED = "true"
+AI_ENABLED = "true"
 
 [env.staging.vars]
 ENVIRONMENT = "staging"
