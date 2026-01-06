@@ -28,3 +28,11 @@ whatsapp_session.db*
 .dev.vars*
 !.dev.vars.example
 !.env.example
+
+# Ignore large binaries and package directories
+/node_modules
+/bun.lockb
+/package.json
+/termux-bot
+/termux-cli
+
