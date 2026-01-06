@@ -27,7 +27,7 @@ A powerful, AI-enhanced Telegram bot to automate your note-taking workflow with 
 
 ### 1. Configuration
 
-Create a `.env` file in the root of the project and add your credentials:
+Create a `.env` file in root of project and add your credentials:
 
 ```dotenv
 # Your Telegram Bot Token (Required)
@@ -47,6 +47,11 @@ HUGGINGFACE_API_KEY=your-huggingface-api-key
 
 # Port for the web dashboard (Optional, defaults to 8080)
 DASHBOARD_PORT=8080
+
+# Google Cloud Logging (Optional, for production)
+GOOGLE_CLOUD_PROJECT=your-gcp-project-id
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
+ENABLE_GOOGLE_LOGGING=false
 ```
 
 Create a `config.yml` file in the project root to define AI models and classification patterns:
@@ -98,3 +103,40 @@ Your bot is now running! You can view the dashboard at `http://localhost:8080` (
 -   `/stats`: View usage statistics.
 
 Simply send an image, PDF, or text message to the bot to start processing.
+
+## ☁️ Google Cloud Integration
+
+For production deployment with Google Cloud logging and monitoring:
+
+### Quick Setup
+```bash
+# Run the Google Cloud setup script
+./setup-google-cloud.sh
+
+# Or follow the quick start guide
+# See: docs/GOOGLE_CLOUD_QUICK_START.md
+```
+
+### Documentation
+- **Complete Setup**: [docs/GOOGLE_CLOUD_SETUP.md](docs/GOOGLE_CLOUD_SETUP.md)
+- **Quick Start**: [docs/GOOGLE_CLOUD_QUICK_START.md](docs/GOOGLE_CLOUD_QUICK_START.md)
+- **Docker Deployment**: [docs/DOCKER_DEPLOYMENT.md](docs/DOCKER_DEPLOYMENT.md)
+
+### Features
+- **Structured Logging**: Automatic log forwarding to Google Cloud
+- **Production Monitoring**: Real-time metrics and alerts
+- **Cost Optimization**: Efficient log management and routing
+- **Security**: Service account authentication and IAM controls
+
+### Quick Commands
+```bash
+# Enable Google Cloud logging
+export ENABLE_GOOGLE_LOGGING=true
+export GOOGLE_CLOUD_PROJECT=your-project-id
+
+# Deploy with Docker
+./docker-deploy.sh production
+
+# View logs
+gcloud logging tail "resource.type=container"
+```
