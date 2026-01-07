@@ -1,9 +1,6 @@
 package components
 
-import (
-	"obsidian-automation/internal/config"
-	"fmt"
-)
+import ()
 
 // EnhancedLogin provides multiple authentication methods including test users
 templ EnhancedLogin(errorMsg string) {
@@ -227,7 +224,7 @@ templ EnhancedLogin(errorMsg string) {
 				<div class="environment-notice">
 					<span class="material-icons-outlined">info</span>
 					<span class="notice-text">
-						<strong>Environment:</strong> { config.GetEnvironment() }
+						<strong>Environment:</strong> Development
 					</span>
 				</div>
 
