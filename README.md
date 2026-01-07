@@ -1,142 +1,165 @@
-# AI-Powered Obsidian Automation Bot
+# Obsidian Vault - README
 
-A powerful, AI-enhanced Telegram bot to automate your note-taking workflow with Obsidian. Send images, PDFs, or just chat with the bot, and it will intelligently process the content, create organized notes, and even stream responses back to you in real-time. It also features a web dashboard for monitoring and management.
+## 🎯 Welcome to Obsidian Vault
 
-## ✨ Features
+A comprehensive automation platform that combines AI, communication, and productivity tools to create an intelligent vault of knowledge and automation.
 
--   **Web Dashboard**: A beautiful and responsive web interface for monitoring bot status, managing AI providers, and viewing system information, built with Go, Templ, and HTMX.
--   **AI-Powered Content Analysis**: Uses Google's Gemini, Groq and/or Hugging Face models (configurable via `config.yml`) to summarize text, answer questions, and categorize content.
--   **Multi-Provider AI Support**: Seamlessly switch between Google Gemini, Groq, and Hugging Face AI providers via the web dashboard or bot commands.
--   **Streaming Responses**: Get real-time answers from the AI, just like a modern chatbot.
--   **Chatbot Mode**: Chat directly with the bot for quick questions and answers; any non-command text is treated as an AI prompt.
--   **Multi-Language Support**: AI responses can be configured to default to any language on-the-fly with the `/lang` command.
--   **File Processing**: Extracts text from images (via Tesseract OCR) and PDFs (via Poppler).
--   **Intelligent Categorization**: Automatically categorizes content based on keywords defined in `config.yml`.
--   **Duplicate Detection**: Prevents processing the same file twice by checking its hash.
--   **Interactive Commands**: A rich set of slash commands, including `/setprovider`, `/reprocess`, `/modelinfo`, `/lang`, and `/stats`.
--   **Dockerized**: Easy to set up and run in a lightweight, single-stage Docker container.
--   **Database-Driven**: Uses a Turso database for persistent state (like chat history), with `sqlc` for generating type-safe Go code.
+## 🚀 Quick Start
 
-## 🚀 Getting Started
-
-### Prerequisites
-
--   Docker
--   `make`
--   A Turso database instance (URL and auth token).
-
-### 1. Configuration
-
-Create a `.env` file in root of project and add your credentials:
-
-```dotenv
-# Your Telegram Bot Token (Required)
-TELEGRAM_BOT_TOKEN=your-token-goes-here
-
-# Turso Database URL and Auth Token (Required)
-TURSO_DATABASE_URL=your-turso-database-url
-TURSO_AUTH_TOKEN=your-turso-auth-token
-
-# At least one AI provider key is recommended
-# Comma-separated list of your Gemini API Keys
-GEMINI_API_KEYS=key-1,key-2,key-3
-# Your Groq API Key
-GROQ_API_KEY=your-groq-api-key
-# Your Hugging Face API Key
-HUGGINGFACE_API_KEY=your-huggingface-api-key
-
-# Port for the web dashboard (Optional, defaults to 8080)
-DASHBOARD_PORT=8080
-
-# Google Cloud Logging (Optional, for production)
-GOOGLE_CLOUD_PROJECT=your-gcp-project-id
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
-ENABLE_GOOGLE_LOGGING=false
-```
-
-Create a `config.yml` file in the project root to define AI models and classification patterns:
-
-```yaml
-providers:
-  gemini:
-    model: gemini-1.5-pro-latest
-  groq:
-    model: llama-3.1-8b-instant
-
-classification:
-  patterns:
-    physics: ["force", "energy", "mass"]
-    math: ["equation", "function"]
-    # ... more patterns ...
-
-language_detection:
-  french_words: ["le", "la", "de", "et"]
-  # ... more language specific words ...
-```
-
-### 2. Running the Bot
-
-Start the bot with a single command:
-
-```sh
-make up
-```
-
-Your bot is now running! You can view the dashboard at `http://localhost:8080` (or your configured port).
-
-### 3. Available `make` Commands
-
--   `make up`: Build the Docker image and start the container.
--   `make down`: Stop and remove the container.
--   `make logs`: View the live logs of the running bot.
--   `make build`: Force a rebuild of the Docker image.
--   `make restart`: Restart the container.
--   `make help`: Show a list of all available commands.
-
-## 🤖 Bot Commands
-
--   `/start`: Display a welcome message.
--   `/setprovider <provider>`: Switch between AI providers (e.g., `gemini`, `groq`).
--   `/reprocess`: Reprocess the last file you sent.
--   `/modelinfo`: Get details about the current AI model.
--   `/lang <language>`: Set the default language for AI responses.
--   `/stats`: View usage statistics.
-
-Simply send an image, PDF, or text message to the bot to start processing.
-
-## ☁️ Google Cloud Integration
-
-For production deployment with Google Cloud logging and monitoring:
-
-### Quick Setup
+### Development
 ```bash
-# Run the Google Cloud setup script
-./setup-google-cloud.sh
+# Quick setup for local development
+./scripts/run.sh quick-start
 
-# Or follow the quick start guide
-# See: docs/GOOGLE_CLOUD_QUICK_START.md
+# Development environment
+./scripts/dev/dev.sh
+
+# Start local services
+./scripts/services/start-services
 ```
 
-### Documentation
-- **Complete Setup**: [docs/GOOGLE_CLOUD_SETUP.md](docs/GOOGLE_CLOUD_SETUP.md)
-- **Quick Start**: [docs/GOOGLE_CLOUD_QUICK_START.md](docs/GOOGLE_CLOUD_QUICK_START.md)
-- **Docker Deployment**: [docs/DOCKER_DEPLOYMENT.md](docs/DOCKER_DEPLOYMENT.md)
-
-### Features
-- **Structured Logging**: Automatic log forwarding to Google Cloud
-- **Production Monitoring**: Real-time metrics and alerts
-- **Cost Optimization**: Efficient log management and routing
-- **Security**: Service account authentication and IAM controls
-
-### Quick Commands
+### Production
 ```bash
-# Enable Google Cloud logging
-export ENABLE_GOOGLE_LOGGING=true
-export GOOGLE_CLOUD_PROJECT=your-project-id
+# Deploy to production
+./scripts/deployment/deploy-production.sh
 
-# Deploy with Docker
-./docker-deploy.sh production
-
-# View logs
-gcloud logging tail "resource.type=container"
+# Monitor all services
+./scripts/monitoring/health-check.sh
 ```
+
+## 📁 Project Overview
+
+Obsidian Vault is an advanced automation platform that provides:
+- **AI-Powered Knowledge Management**: Intelligent document analysis and organization
+- **Multi-Channel Communication**: WhatsApp, web dashboard, API integration
+- **Secure Automation**: Scripted workflows with proper error handling
+- **Real-Time Monitoring**: Comprehensive system health tracking
+- **Scalable Architecture**: Modular design supporting growth and extension
+
+## 🏗️ Key Features
+
+### 🤖 AI Integration
+- **Document Analysis**: Automatic categorization and tagging
+- **Smart Search**: Natural language processing for knowledge discovery
+- **Content Generation**: AI-assisted document creation
+- **Insight Engine**: Pattern recognition across data sources
+
+### 📱 Communication Hub
+- **WhatsApp Integration**: Direct messaging and automation
+- **Web Dashboard**: Modern UI with real-time updates
+- **API Management**: RESTful API for external integrations
+- **Notification System**: Multi-channel alerting and updates
+
+### 🛠️ Automation Engine
+- **Script Management**: Organized automation scripts
+- **Task Scheduling**: Time-based and event-driven automation
+- **Workflows**: Complex multi-step processes
+- **Security Scanning**: Automated vulnerability assessment
+
+### 📊 Analytics & Monitoring
+- **Performance Metrics**: System and application performance tracking
+- **User Behavior Analytics**: Interaction patterns and usage insights
+- **Business Intelligence**: Data-driven decision support
+- **Real-Time Alerts**: Proactive system notifications
+
+## 🔧 Technology Stack
+
+### Backend
+- **Language**: Go (v1.25.4)
+- **Framework**: Gin Web Framework
+- **Database**: SQLite with SQLC migrations
+- **Caching**: Redis for performance
+- **Authentication**: JWT-based with OAuth support
+- **AI Integration**: Multiple providers (OpenAI, Gemini, etc.)
+
+### Frontend
+- **Dashboard**: HTML/CSS/JavaScript with Alpine.js
+- **UI Framework**: Custom with responsive design
+- **Real-Time Updates**: WebSocket connections
+- **Component Library**: Modular and reusable components
+
+### Infrastructure
+- **Containerization**: Docker support
+- **Orchestration**: Kubernetes manifests
+- **CI/CD**: GitHub Actions workflows
+- **Monitoring**: Comprehensive health checks
+- **Security**: RBAC and secrets management
+
+## 🚀 Quick Commands
+
+```bash
+# Start all services
+make start-all
+
+# Start development
+make dev
+
+# Run tests
+make test-all
+
+# Deploy to production
+make deploy-production
+
+# Monitor system
+make health-check
+```
+
+## 📚 Documentation
+
+### For Users
+- [**Setup Guide**](docs/guides/quick-start.md) - Get started quickly
+- [**Development Guide**](docs/development/) - Development workflows
+- [**Deployment Guide**](docs/deployment/) - Production deployment
+- [**API Reference**](docs/api/) - API documentation
+- [**Architecture**](docs/architecture/) - System design
+
+### For Developers
+- [**Agent Development**](AGENTS.md) - Contribute to AI agents
+- [**Code Standards**](conductor/code_styleguides/go.md) - Go coding standards
+- [**File Organization**](docs/guides/FILE_ORGANIZATION.md) - Project structure guide
+
+## 🔧 Configuration
+
+### Environment Variables
+See `.env.example` for required configuration
+- Database configuration in `config/sqlc.yaml`
+- AI provider settings in config files
+- Build and deployment options
+
+## 🤝 Getting Help
+
+### Commands
+```bash
+# Get help for any script
+./scripts/run.sh help
+
+# List available commands
+./scripts/run.sh --help
+
+# Get file reference guide
+cat FILE_REFERENCE.md
+```
+
+### Support
+
+- **Documentation**: Comprehensive guides available
+- **Script Runner**: Universal access to all automation
+- **Error Handling**: Clear error messages and troubleshooting
+- **Community**: Active development and support channels
+
+---
+
+**Version**: 2.0  
+**Last Updated**: January 2026  
+**Maintainer**: Obsidian Vault Team
+
+## 🎯 Ready to Start?
+
+Choose your journey:
+- 🚀 **Quick Development**: `make dev`
+- 📚 **Production Deployment**: `make deploy-production`
+- 🧪 **API Development**: `make api`
+- 🤖 **AI Agent Development**: See [AGENTS.md](AGENTS.md)
+- 📚 **Full System**: `make start-all`
+
+**Obsidian Vault** - Where knowledge meets automation. 🏦

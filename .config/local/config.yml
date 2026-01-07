@@ -1,0 +1,51 @@
+providers:
+  gemini:
+    model: gemini-1.5-flash-latest
+  groq:
+    model: llama-3.1-8b-instant # Or llama3-70b-8192, mixtral-8x7b-32768, etc.
+  huggingface:
+    model: "MiniMaxAI/MiniMax-M2.1:novita"
+  openrouter:
+    model: "openai/gpt-3.5-turbo"
+  onnx:
+#    model_path: "./models/model.onnx"
+#    vocab_path: "./models/vocab.txt"
+    enabled: false
+
+whatsapp:
+  access_token: ""
+  verify_token: ""
+  app_secret: ""
+
+classification:
+  patterns:
+    physics:
+      - force
+      - energy
+      - mass
+      - velocity
+      - acceleration
+    math:
+      - equation
+      - function
+      - derivative
+      - integral
+      - matrix
+    chemistry:
+      - molecule
+      - atom
+      - reaction
+      - chemical
+    admin:
+      - invoice
+      - contract
+      - form
+      - certificate
+
+language_detection:
+  french_words:
+    - le
+    - la
+    - de
+    - et
+    - un

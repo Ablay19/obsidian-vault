@@ -1,0 +1,9 @@
+database:
+  type: "sqlite"
+  path: "obsidian.db"
+
+email:
+  sender: "your-email@example.com"
+  password: "your-password"
+  host: "smtp.example.com"
+  port: 587

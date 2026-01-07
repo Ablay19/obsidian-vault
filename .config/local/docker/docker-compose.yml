@@ -1,0 +1,150 @@
+version: '3.3'
+
+services:
+  # Main Obsidian Bot Service
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+      args:
+        APP_VERSION: ${APP_VERSION:-v1.0.0}
+        GO_VERSION: ${GO_VERSION:-1.25.4}
+        ALPINE_VERSION: ${ALPINE_VERSION:-3.19}
+    container_name: obsidian-bot
+    env_file:
+      - .env
+    volumes:
+      - obsidian_data:/app/data
+      - obsidian_attachments:/app/attachments
+      - obsidian_vault:/app/vault
+      - obsidian_logs:/app/logs
+      - ${GOOGLE_APPLICATION_CREDENTIALS_PATH:-/dev/null}:/app/credentials.json:ro
+    ports:
+      - "${BOT_PORT:-8080}:8080"
+    depends_on:
+      - redis
+    environment:
+      - ENVIRONMENT=production
+      - PORT=8080
+      - LOG_LEVEL=INFO
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-}
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
+      - ENABLE_GOOGLE_LOGGING=${ENABLE_GOOGLE_LOGGING:-false}
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "/app/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    deploy:
+      resources:
+        limits:
+          memory: ${BOT_MEMORY_LIMIT:-512M}
+          cpus: "${BOT_CPU_LIMIT:-0.5}"
+        reservations:
+            memory: 256M
+            cpus: "0.25"
+
+  # SSH Server Service (Optional, for secure access)
+  ssh:
+    build:
+      context: .
+      dockerfile: Dockerfile.ssh
+      args:
+        APP_VERSION: ${APP_VERSION:-v1.0.0}
+    container_name: obsidian-ssh-server
+    env_file:
+      - .env
+    volumes:
+      - ssh_data:/data
+      - ./ssh_users.db:/app/ssh_users.db:ro
+    ports:
+      - "${SSH_API_PORT:-8081}:8081"
+    restart: unless-stopped
+    depends_on:
+      - bot
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - SSH_MANAGER_PORT=8081
+      - WEB_SERVER_URL=http://bot:8080
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: ${SSH_MEMORY_LIMIT:-256M}
+          cpus: "${SSH_CPU_LIMIT:-0.3}"
+        reservations:
+          memory: 128M
+          cpus: "0.1"
+
+
+  # Redis Cache Service
+  redis:
+    image: redis:7-alpine
+    container_name: obsidian-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory ${REDIS_MAX_MEMORY:-256mb} --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    
+    deploy:
+      resources:
+        limits:
+          memory: ${REDIS_MEMORY_LIMIT:-256M}
+          cpus: "0.2"
+
+  # HashiCorp Vault for secrets management (Optional)
+  vault:
+    image: hashicorp/vault:1.15
+    container_name: obsidian-vault
+    ports:
+      - "${VAULT_PORT:-8200}:8200"
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: "root"
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+    volumes:
+      - vault_data:/vault/data
+    cap_add:
+      - IPC_LOCK
+    restart: unless-stopped
+
+
+# Network Configuration
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# Persistent Volumes
+volumes:
+  obsidian_data:
+    driver: local
+  obsidian_attachments:
+    driver: local
+  obsidian_vault:
+    driver: local
+  obsidian_logs:
+    driver: local
+  redis_data:
+    driver: local
+  ssh_data:
+    driver: local
+  vault_data:
+    driver: local
