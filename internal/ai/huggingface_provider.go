@@ -219,14 +219,20 @@ func (p *HuggingFaceProvider) CheckHealth(ctx context.Context) error {
 }
 
 func (p *HuggingFaceProvider) mapError(status int, body string) error {
-	if status == 429 {
+	switch status {
+	case 401:
+		return NewError(ErrCodeUnauthorized, "hugging face authentication failed", fmt.Errorf("status %d: %s", status, body))
+	case 402:
+		return NewError(ErrCodeQuotaExceeded, "hugging face quota exceeded", fmt.Errorf("status %d: %s", status, body))
+	case 429:
 		return NewError(ErrCodeRateLimit, "hugging face rate limit exceeded", fmt.Errorf("status %d: %s", status, body))
-	}
-	if status == 404 || status == 400 {
+	case 400, 404:
 		return NewError(ErrCodeInvalidRequest, "hugging face invalid request or model not found", fmt.Errorf("status %d: %s", status, body))
-	}
-	if status >= 500 {
+	case 408:
+		return NewError(ErrCodeTimeout, "hugging face request timeout", fmt.Errorf("status %d: %s", status, body))
+	case 500, 502, 503, 504:
 		return NewError(ErrCodeProviderOffline, "hugging face service unavailable", fmt.Errorf("status %d: %s", status, body))
+	default:
+		return NewError(ErrCodeInternal, "hugging face internal error", fmt.Errorf("status %d: %s", status, body))
 	}
-	return NewError(ErrCodeInternal, "hugging face internal error", fmt.Errorf("status %d: %s", status, body))
 }

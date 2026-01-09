@@ -235,17 +235,20 @@ func (p *OpenRouterProvider) CheckHealth(ctx context.Context) error {
 }
 
 func (p *OpenRouterProvider) mapError(status int, body string) error {
-	if status == 429 {
+	switch status {
+	case 401:
+		return NewError(ErrCodeUnauthorized, "openrouter authentication failed", fmt.Errorf("status %d: %s", status, body))
+	case 402:
+		return NewError(ErrCodeQuotaExceeded, "openrouter quota exceeded", fmt.Errorf("status %d: %s", status, body))
+	case 429:
 		return NewError(ErrCodeRateLimit, "openrouter rate limit exceeded", fmt.Errorf("status %d: %s", status, body))
-	}
-	if status == 404 || status == 400 {
+	case 400, 404:
 		return NewError(ErrCodeInvalidRequest, "openrouter invalid request or model not found", fmt.Errorf("status %d: %s", status, body))
-	}
-	if status == 401 {
-		return NewError(ErrCodeUnauthorized, "openrouter unauthorized", fmt.Errorf("status %d: %s", status, body))
-	}
-	if status >= 500 {
+	case 408:
+		return NewError(ErrCodeTimeout, "openrouter request timeout", fmt.Errorf("status %d: %s", status, body))
+	case 500, 502, 503, 504:
 		return NewError(ErrCodeProviderOffline, "openrouter service unavailable", fmt.Errorf("status %d: %s", status, body))
+	default:
+		return NewError(ErrCodeInternal, "openrouter internal error", fmt.Errorf("status %d: %s", status, body))
 	}
-	return NewError(ErrCodeInternal, "openrouter internal error", fmt.Errorf("status %d: %s", status, body))
 }

@@ -38,7 +38,7 @@ func (mp *MessageProcessor) ProcessMessage(ctx context.Context, bot Bot, message
 	telemetry.ZapLogger.Sugar().Infow("Processing non-command text as AI prompt", "chat_id", message.Chat.ID, "text_len", len(message.Text))
 
 	// Send thinking message
-	bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Thinking..."))
+	_, _ = bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Thinking..."))
 
 	var responseText strings.Builder
 	systemPrompt := fmt.Sprintf("Respond in %s. Output your response as valid HTML, with proper headings, paragraphs, and LaTeX formulas using MathJax syntax.", state.Language)
@@ -57,7 +57,14 @@ func (mp *MessageProcessor) ProcessMessage(ctx context.Context, bot Bot, message
 	})
 
 	if err != nil {
-		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Sorry, I had trouble thinking: "+err.Error()))
+		userMsg := "Sorry, I had trouble thinking right now. Please try again later."
+		if appErr, ok := err.(*ai.AppError); ok && appErr.UserMessage != "" {
+			userMsg = appErr.UserMessage
+		}
+		_, sendErr := bot.Send(tgbotapi.NewMessage(message.Chat.ID, userMsg))
+		if sendErr != nil {
+			telemetry.ZapLogger.Sugar().Errorw("Failed to send error message", "error", sendErr)
+		}
 		return fmt.Errorf("AI chat failed: %w", err)
 	}
 
