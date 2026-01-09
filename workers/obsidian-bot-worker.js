@@ -23,6 +23,17 @@ let BOT_TOKEN, WEBHOOK_SECRET;
 
 // Simple in-memory state (production would use KV)
 const userState = new Map();
+
+// Clean old user state entries (older than 1 hour)
+function cleanOldUserState() {
+    const now = Date.now();
+    const cutoff = now - 3600000; // 1 hour in milliseconds
+    for (const [key, value] of userState.entries()) {
+        if (value.timestamp < cutoff) {
+            userState.delete(key);
+        }
+    }
+}
     
     return {
         BOT_TOKEN: env.TELEGRAM_BOT_TOKEN,
@@ -126,11 +137,13 @@ class BotUtils {
     }
 
     static getUserState(userId) {
-        return userState.get(userId) || {};
+        cleanOldUserState();
+        return userState.get(userId) || { timestamp: Date.now() };
     }
 
     static setUserState(userId, state) {
-        userState.set(userId, state);
+        cleanOldUserState();
+        userState.set(userId, { ...state, timestamp: Date.now() });
     }
 
     static handleCommand(message, userState) {

@@ -80,7 +80,10 @@ func NewSessionService(config SessionConfig, store SessionStore, logger Logger) 
 
 // CreateSession creates a new session for the user
 func (ss *SessionService) CreateSession(ctx context.Context, userID, email, name string) (*Session, error) {
-	sessionID := generateSessionID()
+	sessionID, err := generateSessionID()
+	if err != nil {
+		return nil, err
+	}
 
 	session := &Session{
 		ID:        sessionID,
@@ -217,10 +220,10 @@ func (ss *SessionService) createJWT(session *Session) (string, error) {
 }
 
 // generateSessionID generates a random session ID
-func generateSessionID() string {
+func generateSessionID() (string, error) {
 	bytes := make([]byte, 32)
 	if _, err := rand.Read(bytes); err != nil {
-		panic(fmt.Sprintf("failed to generate random session ID: %v", err))
+		return "", fmt.Errorf("failed to generate random session ID: %w", err)
 	}
-	return base64.URLEncoding.EncodeToString(bytes)
+	return base64.URLEncoding.EncodeToString(bytes), nil
 }

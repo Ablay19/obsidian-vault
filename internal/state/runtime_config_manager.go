@@ -285,11 +285,11 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 }
 
 // GetConfig provides a read-only copy of the current RuntimeConfig.
-func (rcm *RuntimeConfigManager) GetConfig() RuntimeConfig {
+func (rcm *RuntimeConfigManager) GetConfig(redact bool) RuntimeConfig {
 	rcm.mu.RLock()
 	defer rcm.mu.RUnlock()
 
-	// Perform a deep copy to ensure isolation and mask sensitive values
+	// Perform a deep copy to ensure isolation
 	copy := RuntimeConfig{
 		AIEnabled:      rcm.config.AIEnabled,
 		ActiveProvider: rcm.config.ActiveProvider,
@@ -303,12 +303,16 @@ func (rcm *RuntimeConfigManager) GetConfig() RuntimeConfig {
 	}
 
 	for k, v := range rcm.config.APIKeys {
-		masked := v
-		if masked.Value != "" {
-			masked.Value = "********" // Redact sensitive value
+		if redact {
+			masked := v
+			if masked.Value != "" {
+				masked.Value = "********" // Redact sensitive value
+			}
+			masked.EncryptedValue = "" // Don't expose encrypted value either
+			copy.APIKeys[k] = masked
+		} else {
+			copy.APIKeys[k] = v // Return original unmasked value
 		}
-		masked.EncryptedValue = "" // Don't expose encrypted value either
-		copy.APIKeys[k] = masked
 	}
 
 	return copy

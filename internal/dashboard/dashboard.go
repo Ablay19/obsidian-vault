@@ -226,7 +226,7 @@ func (d *Dashboard) handleServiceStatusPanel(c *gin.Context) {
 
 // handleAIProvidersPanel serves the AIProviderManagementPanel HTML fragment.
 func (d *Dashboard) handleAIProvidersPanel(c *gin.Context) {
-	config := d.rcm.GetConfig()
+	config := d.rcm.GetConfig(true)
 	AIProviderManagementPanel(config).Render(c.Request.Context(), c.Writer)
 }
 
@@ -247,7 +247,7 @@ func (d *Dashboard) handleChatHistoryPanel(c *gin.Context) {
 
 // handleEnvironmentPanel serves the EnvironmentPanel HTML fragment.
 func (d *Dashboard) handleEnvironmentPanel(c *gin.Context) {
-	config := d.rcm.GetConfig()
+	config := d.rcm.GetConfig(true)
 	EnvironmentPanel(config.Environment).Render(c.Request.Context(), c.Writer)
 }
 
@@ -264,7 +264,7 @@ func (d *Dashboard) handleQAConsolePanel(c *gin.Context) {
 
 // handleAPIKeysPanel serves the APIKeysPanel HTML fragment.
 func (d *Dashboard) handleAPIKeysPanel(c *gin.Context) {
-	config := d.rcm.GetConfig()
+	config := d.rcm.GetConfig(true)
 	var apiKeysSlice []state.APIKeyState
 	for _, key := range config.APIKeys {
 		apiKeysSlice = append(apiKeysSlice, key)
@@ -387,7 +387,7 @@ func (d *Dashboard) getAIProviders() struct {
 		}{}
 	}
 
-	config := d.rcm.GetConfig()
+	config := d.rcm.GetConfig(true)
 	var availableProviders []string
 	for name, ps := range config.Providers {
 		if ps.Enabled {
@@ -435,7 +435,7 @@ func (d *Dashboard) handleGetProviderConfig(c *gin.Context) {
 		return
 	}
 
-	config := d.rcm.GetConfig()
+	config := d.rcm.GetConfig(true)
 	providerState, providerExists := config.Providers[providerName]
 	if !providerExists {
 		c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("Provider '%s' not found", providerName)})
@@ -482,7 +482,7 @@ func (d *Dashboard) handleToggleProviderStatus(c *gin.Context) {
 // handleGetAPIKeys returns all API keys, optionally filtered by provider.
 func (d *Dashboard) handleGetAPIKeys(c *gin.Context) {
 	providerName := c.Query("provider")
-	config := d.rcm.GetConfig()
+	config := d.rcm.GetConfig(true)
 	var apiKeys []state.APIKeyState
 	for _, keyState := range config.APIKeys {
 		if providerName == "" || keyState.Provider == providerName {
@@ -601,7 +601,7 @@ func (d *Dashboard) handleRotateAPIKey(c *gin.Context) {
 
 // handleGetEnvironmentState handles GET requests to retrieve the current environment state.
 func (d *Dashboard) handleGetEnvironmentState(c *gin.Context) {
-	config := d.rcm.GetConfig()
+	config := d.rcm.GetConfig(true)
 	envState := config.Environment
 	c.JSON(http.StatusOK, envState)
 }

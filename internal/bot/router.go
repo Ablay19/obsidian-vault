@@ -14,21 +14,19 @@ type CommandDependencies struct {
 	GitManager        *git.Manager
 }
 
-func NewCommandRouter(deps CommandDependencies) map[string]CommandHandler {
-	return map[string]CommandHandler{
-		"start":          &startCommandHandler{},
-		"help":           &helpCommandHandler{},
-		"lang":           &langCommandHandler{},
-		"setprovider":    &setProviderCommandHandler{aiService: deps.AIService},
-		"stats":          &statsCommandHandler{rcm: deps.RCM},
-		"last":           &lastCommandHandler{},
-		"reprocess":      &reprocessCommandHandler{deps: deps},
-		"pid":            &pidCommandHandler{},
-		"link":           &linkCommandHandler{},
-		"service_status": &serviceStatusCommandHandler{aiService: deps.AIService, rcm: deps.RCM},
-		"modelinfo":      &modelInfoCommandHandler{aiService: deps.AIService},
-		"pause_bot":      &pauseBotCommandHandler{},
-		"resume_bot":     &resumeBotCommandHandler{},
-		"process":        &processCommandHandler{ingestionPipeline: deps.IngestionPipeline},
-	}
+func SetupCommands(registry *CommandRegistry) {
+	registry.Register("start", &startCommandHandler{}, "Start the bot")
+	registry.Register("help", &helpCommandHandler{}, "Show help message")
+	registry.Register("lang", &langCommandHandler{}, "Set AI language")
+	registry.Register("setprovider", &setProviderCommandHandler{}, "Set AI provider (Dynamic Menu)")
+	registry.Register("stats", &statsCommandHandler{}, "Show usage statistics")
+	registry.Register("last", &lastCommandHandler{}, "Show last created note")
+	registry.Register("reprocess", &reprocessCommandHandler{}, "Reprocess last sent file")
+	registry.Register("pid", &pidCommandHandler{}, "Show the process ID of the bot instance")
+	registry.Register("link", &linkCommandHandler{}, "Link your Dashboard Account")
+	registry.Register("service_status", &serviceStatusCommandHandler{}, "Show service health")
+	registry.Register("modelinfo", &modelInfoCommandHandler{}, "Show AI model information")
+	registry.Register("pause_bot", &pauseBotCommandHandler{}, "Pause the bot")
+	registry.Register("resume_bot", &resumeBotCommandHandler{}, "Resume the bot")
+	registry.Register("process", &processCommandHandler{}, "Process staged file")
 }

@@ -4,6 +4,8 @@ import { CacheManager } from './cache.js';
 import { RateLimiter } from './rate-limiter.js';
 import { CostOptimizer } from './cost-optimizer.js';
 import { Analytics } from './analytics.js';
+import { RequestHandler } from './request-handler.js';
+import { ProviderManager } from './provider-manager.js';
 
 class AIRequestProcessor {
   constructor(env) {
@@ -13,99 +15,83 @@ class AIRequestProcessor {
     this.limiter = new RateLimiter(env.AI_CACHE || null);
     this.optimizer = new CostOptimizer(env, this.providers);
     this.analytics = new Analytics(env);
+    this.requestHandler = new RequestHandler();
+    this.providerManager = new ProviderManager(this.providers, this.optimizer, this.analytics);
   }
 
   async processRequest(request) {
-    const url = new URL(request.url);
     const startTime = Date.now();
-    
-    // Extract provider and request details
-    const pathParts = url.pathname.split('/');
-    const provider = pathParts[pathParts.length - 1];
-    const prompt = await request.text();
-    const clientIP = request.headers.get('cf-connecting-ip');
-    const userAgent = request.headers.get('user-agent');
+    const requestData = await this.requestHandler.parseRequest(request);
     
     try {
       // 1. Check cache first for identical prompts
-      const cacheKey = await this.generateCacheKey(prompt, provider);
+      const cacheKey = await this.generateCacheKey(requestData.prompt, requestData.provider);
       const cached = await this.cache.get(cacheKey);
       if (cached && !cached.expired) {
         console.log(`Cache hit for provider: ${cached.provider}`);
-        await this.analytics.trackCacheHit(provider, prompt.length, cached);
-        
-        return new Response(cached.data, {
-          status: 200,
-          headers: {
-            'x-ai-provider': cached.provider,
-            'x-cache-status': 'hit',
-            'x-response-time': `${Date.now() - startTime}ms`
-          }
+        await this.analytics.trackCacheHit(requestData.provider, requestData.prompt.length, cached);
+
+        return this.requestHandler.buildResponse(cached.data, {
+          provider: cached.provider,
+          cacheStatus: 'hit',
+          responseTime: Date.now() - startTime
         });
       }
       
       // 2. Rate limiting per provider and IP
-      const rateLimitKey = `ai-${provider}-${clientIP}`;
+      const rateLimitKey = `ai-${requestData.provider}-${requestData.clientIP}`;
       const isAllowed = await this.limiter.check(rateLimitKey, 1, 60);
       if (!isAllowed) {
-        await this.analytics.trackRateLimitHit(provider, clientIP, prompt.length);
-        return new Response('Rate limit exceeded. Please try again later.', { 
-          status: 429,
-          headers: {
-            'x-cache-status': 'rate-limited',
-            'retry-after': '60'
-          }
-        });
+        await this.analytics.trackRateLimitHit(requestData.provider, requestData.clientIP, requestData.prompt.length);
+        return this.requestHandler.buildErrorResponse(
+          { message: "Rate limit exceeded. Please try again later.", status: 429 },
+          Date.now() - startTime
+        );
       }
       
       // 3. Select optimal provider based on current conditions
-      const optimalProvider = await this.optimizer.selectProvider(prompt, {
-        preferredProvider: provider,
-        maxLatency: 2000,
-        maxCostPerToken: 0.001,
-        clientRegion: request.cf.colo
-      });
+      const optimalProvider = await this.providerManager.selectProvider(requestData);
       
       if (!optimalProvider) {
-        return new Response('No available AI providers at the moment.', { 
-          status: 503,
-          headers: { 'x-error': 'no-providers-available' }
-        });
+        return this.requestHandler.buildErrorResponse(
+          { message: "No available AI providers at the moment.", status: 503 },
+          Date.now() - startTime
+        );
       }
       
       // 4. Execute request with retries and fallbacks
-      const response = await this.executeRequestWithRetry(prompt, optimalProvider, request);
-      const responseTime = Date.now() - startTime;
+      const execResult = await this.providerManager.executeRequest(optimalProvider, requestData.prompt, requestData);
+      const response = execResult.result;
+      const responseTime = execResult.responseTime;
       
       // 5. Cache response with intelligent TTL
-      const ttl = this.calculateCacheTTL(prompt, optimalProvider);
+      const ttl = this.calculateCacheTTL(requestData.prompt, optimalProvider);
       await this.cache.set(cacheKey, {
         data: response,
-        provider: optimalProvider.name,
+        provider: execResult.provider,
         timestamp: Date.now(),
         expired: false
       }, ttl);
       
       // 6. Track analytics
       await this.analytics.trackAIUsage({
-        provider: optimalProvider.name,
-        promptLength: prompt.length,
+        provider: execResult.provider,
+        promptLength: requestData.prompt.length,
         responseLength: response.length,
-        tokensUsed: this.estimateTokens(prompt, response),
+        tokensUsed: this.estimateTokens(requestData.prompt, response),
         responseTime,
         cacheHit: false,
-        clientIP,
-        userAgent,
-        colo: request.cf.colo,
-        country: request.cf.country
+        clientIP: requestData.clientIP,
+        userAgent: requestData.userAgent,
+        colo: request.cf?.colo,
+        country: request.cf?.country
       });
       
-      return new Response(response, {
-        status: 200,
-        headers: {
-          'x-ai-provider': optimalProvider.name,
-          'x-cache-status': 'miss',
-          'x-response-time': `${responseTime}ms`,
+      return this.requestHandler.buildResponse(response, {
+        provider: execResult.provider,
+        cacheStatus: 'miss',
+        responseTime,
+        extraHeaders: {
           'x-cache-ttl': `${ttl}s`,
           'x-cost-cents': optimalProvider.costCents
         }
@@ -113,12 +99,13 @@ class AIRequestProcessor {
       
     } catch (error) {
       console.error('AI request processing error:', error);
-      await this.analytics.trackError(provider, error, clientIP);
-      
-      return new Response('Internal server error processing AI request.', { 
-        status: 500,
-        headers: { 'x-error': 'internal-error' }
-      });
+      await this.analytics.trackError(requestData.provider, error, requestData.clientIP);
+
+      return this.requestHandler.buildErrorResponse(
+        { message: "Internal server error processing AI request.", status: 500 },
+        Date.now() - startTime
+      );
+    }
     }
   }
   

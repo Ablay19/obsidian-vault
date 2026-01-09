@@ -1,6 +1,19 @@
 // Enhanced Web UI Utilities and Components
 // Modern, accessible, and feature-rich dashboard utilities
 
+const activeIntervals = [];
+
+function addInterval(callback, delay) {
+    const id = setInterval(callback, delay);
+    activeIntervals.push(id);
+    return id;
+}
+
+// Clear all intervals on page unload
+window.addEventListener('beforeunload', () => {
+    activeIntervals.forEach(id => clearInterval(id));
+});
+
 class DashboardUtils {
     constructor() {
         this.theme = localStorage.getItem('dashboard-theme') || 'dark';
@@ -253,7 +266,7 @@ class DashboardUtils {
 
     monitorMemoryUsage() {
         if ('memory' in performance) {
-            setInterval(() => {
+            addInterval(() => {
                 const memory = performance.memory;
                 const used = (memory.usedJSHeapSize / 1048576).toFixed(2);
                 const total = (memory.totalJSHeapSize / 1048576).toFixed(2);
@@ -430,7 +443,7 @@ class DashboardUtils {
             }
         };
         
-        setInterval(measurePing, 30000);
+        addInterval(measurePing, 30000);
     }
 
     updateConnectionStatus(latency) {
@@ -456,7 +469,7 @@ class DashboardUtils {
         });
         
         // Periodic backup of important data
-        setInterval(() => this.backupToLocalStorage(), 60000);
+        addInterval(() => this.backupToLocalStorage(), 60000);
     }
 
     backupToLocalStorage() {
@@ -587,7 +600,7 @@ dashboardUtils.registerPlugin('performance-panel', {
         
         document.body.appendChild(panel);
         
-        setInterval(() => {
+        addInterval(() => {
             const metrics = dashboardUtils.getMetrics();
             const stats = document.getElementById('performance-stats');
             if (stats) {

@@ -109,7 +109,7 @@ func GetServicesStatus(aiService ai.AIServiceInterface, rcm *state.RuntimeConfig
 		aiDetails := fmt.Sprintf("Active Provider: %s, Available Providers: %d", activeProvider, providerCount)
 
 		// Check RCM for global AI enabled status
-		rcmConfig := rcm.GetConfig()
+		rcmConfig := rcm.GetConfig(true)
 		if !rcmConfig.AIEnabled {
 			aiStatus = "disabled"
 			aiDetails = "AI globally disabled by dashboard. " + aiDetails

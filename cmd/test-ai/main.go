@@ -33,7 +33,7 @@ func main() {
 	_ = ai.NewAIService(ctx, rcm, config.AppConfig.ProviderProfiles, config.AppConfig.SwitchingRules)
 
 	// Get configuration
-	cfg := rcm.GetConfig()
+	cfg := rcm.GetConfig(true)
 
 	fmt.Printf("✅ Runtime Configuration:\n")
 	fmt.Printf("  AI Enabled: %v\n", cfg.AIEnabled)

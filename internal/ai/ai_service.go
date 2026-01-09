@@ -56,7 +56,7 @@ func (s *AIService) InitializeProviders(ctx context.Context) {
 		return
 	}
 
-	config := s.sm.GetConfig()
+	config := s.sm.GetConfig(false)
 	s.providers = make(map[string]map[string]AIProvider)
 
 	for providerName, providerState := range config.Providers {
@@ -107,7 +107,7 @@ func (s *AIService) SetProvider(providerName string) error {
 func (s *AIService) GetActiveProviderName() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	cfg := s.sm.GetConfig()
+	cfg := s.sm.GetConfig(true)
 	if cfg.ActiveProvider != "" && cfg.ActiveProvider != "None" {
 		return cfg.ActiveProvider
 	}
@@ -194,7 +194,7 @@ func (s *AIService) selectProvider(ctx context.Context, task_tokens int, task_de
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	cfg := s.sm.GetConfig()
+	cfg := s.sm.GetConfig(false)
 	if !cfg.AIEnabled {
 		return nil, st.APIKeyState{}, fmt.Errorf("AI is globally disabled")
 	}
@@ -248,6 +248,9 @@ func (s *AIService) selectProvider(ctx context.Context, task_tokens int, task_de
 // ExecuteWithRetry handles retries for transient errors, tracking failed keys to ensure they are skipped in subsequent attempts.
 func (s *AIService) ExecuteWithRetry(ctx context.Context, task_tokens int, task_depth int, max_cost float64, op func(AIProvider) error) error {
 	maxRetries := s.switchingRules.RetryCount
+	if maxRetries <= 0 {
+		maxRetries = 1 // Ensure at least one retry attempt
+	}
 	backoff := time.Duration(s.switchingRules.RetryDelayMs) * time.Millisecond
 	var failedKeys []string
 	var triedProviders []string

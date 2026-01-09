@@ -42,7 +42,7 @@ func TestNewRuntimeConfigManager(t *testing.T) {
 	}
 
 	// Check if default AIEnabled is true
-	config := manager.GetConfig()
+	config := manager.GetConfig(true)
 	if !config.AIEnabled {
 		t.Error("Expected AIEnabled to be true by default, got false")
 	}
@@ -60,7 +60,7 @@ func TestSetAIEnabled(t *testing.T) {
 		t.Fatalf("SetAIEnabled() error = %v", err)
 	}
 
-	config := manager.GetConfig()
+	config := manager.GetConfig(true)
 	if config.AIEnabled {
 		t.Error("Expected AIEnabled to be false, got true")
 	}
@@ -71,7 +71,7 @@ func TestSetAIEnabled(t *testing.T) {
 		t.Fatalf("SetAIEnabled() error = %v", err)
 	}
 
-	config = manager.GetConfig()
+	config = manager.GetConfig(true)
 	if !config.AIEnabled {
 		t.Error("Expected AIEnabled to be true, got false")
 	}

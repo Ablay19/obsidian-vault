@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/auth"
 	"obsidian-automation/internal/bot"
@@ -86,49 +87,43 @@ func setupGracefulShutdown(srv *http.Server, logger *AppLogger) {
 	}()
 }
 
-func main() {
-	logger := NewAppLogger(os.Getenv("ENABLE_COLORFUL_LOGS") == "true")
-
-	// Load configuration FIRST
+func initConfig() {
 	config.LoadConfig()
+}
 
-	// Initialize telemetry
+func initTelemetry(logger *AppLogger) {
 	if _, err := telemetry.Init("obsidian-bot"); err != nil {
 		logger.Error("Failed to initialize telemetry", zap.Error(err))
 		os.Exit(1)
 	}
+}
 
-	logger.Info("Starting Obsidian Bot API Server")
-
-	// Initialize database
+func initDatabase(logger *AppLogger) *database.DBClient {
 	dbClient := database.OpenDB()
-	defer dbClient.DB.Close()
-
 	logger.Info("Database connected successfully")
+	return dbClient
+}
 
-	// Initialize RuntimeConfigManager
-	rcm, err := state.NewRuntimeConfigManager(dbClient.DB)
+func initRuntimeConfigManager(db *gorm.DB, logger *AppLogger) *state.RuntimeConfigManager {
+	rcm, err := state.NewRuntimeConfigManager(db)
 	if err != nil {
 		logger.Error("Failed to initialize RuntimeConfigManager", zap.Error(err))
 		os.Exit(1)
 	}
+	return rcm
+}
 
-	// Initialize AI Service
-	aiService := ai.NewAIService(context.Background(), rcm, config.AppConfig.ProviderProfiles, config.AppConfig.SwitchingRules)
-
-	// Initialize Auth Service
+func initServices(ctx context.Context, db *gorm.DB, rcm *state.RuntimeConfigManager, logger *AppLogger) (*ai.AIService, *auth.AuthService, *ws.Manager) {
+	aiService := ai.NewAIService(ctx, rcm, config.AppConfig.ProviderProfiles, config.AppConfig.SwitchingRules)
 	authService := auth.NewAuthService(config.AppConfig)
-
-	// Initialize WebSocket Manager
 	wsManager := ws.NewManager()
 	go wsManager.Start()
-
-	// Run database migrations
-	database.RunMigrations(dbClient.DB)
-
+	database.RunMigrations(db)
 	logger.Info("Database migrations completed")
+	return aiService, authService, wsManager
+}
 
-	// Initialize router
+func setupRouter(logger *AppLogger) *gin.Engine {
 	router := gin.Default()
 
 	// Add CORS middleware
@@ -167,17 +162,56 @@ func main() {
 		)
 	})
 
-	// Initialize Dashboard
-	dashboardService := dashboard.NewDashboard(aiService, rcm, dbClient.DB, authService, wsManager)
+	return router
+}
 
-	// Register dashboard routes
+func initDashboard(router *gin.Engine, aiService *ai.AIService, rcm *state.RuntimeConfigManager, db *gorm.DB, authService *auth.AuthService, wsManager *ws.Manager, logger *AppLogger) {
+	dashboardService := dashboard.NewDashboard(aiService, rcm, db, authService, wsManager)
 	dashboardService.RegisterRoutes(router)
-	// Register SSH server routes
-	ssh.RegisterRoutes(router, dbClient.DB, logger.logger)
+	ssh.RegisterRoutes(router, db, logger.logger)
+}
+
+func startServer(server *http.Server, logger *AppLogger) {
+	go func() {
+		logger.Info(fmt.Sprintf("Server starting on port %d", config.AppConfig.Dashboard.Port))
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("Server failed to start", zap.Error(err))
+			os.Exit(1)
+		}
+	}()
+}
+
+func startBot(db *gorm.DB, aiService *ai.AIService, rcm *state.RuntimeConfigManager, wsManager *ws.Manager, logger *AppLogger) {
+	go func() {
+		logger.Info("Starting Telegram bot...")
+		if err := bot.Run(db, aiService, rcm, wsManager); err != nil {
+			logger.Error("Failed to start Telegram bot", zap.Error(err))
+		}
+	}()
+}
+
+func main() {
+	logger := NewAppLogger(os.Getenv("ENABLE_COLORFUL_LOGS") == "true")
+
+	initConfig()
+	initTelemetry(logger)
+
+	logger.Info("Starting Obsidian Bot API Server")
+
+	db := initDatabase(logger)
+	defer db.Close()
+
+	rcm := initRuntimeConfigManager(db, logger)
+
+	aiService, authService, wsManager := initServices(context.Background(), db, rcm, logger)
+
+	router := setupRouter(logger)
+
+	initDashboard(router, aiService, rcm, db, authService, wsManager, logger)
 
 	port := config.AppConfig.Dashboard.Port
 	if port == 0 {
-		port = 8080 // fallback
+		port = 8080
 	}
 	logger.Info(fmt.Sprintf("Using port: %d", port))
 
@@ -188,26 +222,26 @@ func main() {
 		WriteTimeout: 15 * time.Second,
 	}
 
-	// Start Telegram bot in a goroutine
-	go func() {
-		logger.Info("Starting Telegram bot...")
-		if err := bot.Run(dbClient.DB, aiService, rcm, wsManager); err != nil {
-			logger.Error("Failed to start Telegram bot", zap.Error(err))
-		}
-	}()
+	startServer(server, logger)
+	startBot(db, aiService, rcm, wsManager, logger)
 
-	// Start server in a goroutine
-	go func() {
-		logger.Info(fmt.Sprintf("Server starting on port %d", config.AppConfig.Dashboard.Port))
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Error("Server failed to start", zap.Error(err))
-			os.Exit(1)
-		}
-	}()
-
-	// Wait for shutdown signal
 	setupGracefulShutdown(server, logger)
 
-	// Block main() from exiting
+	select {}
+}
+	logger.Info(fmt.Sprintf("Using port: %d", port))
+
+	server := &http.Server{
+		Addr:         fmt.Sprintf(":%d", port),
+		Handler:      router,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+	}
+
+	startServer(server, logger)
+	startBot(dbClient.DB, aiService, rcm, wsManager, logger)
+
+	setupGracefulShutdown(server, logger)
+
 	select {}
 }

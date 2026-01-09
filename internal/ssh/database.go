@@ -7,6 +7,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"obsidian-automation/internal/telemetry"
+	"os"
 
 	sqlite "github.com/glebarez/sqlite" // Use glebarez/sqlite
 	"golang.org/x/crypto/ssh"
@@ -25,7 +26,7 @@ func InitDB() {
 
 	if err != nil {
 		telemetry.ZapLogger.Sugar().Errorf("Failed to connect SSH user database: %v", err)
-		panic(fmt.Errorf("failed to connect SSH user database: %s", err))
+		os.Exit(1)
 	}
 	telemetry.ZapLogger.Sugar().Debugf("SSH DB initialized: %p", DB)
 

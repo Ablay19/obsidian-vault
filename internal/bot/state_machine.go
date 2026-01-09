@@ -15,7 +15,7 @@ import (
 // StateMachine defines the interface for user state management
 type StateMachine interface {
 	ProcessMessage(ctx context.Context, bot Bot, message *tgbotapi.Message, state *UserState) error
-	ProcessCommand(ctx context.Context, bot Bot, message *tgbotapi.Message, state *UserState, commandRouter map[string]CommandHandler) error
+	ProcessCommand(ctx context.Context, bot Bot, message *tgbotapi.Message, state *UserState, commandRouter map[string]CommandHandler, cmdCtx *CommandContext) error
 	IsStaging(state *UserState) bool
 	AddContext(state *UserState, context string)
 	StageFile(state *UserState, filename, fileType, caption string)
@@ -95,13 +95,15 @@ func (sm *StagingStateMachine) ProcessMessage(ctx context.Context, bot Bot, mess
 }
 
 // ProcessCommand implements StateMachine interface
-func (sm *StagingStateMachine) ProcessCommand(ctx context.Context, bot Bot, message *tgbotapi.Message, state *UserState, commandRouter map[string]CommandHandler) error {
+func (sm *StagingStateMachine) ProcessCommand(ctx context.Context, bot Bot, message *tgbotapi.Message, state *UserState, commandRouter map[string]CommandHandler, cmdCtx *CommandContext) error {
 	if handler, ok := commandRouter[message.Command()]; ok {
-		handler.Handle(bot, message, state)
-		return nil
+		return handler.Handle(ctx, message, state, cmdCtx)
 	}
 
-	bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Unknown command. Use /help to see available commands."))
+	_, err := bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Unknown command. Use /help to see available commands."))
+	if err != nil {
+		return err
+	}
 	return fmt.Errorf("unknown command: %s", message.Command())
 }
 
@@ -130,6 +132,7 @@ func (sm *StagingStateMachine) StageFile(state *UserState, filename, fileType, c
 type CommandHandlerManager struct {
 	stateMachine  StateMachine
 	commandRouter map[string]CommandHandler
+	cmdCtx        *CommandContext
 }
 
 // HandleCommand processes commands and text messages
@@ -143,7 +146,7 @@ func (chm *CommandHandlerManager) HandleCommand(ctx context.Context, bot Bot, me
 		return chm.stateMachine.ProcessMessage(ctx, bot, message, state)
 	}
 
-	return chm.stateMachine.ProcessCommand(ctx, bot, message, state, chm.commandRouter)
+	return chm.stateMachine.ProcessCommand(ctx, bot, message, state, chm.commandRouter, chm.cmdCtx)
 }
 
 // GetCommandRouter returns the command router

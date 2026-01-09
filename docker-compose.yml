@@ -1,4 +1,4 @@
-version: '3.8'
+version: '3.3'
 
 services:
   # Main Obsidian Bot Service
@@ -43,10 +43,10 @@ services:
       resources:
         limits:
           memory: ${BOT_MEMORY_LIMIT:-512M}
-          cpus: ${BOT_CPU_LIMIT:-0.5}
+          cpus: '${BOT_CPU_LIMIT:-0.5}'
         reservations:
           memory: 256M
-          cpus: 0.25
+          cpus: '0.25'
 
   # SSH Server Service (Optional, for secure access)
   ssh:

@@ -102,39 +102,30 @@ func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.Runt
 	ingestionPipeline.Start(context.Background())
 	defer ingestionPipeline.Stop()
 
-	// Initialize Command Router
-	commandRouter := NewCommandRouter(CommandDependencies{
+	// Create Command Context
+	cmdCtx := &CommandContext{
+		Bot:               bot,
 		AIService:         aiService,
 		RCM:               rcm,
 		IngestionPipeline: ingestionPipeline,
 		GitManager:        gitManager,
-	})
+	}
+
+	// Initialize Command Registry
+	registry := NewCommandRegistry()
+	SetupCommands(registry)
 
 	// Initialize State Machine and Command Handler Manager
 	messageProcessor := NewMessageProcessor(aiService)
 	stagingStateMachine := NewStagingStateMachine(messageProcessor)
 	commandHandlerManager := &CommandHandlerManager{
 		stateMachine:  stagingStateMachine,
-		commandRouter: commandRouter,
+		commandRouter: registry.commands,
+		cmdCtx:        cmdCtx,
 	}
 	fileHandler := NewFileHandler(stagingStateMachine)
 
-	commands := []tgbotapi.BotCommand{
-		{Command: "start", Description: "Start the bot"},
-		{Command: "help", Description: "Show help message"},
-		{Command: "stats", Description: "Show usage statistics"},
-		{Command: "lang", Description: "Set AI language"},
-		{Command: "last", Description: "Show last created note"},
-		{Command: "reprocess", Description: "Reprocess last sent file"},
-		{Command: "pid", Description: "Show the process ID of the bot instance"},
-		{Command: "setprovider", Description: "Set AI provider (Gemini, Groq)"},
-		{Command: "link", Description: "Link Telegram to Dashboard account"},
-		{Command: "service_status", Description: "Show service status"},
-		{Command: "pause_bot", Description: "Pause the bot"},
-		{Command: "resume_bot", Description: "Resume the bot"},
-		{Command: "modelinfo", Description: "Show AI model information"},
-		{Command: "process", Description: "Process staged file"},
-	}
+	commands := registry.GetBotCommands()
 	if _, err := bot.Request(tgbotapi.NewSetMyCommands(commands...)); err != nil {
 		telemetry.ZapLogger.Sugar().Errorw("Error setting bot commands", "error", err)
 	}
@@ -222,20 +213,25 @@ func handleCallbackQuery(bot Bot, callback *tgbotapi.CallbackQuery, commandRoute
 		msg := callback.Message
 		msg.From = callback.From // Crucial: preserve the user who clicked
 		msg.Text = "/setprovider"
-		if handler, ok := commandRouter["setprovider"]; ok {
-			handler.Handle(bot, msg, getUserState(msg.From.ID)) // Pass the state
+		if handler, ok := commandHandlerManager.cmdCtx != nil {
+		if handler, ok := commandHandlerManager.commandRouter["setprovider"]; ok {
+			handler.Handle(ctx, msg, getUserState(msg.From.ID), commandHandlerManager.cmdCtx)
+		}
 		}
 		return
 	}
 	if strings.HasPrefix(callback.Data, "setprovider:") {
 		providerName := strings.TrimPrefix(callback.Data, "setprovider:")
 		if err := aiService.SetProvider(providerName); err != nil {
-			bot.Send(tgbotapi.NewMessage(callback.Message.Chat.ID, fmt.Sprintf("❌ Failed to set provider: %v", err)))
+			_, _ = bot.Send(tgbotapi.NewMessage(callback.Message.Chat.ID, fmt.Sprintf("Failed to set provider: %v", err)))
 		} else {
-			editMsg := tgbotapi.NewEditMessageText(callback.Message.Chat.ID, callback.Message.MessageID, fmt.Sprintf("✅ AI provider has been set to: *%s*", providerName))
+			editMsg := tgbotapi.NewEditMessageText(callback.Message.Chat.ID, callback.Message.MessageID, fmt.Sprintf("AI provider has been set to: *%s*", providerName))
 			editMsg.ParseMode = "Markdown"
-			bot.Send(editMsg)
+			_, _ = bot.Send(editMsg)
+			// Remove the inline keyboard to prevent further clicks
+			bot.Request(tgbotapi.NewEditMessageReplyMarkup(callback.Message.Chat.ID, callback.Message.MessageID, tgbotapi.InlineKeyboardMarkup{}))
 		}
+	}
 	}
 }
 
