@@ -48,7 +48,7 @@ WORKDIR /app
 COPY --from=builder /app/main /app/main
 
 # Copy necessary assets
-COPY config.yml .
+COPY .config/local/config.yml .
 COPY internal/dashboard/static/ ./internal/dashboard/static
 
 # Create directories for data and ensure correct permissions

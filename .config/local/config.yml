@@ -12,6 +12,74 @@ providers:
 #    vocab_path: "./models/vocab.txt"
     enabled: false
 
+provider_profiles:
+  Cloudflare:
+    model: "@cf/meta/llama-3.3-70b-instruct"
+    latency: 1500
+    accuracy: 0.85
+    max_tokens: 4096
+    input_cost_per_token: 0.0
+    output_cost_per_token: 0.0
+    enabled: true
+    is_default: true
+    health_check_url: "/health"
+  
+  gemini:
+    model: gemini-1.5-flash-latest
+    latency: 1200
+    accuracy: 0.92
+    max_tokens: 8192
+    input_cost_per_token: 0.000125
+    output_cost_per_token: 0.000375
+    enabled: true
+    is_default: false
+    health_check_url: "https://generativelanguage.googleapis.com/v1beta/models"
+  
+  groq:
+    model: llama-3.1-8b-instant
+    latency: 800
+    accuracy: 0.88
+    max_tokens: 8192
+    input_cost_per_token: 0.00005
+    output_cost_per_token: 0.00008
+    enabled: true
+    is_default: false
+    health_check_url: "https://api.groq.com/openai/v1/models"
+  
+  huggingface:
+    model: "MiniMaxAI/MiniMax-M2.1:novita"
+    latency: 2000
+    accuracy: 0.86
+    max_tokens: 4096
+    input_cost_per_token: 0.0001
+    output_cost_per_token: 0.0002
+    enabled: true
+    is_default: false
+    health_check_url: "https://router.huggingface.co/models"
+  
+  openrouter:
+    model: "openai/gpt-3.5-turbo"
+    latency: 1500
+    accuracy: 0.90
+    max_tokens: 4096
+    input_cost_per_token: 0.00015
+    output_cost_per_token: 0.0002
+    enabled: true
+    is_default: false
+    health_check_url: "https://openrouter.ai/api/v1/models"
+
+switching_rules:
+  default_provider: "Cloudflare"
+  retry_count: 3
+  retry_delay_ms: 1000
+  latency_target: 2000
+  accuracy_threshold: 0.8
+  cost_threshold: 0.001
+  on_error: "fallback"
+  health_check_interval: 300000
+  enable_auto_switching: true
+  fallback_order: ["Cloudflare", "gemini", "groq", "openrouter", "huggingface"]
+
 whatsapp:
   access_token: ""
   verify_token: ""

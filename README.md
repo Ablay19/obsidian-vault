@@ -136,8 +136,8 @@ docker-compose down
 ## 🔧 Configuration
 
 ### Environment Variables
-See `.env.example` for required configuration
-- Database configuration in `config/sqlc.yaml`
+See `.config/local/.env.example` for required configuration
+- Database configuration in `.config/local/sqlc.yaml`
 - AI provider settings in config files
 - Build and deployment options
 

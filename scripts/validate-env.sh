@@ -11,18 +11,18 @@ echo "🔍 Obsidian Bot Environment Variables Validation"
 echo "==============================================="
 
 # Check if .env file exists
-if [ ! -f ".env" ]; then
+if [ ! -f ".config/local/.env" ]; then
     print_error ".env file not found. Please run ./scripts/setup/env-setup.sh first."
     exit 1
 fi
 
 # Load environment variables
 set -a
-source .env
+source .config/local/.env
 set +a
 
 echo ""
-print_status "Loaded environment variables from .env"
+print_status "Loaded environment variables from .config/local/.env"
 
 # Required variables validation
 REQUIRED_VARS=(
@@ -85,7 +85,7 @@ for var_info in "${REQUIRED_VARS[@]}"; do
 done
 
 if [ "$all_required_valid" = false ]; then
-    print_error "❌ Some required variables are missing. Please configure them in .env"
+    print_error "❌ Some required variables are missing. Please configure them in .config/local/.env"
     exit 1
 fi
 

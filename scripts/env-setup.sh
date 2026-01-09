@@ -187,10 +187,10 @@ configure_env() {
     print_status "Configuring environment variables..."
     
     # Create .env from example if not exists
-    if [ ! -f ".env" ]; then
-        if [ -f ".env.example" ]; then
+    if [ ! -f ".config/local/.env" ]; then
+        if [ -f ".config/local/.env.example" ]; then
             print_status "Creating .env from example..."
-            cp .env.example .env
+            cp .config/local/.env.example .config/local/.env
             print_success ".env file created"
         else
             print_error ".env.example not found"
