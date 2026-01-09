@@ -35,13 +35,6 @@ type VideoChunk struct {
 	ChunkHash  string
 }
 
-type VideoChunk struct {
-	VideoID    string `gorm:"primaryKey"`
-	ChunkIndex int    `gorm:"primaryKey"`
-	ChunkData  []byte `gorm:"type:BLOB"`
-	ChunkHash  string
-}
-
 type VideoStorage interface {
 	StoreVideo(ctx context.Context, userID, title, prompt string, videoData []byte, retentionHours int) (*VideoMetadata, error)
 	GetVideo(ctx context.Context, videoID string) ([]byte, error)
@@ -88,33 +81,36 @@ func (s *DatabaseVideoStorage) StoreVideo(ctx context.Context, userID, title, pr
 	chunks := s.chunkVideo(videoData)
 	metadata.ChunkCount = len(chunks)
 
-	tx := s.db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
 
-	if err := tx.Create(&metadata).Error; err != nil {
-		tx.Rollback()
+	// Insert metadata
+	_, err = tx.Exec(`
+		INSERT INTO videos (id, user_id, title, description, original_prompt, video_format, file_size_bytes, chunk_count, created_at, expires_at, processing_status, download_token, retention_hours)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		metadata.ID, metadata.UserID, metadata.Title, metadata.Description, metadata.OriginalPrompt,
+		metadata.VideoFormat, metadata.FileSizeBytes, metadata.ChunkCount, metadata.CreatedAt, metadata.ExpiresAt,
+		metadata.ProcessingStatus, metadata.DownloadToken, metadata.RetentionHours)
+	if err != nil {
 		return nil, err
 	}
 
+	// Insert chunks
 	for i, chunk := range chunks {
 		chunkHash := hashChunk(chunk)
-		chunkRecord := VideoChunk{
-			VideoID:    videoID,
-			ChunkIndex: i,
-			ChunkData:  chunk,
-			ChunkHash:  chunkHash,
-		}
-		if err := tx.Create(&chunkRecord).Error; err != nil {
-			tx.Rollback()
+		_, err = tx.Exec(`
+			INSERT INTO video_chunks (video_id, chunk_index, chunk_data, chunk_hash)
+			VALUES (?, ?, ?, ?)`,
+			videoID, i, chunk, chunkHash)
+		if err != nil {
 			return nil, err
 		}
 	}
 
-	if err := tx.Commit().Error; err != nil {
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 
@@ -122,19 +118,23 @@ func (s *DatabaseVideoStorage) StoreVideo(ctx context.Context, userID, title, pr
 }
 
 func (s *DatabaseVideoStorage) GetVideo(ctx context.Context, videoID string) ([]byte, error) {
-	var chunks []VideoChunk
-	if err := s.db.Where("video_id = ?", videoID).Order("chunk_index").Find(&chunks).Error; err != nil {
+	rows, err := s.db.Query("SELECT chunk_data FROM video_chunks WHERE video_id = ? ORDER BY chunk_index", videoID)
+	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 
-	if len(chunks) == 0 {
-		return nil, fmt.Errorf("video not found")
+	var videoData []byte
+	for rows.Next() {
+		var chunkData []byte
+		if err := rows.Scan(&chunkData); err != nil {
+			return nil, err
+		}
+		videoData = append(videoData, chunkData...)
 	}
 
-	// Reassemble chunks
-	var videoData []byte
-	for _, chunk := range chunks {
-		videoData = append(videoData, chunk.ChunkData...)
+	if len(videoData) == 0 {
+		return nil, fmt.Errorf("video not found")
 	}
 
 	return videoData, nil
@@ -148,38 +148,66 @@ func (s *DatabaseVideoStorage) GetVideoStream(ctx context.Context, videoID strin
 }
 
 func (s *DatabaseVideoStorage) GetUserVideos(ctx context.Context, userID string, limit, offset int) ([]VideoMetadata, error) {
-	var videos []VideoMetadata
-	query := s.db.Where("user_id = ?", userID).Order("created_at DESC")
+	query := "SELECT id, user_id, title, description, original_prompt, video_format, file_size_bytes, chunk_count, created_at, expires_at, processing_status, error_message, download_token, retention_hours FROM videos WHERE user_id = ? ORDER BY created_at DESC"
+	args := []interface{}{userID}
 
 	if limit > 0 {
-		query = query.Limit(limit)
+		query += " LIMIT ?"
+		args = append(args, limit)
 	}
 	if offset > 0 {
-		query = query.Offset(offset)
+		query += " OFFSET ?"
+		args = append(args, offset)
 	}
 
-	if err := query.Find(&videos).Error; err != nil {
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
 		return nil, err
+	}
+	defer rows.Close()
+
+	var videos []VideoMetadata
+	for rows.Next() {
+		var v VideoMetadata
+		err := rows.Scan(&v.ID, &v.UserID, &v.Title, &v.Description, &v.OriginalPrompt, &v.VideoFormat,
+			&v.FileSizeBytes, &v.ChunkCount, &v.CreatedAt, &v.ExpiresAt, &v.ProcessingStatus, &v.ErrorMessage,
+			&v.DownloadToken, &v.RetentionHours)
+		if err != nil {
+			return nil, err
+		}
+		videos = append(videos, v)
 	}
 
 	return videos, nil
 }
 
 func (s *DatabaseVideoStorage) DeleteVideo(ctx context.Context, videoID string) error {
-	return s.db.Where("id = ?", videoID).Delete(&VideoMetadata{}).Error
+	// Delete chunks first
+	_, err := s.db.Exec("DELETE FROM video_chunks WHERE video_id = ?", videoID)
+	if err != nil {
+		return err
+	}
+	// Delete metadata
+	_, err = s.db.Exec("DELETE FROM videos WHERE id = ?", videoID)
+	return err
 }
 
 func (s *DatabaseVideoStorage) CleanupExpired(ctx context.Context) (int, error) {
-	result := s.db.Where("expires_at < ?", time.Now()).Delete(&VideoMetadata{})
-	return int(result.RowsAffected), result.Error
+	result, err := s.db.Exec("DELETE FROM videos WHERE expires_at < ?", time.Now())
+	if err != nil {
+		return 0, err
+	}
+	rowsAffected, err := result.RowsAffected()
+	return int(rowsAffected), err
 }
 
 func (s *DatabaseVideoStorage) ValidateToken(ctx context.Context, token string) (string, error) {
-	var video VideoMetadata
-	if err := s.db.Where("download_token = ? AND expires_at > ?", token, time.Now()).First(&video).Error; err != nil {
+	var videoID string
+	err := s.db.QueryRow("SELECT id FROM videos WHERE download_token = ? AND expires_at > ?", token, time.Now()).Scan(&videoID)
+	if err != nil {
 		return "", err
 	}
-	return video.ID, nil
+	return videoID, nil
 }
 
 func (s *DatabaseVideoStorage) chunkVideo(data []byte) [][]byte {
@@ -204,8 +232,19 @@ type videoReader struct {
 func (r *videoReader) Read(p []byte) (n int, err error) {
 	if r.chunks == nil {
 		// Load chunks on first read
-		if err := r.storage.db.Where("video_id = ?", r.videoID).Order("chunk_index").Find(&r.chunks).Error; err != nil {
+		rows, err := r.storage.db.Query("SELECT chunk_data FROM video_chunks WHERE video_id = ? ORDER BY chunk_index", r.videoID)
+		if err != nil {
 			return 0, err
+		}
+		defer rows.Close()
+
+		r.chunks = []VideoChunk{}
+		for rows.Next() {
+			var chunkData []byte
+			if err := rows.Scan(&chunkData); err != nil {
+				return 0, err
+			}
+			r.chunks = append(r.chunks, VideoChunk{ChunkData: chunkData})
 		}
 		if len(r.chunks) == 0 {
 			return 0, io.EOF

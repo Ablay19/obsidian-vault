@@ -47,10 +47,11 @@ type Dashboard struct {
 	wsManager       *ws.Manager
 	rateLimiter     *security.RateLimiter
 	whatsappHandler *whatsapp.Handler
+	videoHandler    *VideoHandler
 }
 
 // NewDashboard creates a new Dashboard instance.
-func NewDashboard(aiService *ai.AIService, rcm *state.RuntimeConfigManager, db *sql.DB, authService *auth.AuthService, wsManager *ws.Manager) *Dashboard {
+func NewDashboard(aiService *ai.AIService, rcm *state.RuntimeConfigManager, db *sql.DB, authService *auth.AuthService, wsManager *ws.Manager, videoStorage database.VideoStorage) *Dashboard {
 	redisAddr := os.Getenv("REDIS_ADDR")
 	if redisAddr == "" {
 		redisAddr = "localhost:6379"
@@ -91,6 +92,7 @@ func NewDashboard(aiService *ai.AIService, rcm *state.RuntimeConfigManager, db *
 		wsManager:       wsManager,
 		rateLimiter:     security.NewRedisRateLimiter(redisAddr, 100, time.Minute), // 100 req/min default
 		whatsappHandler: whatsappHandler,
+		videoHandler:    NewVideoHandler(videoStorage, aiService),
 	}
 }
 
@@ -149,6 +151,14 @@ func (d *Dashboard) RegisterRoutes(router *gin.Engine) {
 		{
 			envRoutes.GET("/", d.handleGetEnvironmentState)
 			envRoutes.POST("/set", d.handleSetEnvironmentState)
+		}
+
+		videoRoutes := api.Group("/videos")
+		videoRoutes.Use(d.authService.GinMiddleware())
+		{
+			videoRoutes.POST("/generate", d.videoHandler.GenerateVideo)
+			videoRoutes.GET("/download/:token", d.videoHandler.DownloadVideo)
+			videoRoutes.GET("", d.videoHandler.ListVideos)
 		}
 
 		api.POST("/qa", d.authService.GinMiddleware(), d.handleQA)

@@ -190,14 +190,16 @@ func initRuntimeConfigManager(db *sql.DB, logger *AppLogger) *state.RuntimeConfi
 	return rcm
 }
 
-func initServices(ctx context.Context, db *sql.DB, rcm *state.RuntimeConfigManager, logger *AppLogger) (*ai.AIService, *auth.AuthService, *ws.Manager) {
+func initServices(ctx context.Context, db *sql.DB, rcm *state.RuntimeConfigManager, logger *AppLogger) (*ai.AIService, *auth.AuthService, *ws.Manager, database.VideoStorage) {
 	aiService := ai.NewAIService(ctx, rcm, config.AppConfig.ProviderProfiles, config.AppConfig.SwitchingRules)
 	authService := auth.NewAuthService(config.AppConfig)
 	wsManager := ws.NewManager()
 	go wsManager.Start()
 	database.RunMigrations(db)
 	logger.Info("Database migrations completed")
-	return aiService, authService, wsManager
+
+	videoStorage := database.NewVideoStorage(db)
+	return aiService, authService, wsManager, videoStorage
 }
 
 func setupRouter(logger *AppLogger) *gin.Engine {
@@ -242,8 +244,8 @@ func setupRouter(logger *AppLogger) *gin.Engine {
 	return router
 }
 
-func initDashboard(router *gin.Engine, aiService *ai.AIService, rcm *state.RuntimeConfigManager, db *sql.DB, authService *auth.AuthService, wsManager *ws.Manager, logger *AppLogger) {
-	dashboardService := dashboard.NewDashboard(aiService, rcm, db, authService, wsManager)
+func initDashboard(router *gin.Engine, aiService *ai.AIService, rcm *state.RuntimeConfigManager, db *sql.DB, authService *auth.AuthService, wsManager *ws.Manager, videoStorage database.VideoStorage, logger *AppLogger) {
+	dashboardService := dashboard.NewDashboard(aiService, rcm, db, authService, wsManager, videoStorage)
 	dashboardService.RegisterRoutes(router)
 	ssh.RegisterRoutes(router, db, logger.logger)
 }
@@ -277,15 +279,14 @@ func main() {
 	logger.Info("Starting Obsidian Bot API Server")
 
 	db := initDatabase(logger)
-	defer db.Close()
 
 	rcm := initRuntimeConfigManager(db, logger)
 
-	aiService, authService, wsManager := initServices(context.Background(), db, rcm, logger)
+	aiService, authService, wsManager, videoStorage := initServices(context.Background(), db, rcm, logger)
 
 	router := setupRouter(logger)
 
-	initDashboard(router, aiService, rcm, db, authService, wsManager, logger)
+	initDashboard(router, aiService, rcm, db, authService, wsManager, videoStorage, logger)
 
 	port := config.AppConfig.Dashboard.Port
 	if port == 0 {
