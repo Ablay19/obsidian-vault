@@ -36,6 +36,8 @@ OPTIONAL_VARS=(
     "GROQ_API_KEY:Groq API key"
     "HUGGINGFACE_API_KEY:HuggingFace API key"
     "OPENROUTER_API_KEY:OpenRouter API key"
+    "REPLICATE_API_TOKEN:Replicate API token"
+    "TOGETHER_API_KEY:Together AI API key"
     "TURSO_DATABASE_URL:Turso database connection URL"
     "GOOGLE_CLIENT_ID:Google OAuth client ID"
     "GOOGLE_CLIENT_SECRET:Google OAuth client secret"
