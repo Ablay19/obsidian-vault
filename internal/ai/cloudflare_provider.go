@@ -29,7 +29,7 @@ type CloudflareResponse struct {
 // NewCloudflareProvider creates a new Cloudflare Worker provider
 func NewCloudflareProvider(workerURL string) *CloudflareProvider {
 	return &CloudflareProvider{
-		endpoint: workerURL + "/ai",
+		endpoint: workerURL + "/ai/proxy/cloudflare",
 		client: &http.Client{
 			Timeout: 60 * time.Second,
 		},
@@ -42,18 +42,11 @@ func (p *CloudflareProvider) GenerateCompletion(ctx context.Context, req *Reques
 	// Combine system and user prompts
 	fullPrompt := req.SystemPrompt + "\n" + req.UserPrompt
 
-	// Prepare request
-	cfReq := CloudflareRequest{
-		Prompt: fullPrompt,
-	}
-
-	reqBody, err := json.Marshal(cfReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
+	// Prepare request - send as raw text
+	reqBody := bytes.NewBufferString(fullPrompt)
 
 	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.endpoint, bytes.NewBuffer(reqBody))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.endpoint, reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
