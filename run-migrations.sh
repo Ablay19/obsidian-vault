@@ -1,8 +1,6 @@
 #!/bin/bash
 
 echo "🔧 Running database migrations..."
-
-# Load environment variables
 if [ -f ".env" ]; then
     export $(grep -v '^#' .env | xargs)
     echo "✅ Environment variables loaded from .env"
