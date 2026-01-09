@@ -1,0 +1,48 @@
+providers:
+  gemini:
+    model: gemini-pro
+  groq:
+    model: llama2-70b-4096
+  huggingface:
+    api_key: ""
+    model: ""
+  openrouter:
+    api_key: ""
+    model: ""
+
+provider_profiles: {}
+
+switching_rules:
+  default_provider: gemini
+  latency_target: 5000
+  throughput_target: 100
+  accuracy_threshold: 0.8
+  retry_count: 3
+  retry_delay_ms: 1000
+  on_error: fallback
+
+whatsapp:
+  access_token: ""
+  verify_token: ""
+  app_secret: ""
+
+classification:
+  patterns: {}
+
+language_detection:
+  french_words: []
+
+dashboard:
+  port: 8080
+
+auth:
+  google_client_id: ""
+  google_client_secret: ""
+  google_redirect_url: ""
+  session_secret: ""
+
+git:
+  user_name: ""
+  user_email: ""
+  vault_path: ""
+  remote_url: ""

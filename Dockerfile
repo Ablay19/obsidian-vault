@@ -23,7 +23,7 @@ RUN go run github.com/a-h/templ/cmd/templ@latest generate
 # Build the application
 # Use ldflags to embed version information
 ARG APP_VERSION=v0.0.0-dev
-RUN CGO_ENABLED=0 go build -ldflags="-w -s -X main.version=${APP_VERSION}" -o /app/main ./cmd/bot/main.go
+RUN CGO_ENABLED=0 go build -ldflags="-w -s -X main.version=${APP_VERSION}" -o /app/main ./cmd/bot/
 
 
 # --- Final Stage ---
@@ -48,7 +48,6 @@ WORKDIR /app
 COPY --from=builder /app/main /app/main
 
 # Copy necessary assets
-COPY .config/local/config.yml .
 COPY internal/dashboard/static/ ./internal/dashboard/static
 
 # Create directories for data and ensure correct permissions
