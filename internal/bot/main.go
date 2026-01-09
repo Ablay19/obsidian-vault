@@ -142,16 +142,16 @@ func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.Runt
 			continue
 		}
 		telemetry.ZapLogger.Sugar().Debugw("Received update", "update_id", update.UpdateID)
-		go handleUpdate(context.Background(), bot, &update, token, commandHandlerManager, fileHandler) // Pass context
+		go handleUpdate(context.Background(), bot, &update, token, commandHandlerManager, fileHandler, ais.(*ai.AIService)) // Pass context
 	}
 	return nil
 }
 
 // handleUpdate processes incoming Telegram updates.
-func handleUpdate(ctx context.Context, bot Bot, update *tgbotapi.Update, token string, commandHandlerManager *CommandHandlerManager, fileHandler *FileHandler) {
+func handleUpdate(ctx context.Context, bot Bot, update *tgbotapi.Update, token string, commandHandlerManager *CommandHandlerManager, fileHandler *FileHandler, aiService *ai.AIService) {
 	if update.CallbackQuery != nil {
 		telemetry.ZapLogger.Sugar().Infow("Handling callback query", "chat_id", update.CallbackQuery.Message.Chat.ID, "data", update.CallbackQuery.Data)
-		handleCallbackQuery(bot, update.CallbackQuery, commandHandlerManager.GetCommandRouter())
+		handleCallbackQuery(ctx, bot, update.CallbackQuery, commandHandlerManager, aiService)
 		return
 	}
 
@@ -204,7 +204,7 @@ func handleUpdate(ctx context.Context, bot Bot, update *tgbotapi.Update, token s
 	}
 }
 
-func handleCallbackQuery(bot Bot, callback *tgbotapi.CallbackQuery, commandRouter map[string]CommandHandler) {
+func handleCallbackQuery(ctx context.Context, bot Bot, callback *tgbotapi.CallbackQuery, commandHandlerManager *CommandHandlerManager, aiService *ai.AIService) {
 	// Always answer the callback query to stop the loading spinner
 	defer bot.Request(tgbotapi.NewCallback(callback.ID, ""))
 
@@ -213,10 +213,8 @@ func handleCallbackQuery(bot Bot, callback *tgbotapi.CallbackQuery, commandRoute
 		msg := callback.Message
 		msg.From = callback.From // Crucial: preserve the user who clicked
 		msg.Text = "/setprovider"
-		if handler, ok := commandHandlerManager.cmdCtx != nil {
 		if handler, ok := commandHandlerManager.commandRouter["setprovider"]; ok {
 			handler.Handle(ctx, msg, getUserState(msg.From.ID), commandHandlerManager.cmdCtx)
-		}
 		}
 		return
 	}
@@ -231,7 +229,6 @@ func handleCallbackQuery(bot Bot, callback *tgbotapi.CallbackQuery, commandRoute
 			// Remove the inline keyboard to prevent further clicks
 			bot.Request(tgbotapi.NewEditMessageReplyMarkup(callback.Message.Chat.ID, callback.Message.MessageID, tgbotapi.InlineKeyboardMarkup{}))
 		}
-	}
 	}
 }
 
