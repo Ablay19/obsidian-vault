@@ -6,25 +6,37 @@ A comprehensive automation platform that combines AI, communication, and product
 
 ## 🚀 Quick Start
 
-### Development
+### Environment Setup
 ```bash
-# Quick setup for local development
-./scripts/run.sh quick-start
+# Validate environment variables
+./scripts/validate-env.sh
 
-# Development environment
-./scripts/dev/dev.sh
-
-# Start local services
-./scripts/services/start-services
+# Set up environment interactively
+./scripts/setup/env-setup.sh
 ```
 
-### Production
+### Development
 ```bash
-# Deploy to production
-./scripts/deployment/deploy-production.sh
+# Quick start with Docker
+docker-compose up -d
 
-# Monitor all services
-./scripts/monitoring/health-check.sh
+# Manual testing checklist
+./scripts/test-manual.sh
+
+# View logs
+docker-compose logs -f
+```
+
+### Production Deployment
+```bash
+# Deploy to staging
+./scripts/deploy.sh staging deploy
+
+# Deploy to production
+./scripts/deploy.sh production deploy
+
+# Rollback if needed
+./scripts/deploy.sh production rollback
 ```
 
 ## 📁 Project Overview
@@ -88,20 +100,23 @@ Obsidian Vault is an advanced automation platform that provides:
 ## 🚀 Quick Commands
 
 ```bash
-# Start all services
-make start-all
+# Environment validation
+./scripts/validate-env.sh
 
-# Start development
-make dev
+# Start all services with Docker
+docker-compose up -d
 
-# Run tests
-make test-all
+# View service status
+docker-compose ps
+
+# View logs
+docker-compose logs -f
+
+# Stop all services
+docker-compose down
 
 # Deploy to production
-make deploy-production
-
-# Monitor system
-make health-check
+./scripts/deploy.sh production deploy
 ```
 
 ## 📚 Documentation
@@ -130,14 +145,17 @@ See `.env.example` for required configuration
 
 ### Commands
 ```bash
-# Get help for any script
-./scripts/run.sh help
+# Validate environment
+./scripts/validate-env.sh
 
-# List available commands
-./scripts/run.sh --help
+# Deploy application
+./scripts/deploy.sh [staging|production] [build|deploy|rollback]
 
-# Get file reference guide
-cat FILE_REFERENCE.md
+# Manual testing guide
+./scripts/test-manual.sh
+
+# Environment setup
+./scripts/setup/env-setup.sh
 ```
 
 ### Support
@@ -149,17 +167,17 @@ cat FILE_REFERENCE.md
 
 ---
 
-**Version**: 2.0  
-**Last Updated**: January 2026  
+**Version**: 2.1 (Refactored)
+**Last Updated**: January 2026
 **Maintainer**: Obsidian Vault Team
 
 ## 🎯 Ready to Start?
 
 Choose your journey:
-- 🚀 **Quick Development**: `make dev`
-- 📚 **Production Deployment**: `make deploy-production`
-- 🧪 **API Development**: `make api`
+- 🔧 **Environment Setup**: `./scripts/setup/env-setup.sh`
+- 🚀 **Quick Development**: `docker-compose up -d`
+- 📦 **Production Deployment**: `./scripts/deploy.sh production deploy`
+- 🧪 **Manual Testing**: `./scripts/test-manual.sh`
 - 🤖 **AI Agent Development**: See [AGENTS.md](AGENTS.md)
-- 📚 **Full System**: `make start-all`
 
 **Obsidian Vault** - Where knowledge meets automation. 🏦
