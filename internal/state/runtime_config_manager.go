@@ -280,8 +280,6 @@ func (rcm *RuntimeConfigManager) initializeFromEnv() {
 			}
 		}
 	}
-
-	// TODO: Add other providers (ONNX if re-enabled)
 }
 
 // GetConfig provides a read-only copy of the current RuntimeConfig.
