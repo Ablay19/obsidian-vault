@@ -286,7 +286,11 @@ func main() {
 	aiService, authService, wsManager, videoStorage := initServices(context.Background(), db, rcm, logger)
 
 	// Initialize vector store for RAG
-	vectorStore := vectorstore.NewMemoryVectorStore()
+	vectorStore, err := vectorstore.NewSQLiteVectorStore(db)
+	if err != nil {
+		logger.Error("Failed to initialize vector store", zap.Error(err))
+		return
+	}
 
 	router := setupRouter(logger)
 
