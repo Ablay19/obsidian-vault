@@ -2,17 +2,20 @@ package bot
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/config"
 	"obsidian-automation/internal/pipeline"
-	"os"
 	"os/exec"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/ledongthuc/pdf"
+	"github.com/tmc/langchaingo/chains"
+	"github.com/tmc/langchaingo/llms"
+	"github.com/tmc/langchaingo/prompts"
 	"go.uber.org/zap"
 )
 
@@ -82,6 +85,51 @@ type ProcessedContent struct {
 	Topics     []string
 	Questions  []string
 	AIProvider string
+}
+
+// AIServiceLLM wraps the aiService to implement LangChain's LLM interface
+type AIServiceLLM struct {
+	aiService ai.AIServiceInterface
+	modelName string
+}
+
+func (l *AIServiceLLM) Call(ctx context.Context, prompt string, options ...llms.CallOption) (string, error) {
+	// Use the aiService to generate content
+	req := &ai.RequestModel{
+		UserPrompt:  prompt,
+		Temperature: 0.5,
+	}
+	var response strings.Builder
+	err := l.aiService.Chat(ctx, req, func(chunk string) {
+		response.WriteString(chunk)
+	})
+	if err != nil {
+		return "", err
+	}
+	return response.String(), nil
+}
+
+func (l *AIServiceLLM) GenerateContent(ctx context.Context, messages []llms.MessageContent, options ...llms.CallOption) (*llms.ContentResponse, error) {
+	// Simplified implementation for LangChain compatibility
+	prompt := ""
+	for _, msg := range messages {
+		for _, part := range msg.Parts {
+			if textPart, ok := part.(llms.TextContent); ok {
+				prompt += textPart.Text
+			}
+		}
+	}
+	content, err := l.Call(ctx, prompt, options...)
+	if err != nil {
+		return nil, err
+	}
+	return &llms.ContentResponse{
+		Choices: []*llms.ContentChoice{
+			{
+				Content: content,
+			},
+		},
+	}, nil
 }
 
 var execCommand = exec.Command
@@ -223,11 +271,24 @@ func processFile(filePath, fileType string) ProcessedContent {
 	return classifyContent(text)
 }
 
+// createLangChainSummaryChain creates a LangChain chain for summarization
+func createLangChainSummaryChain(aiService ai.AIServiceInterface) chains.Chain {
+	llm := &AIServiceLLM{aiService: aiService, modelName: aiService.GetActiveProviderName()}
+	prompt := prompts.NewPromptTemplate("Summarize the following text in {{.language}}. If the text contains any questions, answer them as part of the summary. Text:\n\n{{.text}}", []string{"language", "text"})
+	return chains.NewLLMChain(llm, prompt)
+}
+
+// createLangChainAnalysisChain creates a LangChain chain for JSON analysis
+func createLangChainAnalysisChain(aiService ai.AIServiceInterface) chains.Chain {
+	llm := &AIServiceLLM{aiService: aiService, modelName: aiService.GetActiveProviderName()}
+	prompt := prompts.NewPromptTemplate("Analyze the following text and provide a JSON response with 'category', 'topics' (array), and 'questions' (array). Text:\n\n{{.text}}", []string{"text"})
+	return chains.NewLLMChain(llm, prompt)
+}
+
 func processFileWithAI(ctx context.Context, filePath, fileType string, aiService ai.AIServiceInterface, streamCallback func(string), language string, updateStatus func(string), additionalContext string) ProcessedContent {
 	// Do basic OCR/extraction first
 	var text string
 	var err error
-	var fileData []byte
 
 	zap.S().Info("Processing file with AI", "type", fileType, "path", filePath)
 	updateStatus("🔍 Extracting text...")
@@ -236,13 +297,7 @@ func processFileWithAI(ctx context.Context, filePath, fileType string, aiService
 		text, err = extractTextFromImage(filePath)
 		if err != nil {
 			zap.S().Error("Error extracting text from image", "error", err)
-			// Continue with image data only if text extraction fails
-		}
-		fileData, err = os.ReadFile(filePath)
-		if err != nil {
-			zap.S().Error("Error reading image file", "error", err)
-			updateStatus("⚠️ Could not read image file.")
-			return ProcessedContent{Category: "unprocessed", Tags: []string{"error", "read-error"}}
+			// Continue with text only
 		}
 	} else if fileType == "pdf" {
 		text, err = extractTextFromPDF(filePath)
@@ -264,65 +319,84 @@ func processFileWithAI(ctx context.Context, filePath, fileType string, aiService
 	}
 
 	if aiService != nil {
-		zap.S().Info("Using AI for enhancement...")
-		// Use result.AIProvider = aiService.GetActiveProviderName()
+		zap.S().Info("Using LangChain for enhancement...")
 		result.AIProvider = aiService.GetActiveProviderName()
-		updateStatus("🤖 Generating summary...")
+		updateStatus("🤖 Generating summary with LangChain...")
 
-		// 1. Get the summary (streaming)
-		var summaryPrompt string
-		if len(fileData) > 0 {
-			summaryPrompt = fmt.Sprintf("Analyze the attached image and summarize its content in %s. If there is text in the image, use it as context. If there are any questions, answer them as part of the summary. Extracted text (if any):\n\n%s\n\nAdditional User Context:\n%s",
-				language,
-				text,
-				additionalContext,
-			)
-		} else {
-			summaryPrompt = fmt.Sprintf("Summarize the following text in %s. If the text contains any questions, answer them as part of the summary. Text:\n\n%s\n\nAdditional User Context:\n%s",
-				language,
-				text,
-				additionalContext,
-			)
+		// Create LangChain summary chain
+		summaryChain := createLangChainSummaryChain(aiService)
+
+		// Prepare inputs for the chain
+		inputs := map[string]any{
+			"language": language,
+			"text":     text,
+		}
+		if additionalContext != "" {
+			inputs["text"] = text + "\n\nAdditional User Context:\n" + additionalContext
 		}
 
-		// Prepare Request Model
-		chatReq := &ai.RequestModel{
-			UserPrompt:  summaryPrompt,
-			ImageData:   fileData,
-			Temperature: 0.5,
-		}
-
-		var fullSummaryBuilder strings.Builder
-		streamErr := aiService.Chat(ctx, chatReq, func(chunk string) {
-			fullSummaryBuilder.WriteString(chunk)
-			if streamCallback != nil {
-				streamCallback(chunk)
-			}
-		})
-
-		if streamErr != nil {
-			zap.S().Error("Error from AI summary service", "error", streamErr)
-			updateStatus("⚠️ AI summary failed. Falling back to basic classification.")
+		// Run the chain
+		summaryResult, err := chains.Call(ctx, summaryChain, inputs)
+		if err != nil {
+			zap.S().Error("Error from LangChain summary", "error", err)
+			updateStatus("⚠️ LangChain summary failed. Falling back to basic classification.")
 			return classifyContent(text)
 		}
-		result.Summary = fullSummaryBuilder.String()
 
-		updateStatus("📊 Generating topics and questions...")
+		// Extract summary from result
+		if textResult, ok := summaryResult["text"].(string); ok {
+			result.Summary = textResult
+			// For streaming, we could split the result, but for now, send as one chunk
+			if streamCallback != nil {
+				streamCallback(result.Summary)
+			}
+		} else {
+			zap.S().Warn("Unexpected summary result format", "result", summaryResult)
+			result.Summary = "Summary generated but format unexpected"
+		}
 
-		// 2. Get the structured data
-		analysisResult, err := aiService.AnalyzeTextWithParams(ctx, text, language, len(text), 1, 0.01)
+		updateStatus("📊 Generating topics and questions with LangChain...")
+
+		// Create LangChain analysis chain
+		analysisChain := createLangChainAnalysisChain(aiService)
+
+		// Run the analysis chain
+		analysisInputs := map[string]any{
+			"text": text,
+		}
+		analysisResult, err := chains.Call(ctx, analysisChain, analysisInputs)
 		if err != nil {
-			zap.S().Error("Error from AI analysis service", "error", err)
-			updateStatus("⚠️ AI analysis failed. Using basic classification.")
+			zap.S().Error("Error from LangChain analysis", "error", err)
+			updateStatus("⚠️ LangChain analysis failed. Using basic classification.")
 			basicResult := classifyContent(text)
 			result.Category = basicResult.Category
 			result.Tags = basicResult.Tags
 		} else {
-			result.Category = analysisResult.Category
-			result.Topics = analysisResult.Topics
-			result.Questions = analysisResult.Questions
-			result.Tags = append([]string{result.Category}, result.Topics...)
-			result.Confidence = 0.95
+			// Parse the JSON result
+			if jsonStr, ok := analysisResult["text"].(string); ok {
+				var aiResult struct {
+					Category  string   `json:"category"`
+					Topics    []string `json:"topics"`
+					Questions []string `json:"questions"`
+				}
+				if parseErr := json.Unmarshal([]byte(jsonStr), &aiResult); parseErr != nil {
+					zap.S().Error("Error parsing LangChain analysis JSON", "error", parseErr)
+					basicResult := classifyContent(text)
+					result.Category = basicResult.Category
+					result.Tags = basicResult.Tags
+				} else {
+					result.Category = aiResult.Category
+					result.Topics = aiResult.Topics
+					result.Questions = aiResult.Questions
+					result.Tags = append([]string{result.Category}, result.Topics...)
+					result.Confidence = 0.95
+				}
+			} else {
+				zap.S().Warn("Unexpected analysis result format", "result", analysisResult)
+				basicResult := classifyContent(text)
+				result.Category = basicResult.Category
+				result.Tags = basicResult.Tags
+			}
 		}
 
 	} else {

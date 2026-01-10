@@ -113,7 +113,7 @@ func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.Runt
 
 	// Initialize Command Registry
 	registry := NewCommandRegistry()
-	SetupCommands(registry)
+	// SetupCommands(registry) // TODO: Implement command setup
 
 	// Initialize State Machine and Command Handler Manager
 	messageProcessor := NewMessageProcessor(aiService)
