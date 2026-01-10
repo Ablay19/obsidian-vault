@@ -24,6 +24,7 @@ import (
 	"obsidian-automation/internal/ssh"
 	"obsidian-automation/internal/state"
 	"obsidian-automation/internal/telemetry"
+	"obsidian-automation/internal/vectorstore"
 )
 
 // AppLogger wraps zap logger with color support
@@ -260,10 +261,10 @@ func startServer(server *http.Server, logger *AppLogger) {
 	}()
 }
 
-func startBot(db *sql.DB, aiService *ai.AIService, rcm *state.RuntimeConfigManager, wsManager *ws.Manager, logger *AppLogger) {
+func startBot(db *sql.DB, aiService *ai.AIService, rcm *state.RuntimeConfigManager, wsManager *ws.Manager, vectorStore vectorstore.VectorStore, logger *AppLogger) {
 	go func() {
 		logger.Info("Starting Telegram bot...")
-		if err := bot.Run(db, aiService, rcm, wsManager); err != nil {
+		if err := bot.Run(db, aiService, rcm, wsManager, vectorStore); err != nil {
 			logger.Error("Failed to start Telegram bot", zap.Error(err))
 		}
 	}()
@@ -284,6 +285,9 @@ func main() {
 
 	aiService, authService, wsManager, videoStorage := initServices(context.Background(), db, rcm, logger)
 
+	// Initialize vector store for RAG
+	vectorStore := vectorstore.NewMemoryVectorStore()
+
 	router := setupRouter(logger)
 
 	initDashboard(router, aiService, rcm, db, authService, wsManager, videoStorage, logger)
@@ -302,7 +306,7 @@ func main() {
 	}
 
 	startServer(server, logger)
-	startBot(db, aiService, rcm, wsManager, logger)
+	startBot(db, aiService, rcm, wsManager, vectorStore, logger)
 
 	setupGracefulShutdown(server, logger)
 

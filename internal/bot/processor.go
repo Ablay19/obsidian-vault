@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/config"
 	"obsidian-automation/internal/pipeline"
@@ -17,7 +18,11 @@ import (
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/prompts"
 	"go.uber.org/zap"
+	"obsidian-automation/internal/vectorstore"
 )
+
+// Global vector store for RAG functionality
+var globalVectorStore vectorstore.VectorStore
 
 // Processor interface for the processing pipeline.
 type Processor interface {
@@ -25,7 +30,8 @@ type Processor interface {
 }
 
 type botProcessor struct {
-	aiService ai.AIServiceInterface
+	aiService   ai.AIServiceInterface
+	vectorStore vectorstore.VectorStore
 }
 
 // NewBotProcessor creates a new botProcessor instance.
@@ -405,5 +411,61 @@ func processFileWithAI(ctx context.Context, filePath, fileType string, aiService
 		result = classifyContent(text)
 	}
 
+	// Store document in vector store for RAG
+	if globalVectorStore != nil {
+		docID := fmt.Sprintf("%s_%s", fileType, filePath)
+		embedding := generateSimpleEmbedding(result.Summary + " " + result.Text)
+
+		doc := vectorstore.Document{
+			ID:      docID,
+			Content: result.Summary,
+			Metadata: map[string]interface{}{
+				"file_path":   filePath,
+				"file_type":   fileType,
+				"category":    result.Category,
+				"language":    result.Language,
+				"ai_provider": result.AIProvider,
+			},
+			Vector: embedding,
+		}
+
+		err := globalVectorStore.AddDocuments(ctx, []vectorstore.Document{doc})
+		if err != nil {
+			zap.S().Error("Failed to store document in vector store", "error", err)
+		} else {
+			zap.S().Info("Document stored in vector store", "id", docID)
+		}
+	}
+
 	return result
+}
+
+// generateSimpleEmbedding creates a basic embedding vector from text
+// TODO: Replace with proper embedding model (OpenAI, Sentence Transformers, etc.)
+func generateSimpleEmbedding(text string) []float32 {
+	// Simple hash-based embedding for demonstration
+	// In production, use proper embedding models
+	const embeddingDim = 384 // Common embedding dimension
+	embedding := make([]float32, embeddingDim)
+
+	// Simple hash function to generate pseudo-random values
+	for i, char := range text {
+		hash := int(char) * (i + 1)
+		idx := hash % embeddingDim
+		embedding[idx] += float32(hash%100) / 100.0
+	}
+
+	// Normalize the embedding
+	var norm float32
+	for _, v := range embedding {
+		norm += v * v
+	}
+	norm = float32(math.Sqrt(float64(norm)))
+	if norm > 0 {
+		for i := range embedding {
+			embedding[i] /= norm
+		}
+	}
+
+	return embedding
 }

@@ -15,6 +15,7 @@ import (
 	"obsidian-automation/internal/state" // Import the new state package
 	"obsidian-automation/internal/status"
 	"obsidian-automation/internal/telemetry"
+	"obsidian-automation/internal/vectorstore"
 	"os"
 	"regexp"
 	"strings"
@@ -60,7 +61,10 @@ func (t *TelegramBot) GetFile(config tgbotapi.FileConfig) (tgbotapi.File, error)
 }
 
 // Run initializes and starts the bot.
-func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.RuntimeConfigManager, wsm *ws.Manager) error {
+func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.RuntimeConfigManager, wsm *ws.Manager, vectorStore vectorstore.VectorStore) error {
+	// Set global vector store for RAG functionality
+	globalVectorStore = vectorStore
+
 	// Check external binary dependencies first
 	if err := ValidateBinaries(); err != nil {
 		telemetry.ZapLogger.Sugar().Errorw("Binary validation failed", "error", err)
