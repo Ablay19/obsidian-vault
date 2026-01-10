@@ -12,6 +12,7 @@ import (
 	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/git"
 	"obsidian-automation/internal/pipeline"
+	"obsidian-automation/internal/rag"
 	"obsidian-automation/internal/state" // Import the new state package
 	"obsidian-automation/internal/status"
 	"obsidian-automation/internal/telemetry"
@@ -30,11 +31,12 @@ var (
 	aiService         ai.AIServiceInterface
 	rcm               *state.RuntimeConfigManager
 	ingestionPipeline *pipeline.Pipeline
-	gitManager        *git.Manager
 	wsManager         *ws.Manager
-	userStates        = make(map[int64]*UserState)
+	globalRAGChain    *rag.RAGChain
 	stateMutex        sync.RWMutex
-	userLocks         sync.Map // Per-user processing lock
+	userStates        = make(map[int64]*UserState)
+	userLocks         sync.Map
+	gitManager        *git.Manager
 )
 
 func getUserState(userID int64) *UserState {
@@ -64,6 +66,16 @@ func (t *TelegramBot) GetFile(config tgbotapi.FileConfig) (tgbotapi.File, error)
 func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.RuntimeConfigManager, wsm *ws.Manager, vectorStore vectorstore.VectorStore) error {
 	// Set global vector store for RAG functionality
 	globalVectorStore = vectorStore
+
+	// Initialize RAG chain
+	retriever := rag.NewVectorRetriever(vectorStore, nil, 5, 0.1) // topK=5, threshold=0.1
+	llm := &rag.AIServiceLLM{AIService: ais, ModelName: ais.GetActiveProviderName()}
+	ragChain, err := rag.NewRAGChain(retriever, llm)
+	if err != nil {
+		telemetry.ZapLogger.Sugar().Errorw("Failed to initialize RAG chain", "error", err)
+	} else {
+		globalRAGChain = ragChain
+	}
 
 	// Check external binary dependencies first
 	if err := ValidateBinaries(); err != nil {
@@ -117,7 +129,7 @@ func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.Runt
 
 	// Initialize Command Registry
 	registry := NewCommandRegistry()
-	// SetupCommands(registry) // TODO: Implement command setup
+	// setupCommands(registry) // TODO: Implement command setup
 
 	// Initialize State Machine and Command Handler Manager
 	messageProcessor := NewMessageProcessor(aiService)

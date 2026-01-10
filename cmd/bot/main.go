@@ -316,3 +316,128 @@ func main() {
 
 	select {}
 }
+
+func setupCommands(registry *CommandRegistry) {
+	// Register command handlers
+	registry.Register("start", &startCommandHandler{}, "Start the bot")
+	registry.Register("help", &helpCommandHandler{}, "Show help message")
+	registry.Register("lang", &langCommandHandler{}, "Set AI language")
+	registry.Register("setprovider", &setProviderCommandHandler{}, "Set AI provider")
+	registry.Register("stats", &statsCommandHandler{}, "Show usage statistics")
+	registry.Register("pid", &pidCommandHandler{}, "Show bot process ID")
+	registry.Register("link", &linkCommandHandler{}, "Link dashboard account")
+	registry.Register("service_status", &serviceStatusCommandHandler{}, "Show service health")
+	registry.Register("modelinfo", &modelInfoCommandHandler{}, "Show AI model information")
+	registry.Register("pause_bot", &pauseBotCommandHandler{}, "Pause the bot")
+	registry.Register("resume_bot", &resumeBotCommandHandler{}, "Resume the bot")
+	registry.Register("rag", &ragCommandHandler{}, "Query documents using RAG")
+}
+
+// Command handler types
+type startCommandHandler struct{}
+type helpCommandHandler struct{}
+type langCommandHandler struct{}
+type setProviderCommandHandler struct{}
+type statsCommandHandler struct{}
+type pidCommandHandler struct{}
+type linkCommandHandler struct{}
+type serviceStatusCommandHandler struct{}
+type modelInfoCommandHandler struct{}
+type pauseBotCommandHandler struct{}
+type resumeBotCommandHandler struct{}
+type ragCommandHandler struct{}
+
+// Implement Handle methods (placeholder implementations)
+func (h *startCommandHandler) Handle(ctx context.Context, message *tgbotapi.Message, state *UserState, cmdCtx *CommandContext) error {
+	_, err := cmdCtx.Bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🤖 Bot is up and running. Use /help to see available commands."))
+	return err
+}
+
+func (h *helpCommandHandler) Handle(ctx context.Context, message *tgbotapi.Message, state *UserState, cmdCtx *CommandContext) error {
+	help := "Available commands:\n" +
+		"/start - Start the bot\n" +
+		"/help - Show this help message\n" +
+		"/lang <language> - Set AI language\n" +
+		"/setprovider <name> - Set AI provider\n" +
+		"/stats - Show usage statistics\n" +
+		"/rag <question> - Query documents using RAG\n" +
+		"/pid - Show bot process id\n" +
+		"/link - Link your Dashboard account\n" +
+		"/service_status - Show service health\n" +
+		"/modelinfo - Show AI model information\n" +
+		"/pause_bot - Pause the bot\n" +
+		"/resume_bot - Resume the bot\n"
+	_, err := cmdCtx.Bot.Send(tgbotapi.NewMessage(message.Chat.ID, help))
+	return err
+}
+
+func (h *ragCommandHandler) Handle(ctx context.Context, message *tgbotapi.Message, state *UserState, cmdCtx *CommandContext) error {
+	args := strings.TrimSpace(message.CommandArguments())
+	if args == "" {
+		_, err := cmdCtx.Bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Usage: /rag <question> - Ask questions using retrieved documents"))
+		return err
+	}
+
+	// Use global RAG chain if available
+	if globalRAGChain != nil {
+		answer, err := globalRAGChain.Query(ctx, args)
+		if err != nil {
+			_, sendErr := cmdCtx.Bot.Send(tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("RAG query failed: %v", err)))
+			return sendErr
+		}
+		_, err = cmdCtx.Bot.Send(tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("🤖 RAG Answer: %s", answer)))
+		return err
+	}
+
+	// Fallback response
+	response := fmt.Sprintf("RAG Query: %s\n\n(This feature is under development. Documents will be retrieved and analyzed to provide context-aware answers.)", args)
+	_, err := cmdCtx.Bot.Send(tgbotapi.NewMessage(message.Chat.ID, response))
+	return err
+}
+
+// Placeholder implementations for other handlers
+func (h *langCommandHandler) Handle(ctx context.Context, message *tgbotapi.Message, state *UserState, cmdCtx *CommandContext) error {
+	_, err := cmdCtx.Bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Language setting not implemented yet"))
+	return err
+}
+
+func (h *setProviderCommandHandler) Handle(ctx context.Context, message *tgbotapi.Message, state *UserState, cmdCtx *CommandContext) error {
+	_, err := cmdCtx.Bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Provider setting not implemented yet"))
+	return err
+}
+
+func (h *statsCommandHandler) Handle(ctx context.Context, message *tgbotapi.Message, state *UserState, cmdCtx *CommandContext) error {
+	_, err := cmdCtx.Bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Stats not implemented yet"))
+	return err
+}
+
+func (h *pidCommandHandler) Handle(ctx context.Context, message *tgbotapi.Message, state *UserState, cmdCtx *CommandContext) error {
+	pid := os.Getpid()
+	_, err := cmdCtx.Bot.Send(tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("PID: %d", pid)))
+	return err
+}
+
+func (h *linkCommandHandler) Handle(ctx context.Context, message *tgbotapi.Message, state *UserState, cmdCtx *CommandContext) error {
+	_, err := cmdCtx.Bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Dashboard linking not implemented yet"))
+	return err
+}
+
+func (h *serviceStatusCommandHandler) Handle(ctx context.Context, message *tgbotapi.Message, state *UserState, cmdCtx *CommandContext) error {
+	_, err := cmdCtx.Bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Service status not implemented yet"))
+	return err
+}
+
+func (h *modelInfoCommandHandler) Handle(ctx context.Context, message *tgbotapi.Message, state *UserState, cmdCtx *CommandContext) error {
+	_, err := cmdCtx.Bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Model info not implemented yet"))
+	return err
+}
+
+func (h *pauseBotCommandHandler) Handle(ctx context.Context, message *tgbotapi.Message, state *UserState, cmdCtx *CommandContext) error {
+	_, err := cmdCtx.Bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Bot pausing not implemented yet"))
+	return err
+}
+
+func (h *resumeBotCommandHandler) Handle(ctx context.Context, message *tgbotapi.Message, state *UserState, cmdCtx *CommandContext) error {
+	_, err := cmdCtx.Bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Bot resuming not implemented yet"))
+	return err
+}
