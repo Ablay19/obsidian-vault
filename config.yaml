@@ -9,8 +9,25 @@ providers:
   openrouter:
     api_key: ""
     model: ""
+  cloudflare:
+    model: "cf-workers-ai"
 
-provider_profiles: {}
+provider_profiles:
+  cloudflare:
+    input_cost_per_token: 0.000001
+    max_input_tokens: 32768
+    latency_ms_threshold: 500
+    accuracy_pct_threshold: 0.85
+  gemini:
+    input_cost_per_token: 0.000001
+    max_input_tokens: 32768
+    latency_ms_threshold: 500
+    accuracy_pct_threshold: 0.9
+  groq:
+    input_cost_per_token: 0.0000005
+    max_input_tokens: 8192
+    latency_ms_threshold: 100
+    accuracy_pct_threshold: 0.88
 
 switching_rules:
   default_provider: gemini

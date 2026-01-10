@@ -33,22 +33,21 @@ var (
 	ingestionPipeline *pipeline.Pipeline
 	wsManager         *ws.Manager
 	globalRAGChain    *rag.RAGChain
-	stateMutex        sync.RWMutex
-	userStates        = make(map[int64]*UserState)
 	userLocks         sync.Map
 	gitManager        *git.Manager
-)
+	startTime         = time.Now()
+	botPaused         = false
 
-func getUserState(userID int64) *UserState {
-	stateMutex.Lock()
-	defer stateMutex.Unlock()
-	if state, exists := userStates[userID]; exists {
-		return state
-	}
-	state := &UserState{Language: "English"}
-	userStates[userID] = state
-	return state
-}
+	// Usage statistics counters
+	statsMutex              sync.RWMutex
+	totalMessages           int64
+	totalCommands           int64
+	totalImagesProcessed    int64
+	totalDocumentsProcessed int64
+	providerUsage           map[string]int64
+	commandUsage            map[string]int64
+	responseTimes           []time.Duration
+)
 
 type TelegramBot struct {
 	*tgbotapi.BotAPI
@@ -72,24 +71,40 @@ func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.Runt
 	llm := &rag.AIServiceLLM{AIService: ais, ModelName: ais.GetActiveProviderName()}
 	ragChain, err := rag.NewRAGChain(retriever, llm)
 	if err != nil {
-		telemetry.ZapLogger.Sugar().Errorw("Failed to initialize RAG chain", "error", err)
+		telemetry.Error("Failed to initialize RAG chain: " + err.Error())
 	} else {
 		globalRAGChain = ragChain
 	}
 
 	// Check external binary dependencies first
 	if err := ValidateBinaries(); err != nil {
-		telemetry.ZapLogger.Sugar().Errorw("Binary validation failed", "error", err)
-		// Log the error but continue - bot will run with limited functionality
-		telemetry.ZapLogger.Sugar().Warn("Bot will start with limited functionality. Some features may not work properly.")
+		telemetry.Error("Binary validation failed: " + err.Error())
+		telemetry.Warn("Bot will start with limited functionality. Some features may not work properly.")
 	}
 	aiService = ais
 	rcm = runtimeConfigManager // Assign to package-level variable
 	wsManager = wsm
 
+	// Initialize usage statistics
+	statsMutex.Lock()
+	providerUsage = make(map[string]int64)
+	commandUsage = make(map[string]int64)
+	responseTimes = make([]time.Duration, 0)
+	statsMutex.Unlock()
+
+	// Initialize webhook manager
+	if err := InitializeWebhookManager(); err != nil {
+		telemetry.Warn("Failed to initialize webhook manager: " + err.Error())
+	}
+
+	// Initialize security manager
+	if err := InitializeSecurityManager(); err != nil {
+		telemetry.Warn("Failed to initialize security manager: " + err.Error())
+	}
+
 	token := os.Getenv("TELEGRAM_BOT_TOKEN")
 	if token == "" {
-		telemetry.ZapLogger.Sugar().Fatal("TELEGRAM_BOT_TOKEN is not set. Bot cannot start.")
+		telemetry.Fatal("TELEGRAM_BOT_TOKEN is not set. Bot cannot start.")
 		return fmt.Errorf("TELEGRAM_BOT_TOKEN not set")
 	}
 
@@ -103,11 +118,11 @@ func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.Runt
 	gitCfg := config.AppConfig.Git
 	gitManager = git.NewManager(gitCfg.VaultPath)
 	if err := gitManager.ConfigureUser(gitCfg.UserName, gitCfg.UserEmail); err != nil {
-		telemetry.ZapLogger.Sugar().Warnw("Failed to configure Git user", "error", err)
+		telemetry.Warn("Failed to configure Git user: " + err.Error())
 	}
 	if gitCfg.RemoteURL != "" {
 		if err := gitManager.EnsureRemote(gitCfg.RemoteURL); err != nil {
-			telemetry.ZapLogger.Sugar().Warnw("Failed to ensure Git remote", "error", err)
+			telemetry.Warn("Failed to ensure Git remote: " + err.Error())
 		}
 	}
 
@@ -129,7 +144,7 @@ func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.Runt
 
 	// Initialize Command Registry
 	registry := NewCommandRegistry()
-	// setupCommands(registry) // TODO: Implement command setup
+	SetupCommands(registry)
 
 	// Initialize State Machine and Command Handler Manager
 	messageProcessor := NewMessageProcessor(aiService)
@@ -143,21 +158,21 @@ func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.Runt
 
 	commands := registry.GetBotCommands()
 	if _, err := bot.Request(tgbotapi.NewSetMyCommands(commands...)); err != nil {
-		telemetry.ZapLogger.Sugar().Errorw("Error setting bot commands", "error", err)
+		telemetry.Error("Error setting bot commands: " + err.Error())
 	}
 
-	telemetry.ZapLogger.Sugar().Infow("Authorized on account", "username", bot.Self.UserName)
+	telemetry.Info("Authorized on account: " + bot.Self.UserName)
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 	updates := bot.GetUpdatesChan(u)
-	telemetry.ZapLogger.Sugar().Info("Bot is running...")
+	telemetry.Info("Bot is running...")
 
 	for update := range updates {
 		if status.IsPaused() {
 			time.Sleep(1 * time.Second)
 			continue
 		}
-		telemetry.ZapLogger.Sugar().Debugw("Received update", "update_id", update.UpdateID)
+		telemetry.Debug("Received update")
 		go handleUpdate(context.Background(), bot, &update, token, commandHandlerManager, fileHandler, ais.(*ai.AIService)) // Pass context
 	}
 	return nil
@@ -166,7 +181,7 @@ func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.Runt
 // handleUpdate processes incoming Telegram updates.
 func handleUpdate(ctx context.Context, bot Bot, update *tgbotapi.Update, token string, commandHandlerManager *CommandHandlerManager, fileHandler *FileHandler, aiService *ai.AIService) {
 	if update.CallbackQuery != nil {
-		telemetry.ZapLogger.Sugar().Infow("Handling callback query", "chat_id", update.CallbackQuery.Message.Chat.ID, "data", update.CallbackQuery.Data)
+		telemetry.Info("Handling callback query")
 		handleCallbackQuery(ctx, bot, update.CallbackQuery, commandHandlerManager, aiService)
 		return
 	}
@@ -180,13 +195,13 @@ func handleUpdate(ctx context.Context, bot Bot, update *tgbotapi.Update, token s
 	if !update.Message.IsCommand() {
 		userID := update.Message.From.ID
 		if _, loaded := userLocks.LoadOrStore(userID, true); loaded {
-			telemetry.ZapLogger.Sugar().Warnw("User is already being processed, skipping duplicate content update", "user_id", userID)
+			telemetry.Warn("User is already being processed, skipping duplicate content update for user: " + fmt.Sprintf("%d", userID))
 			return
 		}
 		defer userLocks.Delete(userID)
 	}
 
-	telemetry.ZapLogger.Sugar().Infow("Handling message", "chat_id", update.Message.Chat.ID, "user", update.Message.From.UserName, "text", update.Message.Text)
+	telemetry.Info("Handling message from user: " + update.Message.From.UserName)
 
 	// Save incoming message to history
 	contentType := "text"
@@ -202,10 +217,10 @@ func handleUpdate(ctx context.Context, bot Bot, update *tgbotapi.Update, token s
 	emailRegex := regexp.MustCompile(`[a-z0-9._%+\-]+@[a-z0-9.-]+\.[a-z]{2,}`)
 	email := emailRegex.FindString(strings.ToLower(update.Message.Text))
 	if email != "" {
-		telemetry.ZapLogger.Sugar().Infow("Attempting to map user via email", "email", email, "telegram_id", update.Message.From.ID)
+		telemetry.Info("Attempting to map user via email: " + email)
 		err := database.LinkTelegramToEmail(ctx, update.Message.From.ID, email) // Pass context
 		if err != nil {
-			telemetry.ZapLogger.Sugar().Errorw("Failed to link user", "error", err)
+			telemetry.Error("Failed to link user: " + err.Error())
 		} else {
 			bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "✅ Your Telegram account has been linked to your Dashboard account ("+email+")."))
 		}
@@ -230,52 +245,103 @@ func handleCallbackQuery(ctx context.Context, bot Bot, callback *tgbotapi.Callba
 		msg.From = callback.From // Crucial: preserve the user who clicked
 		msg.Text = "/setprovider"
 		if handler, ok := commandHandlerManager.commandRouter["setprovider"]; ok {
-			handler.Handle(ctx, msg, getUserState(msg.From.ID), commandHandlerManager.cmdCtx)
+			handler.Handle(ctx, msg, GetUserState(msg.From.ID), commandHandlerManager.cmdCtx)
 		}
 		return
 	}
-	if strings.HasPrefix(callback.Data, "setprovider:") {
-		providerName := strings.TrimPrefix(callback.Data, "setprovider:")
-		if err := aiService.SetProvider(providerName); err != nil {
-			_, _ = bot.Send(tgbotapi.NewMessage(callback.Message.Chat.ID, fmt.Sprintf("Failed to set provider: %v", err)))
+	if strings.HasPrefix(callback.Data, "setprovider_") {
+		provider := strings.TrimPrefix(callback.Data, "setprovider_")
+
+		// Get user state
+		userState := GetUserState(callback.From.ID)
+
+		// Validate provider
+		supportedProviders := []string{"gemini", "groq", "cloudflare", "openrouter", "replicate", "together", "huggingface"}
+		supported := false
+		for _, p := range supportedProviders {
+			if provider == p {
+				supported = true
+				break
+			}
+		}
+
+		if supported {
+			userState.UpdateProvider(provider)
+
+			// Set the provider on the AI service
+			if err := aiService.SetProvider(normalizeProviderName(provider)); err != nil {
+				// Edit the message to show error
+				editMsg := tgbotapi.NewEditMessageText(
+					callback.Message.Chat.ID,
+					callback.Message.MessageID,
+					fmt.Sprintf("❌ Provider set to %s but AI service error: %v", provider, err),
+				)
+				bot.Send(editMsg)
+				return
+			}
+
+			// Trigger webhook event
+			go TriggerProviderEvent(callback.From.ID, "", provider)
+
+			// Edit the message to show success and remove keyboard
+			editMsg := tgbotapi.NewEditMessageText(
+				callback.Message.Chat.ID,
+				callback.Message.MessageID,
+				fmt.Sprintf("✅ AI Provider set to: **%s**", strings.Title(provider)),
+			)
+			editMsg.ParseMode = tgbotapi.ModeMarkdown
+
+			// Remove the inline keyboard
+			editMsg.ReplyMarkup = &tgbotapi.InlineKeyboardMarkup{
+				InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{},
+			}
+
+			bot.Send(editMsg)
 		} else {
-			editMsg := tgbotapi.NewEditMessageText(callback.Message.Chat.ID, callback.Message.MessageID, fmt.Sprintf("AI provider has been set to: *%s*", providerName))
-			editMsg.ParseMode = "Markdown"
-			_, _ = bot.Send(editMsg)
-			// Remove the inline keyboard to prevent further clicks
-			bot.Request(tgbotapi.NewEditMessageReplyMarkup(callback.Message.Chat.ID, callback.Message.MessageID, tgbotapi.InlineKeyboardMarkup{}))
+			// Edit message to show invalid provider
+			editMsg := tgbotapi.NewEditMessageText(
+				callback.Message.Chat.ID,
+				callback.Message.MessageID,
+				fmt.Sprintf("❌ Invalid provider: %s", provider),
+			)
+			bot.Send(editMsg)
 		}
 	}
 }
 
 // handleCommand processes text messages and commands.
 func handleCommand(ctx context.Context, bot Bot, message *tgbotapi.Message, commandHandlerManager *CommandHandlerManager) {
-	state := getUserState(message.From.ID) // Get user state for language
+	state := GetUserState(message.From.ID) // Get user state for language
 	err := commandHandlerManager.HandleCommand(ctx, bot, message, state)
 	if err != nil {
-		telemetry.ZapLogger.Sugar().Errorw("Failed to handle command", "error", err, "command", message.Text)
+		telemetry.Error("Failed to handle command: " + err.Error())
 	}
 }
 
 // handlePhoto processes incoming photos.
-func handlePhoto(ctx context.Context, bot Bot, message *tgbotapi.Message, token string, fileHandler *FileHandler) { // Pass context
+func handlePhoto(ctx context.Context, bot Bot, message *tgbotapi.Message, token string, fileHandler *FileHandler) {
 	status.UpdateActivity()
 
 	photo := message.Photo[len(message.Photo)-1]
-	filename := downloadFile(ctx, bot, photo.FileID, "jpg", token) // Pass context
+	filename := downloadFile(ctx, bot, photo.FileID, "jpg", token)
 	if filename == "" {
 		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "❌ Failed to download image."))
 		return
 	}
 
+	// Store the file in user state for /process command
+	userState := GetUserState(message.From.ID)
+	userState.PendingFile = filename
+	userState.PendingFileType = "image"
+
 	err := fileHandler.HandlePhoto(ctx, bot, message, filename)
 	if err != nil {
-		telemetry.ZapLogger.Sugar().Errorw("Failed to handle photo", "error", err)
+		telemetry.Error("Failed to handle photo: " + err.Error())
 	}
 }
 
 // handleDocument processes incoming documents.
-func handleDocument(ctx context.Context, bot Bot, message *tgbotapi.Message, token string, fileHandler *FileHandler) { // Pass context
+func handleDocument(ctx context.Context, bot Bot, message *tgbotapi.Message, token string, fileHandler *FileHandler) {
 	status.UpdateActivity()
 
 	doc := message.Document
@@ -285,15 +351,20 @@ func handleDocument(ctx context.Context, bot Bot, message *tgbotapi.Message, tok
 		return
 	}
 
-	filename := downloadFile(ctx, bot, doc.FileID, "pdf", token) // Pass context
+	filename := downloadFile(ctx, bot, doc.FileID, "pdf", token)
 	if filename == "" {
 		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "❌ Failed to download document."))
 		return
 	}
 
+	// Store the file in user state for /process command
+	userState := GetUserState(message.From.ID)
+	userState.PendingFile = filename
+	userState.PendingFileType = "document"
+
 	err := fileHandler.HandleDocument(ctx, bot, message, filename)
 	if err != nil {
-		telemetry.ZapLogger.Sugar().Errorw("Failed to handle document", "error", err)
+		telemetry.Error("Failed to handle document: " + err.Error())
 	}
 }
 
@@ -301,7 +372,7 @@ func handleDocument(ctx context.Context, bot Bot, message *tgbotapi.Message, tok
 func downloadFile(ctx context.Context, bot Bot, fileID, ext, token string) string { // Pass context
 	file, err := bot.GetFile(tgbotapi.FileConfig{FileID: fileID})
 	if err != nil {
-		telemetry.ZapLogger.Sugar().Errorw("GetFile error", "error", err)
+		telemetry.Error("GetFile error: " + err.Error())
 		return ""
 	}
 
@@ -309,13 +380,13 @@ func downloadFile(ctx context.Context, bot Bot, fileID, ext, token string) strin
 
 	resp, err := http.Get(fileURL)
 	if err != nil {
-		telemetry.ZapLogger.Sugar().Errorw("HTTP error downloading file", "error", err)
+		telemetry.Error("HTTP error downloading file: " + err.Error())
 		return ""
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		telemetry.ZapLogger.Sugar().Errorw("Bad response status", "status", resp.StatusCode)
+		telemetry.Error("Bad response status: " + fmt.Sprintf("%d", resp.StatusCode))
 		return ""
 	}
 
@@ -325,17 +396,89 @@ func downloadFile(ctx context.Context, bot Bot, fileID, ext, token string) strin
 	filename := fmt.Sprintf("attachments/%s.%s", time.Now().Format("20060102_150405"), ext)
 	out, err := os.Create(filename)
 	if err != nil {
-		telemetry.ZapLogger.Sugar().Errorw("Create file error", "error", err)
+		telemetry.Error("Create file error: " + err.Error())
 		return ""
 	}
 	defer out.Close()
 
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {
-		telemetry.ZapLogger.Sugar().Errorw("Write file error", "error", err)
+		telemetry.Error("Write file error: " + err.Error())
 		return ""
 	}
 
-	telemetry.ZapLogger.Sugar().Infow("File downloaded", "path", filename)
+	telemetry.Info("File downloaded: " + filename)
 	return filename
+}
+
+// Statistics tracking functions
+
+// TrackMessage increments the message counter
+func TrackMessage() {
+	statsMutex.Lock()
+	totalMessages++
+	statsMutex.Unlock()
+}
+
+// TrackCommand increments the command counter and tracks which command was used
+func TrackCommand(command string) {
+	statsMutex.Lock()
+	totalCommands++
+	commandUsage[command]++
+	statsMutex.Unlock()
+}
+
+// TrackImageProcessed increments the image processing counter
+func TrackImageProcessed() {
+	statsMutex.Lock()
+	totalImagesProcessed++
+	statsMutex.Unlock()
+}
+
+// TrackDocumentProcessed increments the document processing counter
+func TrackDocumentProcessed() {
+	statsMutex.Lock()
+	totalDocumentsProcessed++
+	statsMutex.Unlock()
+}
+
+// TrackProviderUsage tracks which AI provider was used
+func TrackProviderUsage(provider string) {
+	statsMutex.Lock()
+	providerUsage[provider]++
+	statsMutex.Unlock()
+}
+
+// TrackResponseTime records a response time for performance monitoring
+func TrackResponseTime(duration time.Duration) {
+	statsMutex.Lock()
+	// Keep only last 100 response times to avoid memory bloat
+	if len(responseTimes) >= 100 {
+		responseTimes = responseTimes[1:]
+	}
+	responseTimes = append(responseTimes, duration)
+	statsMutex.Unlock()
+}
+
+// GetStats returns current usage statistics
+func GetStats() (messages, commands, images, docs int64, provUsage map[string]int64, cmdUsage map[string]int64, avgResponse time.Duration) {
+	statsMutex.RLock()
+	defer statsMutex.RUnlock()
+
+	messages = totalMessages
+	commands = totalCommands
+	images = totalImagesProcessed
+	docs = totalDocumentsProcessed
+	provUsage = providerUsage
+	cmdUsage = commandUsage
+
+	if len(responseTimes) > 0 {
+		var total time.Duration
+		for _, d := range responseTimes {
+			total += d
+		}
+		avgResponse = total / time.Duration(len(responseTimes))
+	}
+
+	return
 }

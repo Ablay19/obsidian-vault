@@ -12,6 +12,9 @@ routes = [
   { pattern = "api.obsidian-bot.com/metrics", zone_name = "obsidian-bot.com" }
 ]
 
+[env.production.ai]
+binding = "AI"
+
 [env.staging]
 name = "obsidian-bot-workers-staging"
 routes = [
@@ -29,6 +32,9 @@ routes = [
   { pattern = "dev-api.obsidian-bot.com/health", zone_name = "obsidian-bot.com" },
   { pattern = "dev-api.obsidian-bot.com/metrics", zone_name = "obsidian-bot.com" }
 ]
+
+[env.development.ai]
+binding = "AI"
 
 # AI Services Configuration
 [ai]

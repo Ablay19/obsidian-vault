@@ -8,10 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"obsidian-automation/internal/telemetry"
 	"strings"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 // OpenRouterProvider implements the AIProvider interface for OpenRouter.
@@ -24,7 +23,7 @@ type OpenRouterProvider struct {
 // NewOpenRouterProvider creates a new OpenRouter provider.
 func NewOpenRouterProvider(apiKey string, modelName string, httpClient *http.Client) *OpenRouterProvider {
 	if apiKey == "" {
-		zap.S().Info("OpenRouter API key is empty. OpenRouter AI will be unavailable.")
+		telemetry.Info("OpenRouter API key is empty. OpenRouter AI will be unavailable.")
 		return nil
 	}
 
@@ -206,7 +205,7 @@ func (p *OpenRouterProvider) StreamCompletion(ctx context.Context, req *RequestM
 			var streamResp openRouterStreamResponse
 			if err := json.Unmarshal([]byte(data), &streamResp); err != nil {
 				// Don't kill stream on one bad line, just log
-				zap.S().Debug("Error unmarshaling OpenRouter stream line", "error", err)
+				telemetry.Debug("Error unmarshaling OpenRouter stream line", "error", err)
 				continue
 			}
 

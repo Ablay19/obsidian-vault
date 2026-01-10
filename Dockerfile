@@ -5,25 +5,28 @@ ARG ALPINE_VERSION=3.19
 # --- Builder Stage ---
 FROM golang:${GO_VERSION}-alpine AS builder
 
-# Install build dependencies
+# Install build dependencies and templ once
 RUN apk add --no-cache build-base git
+RUN go install github.com/a-h/templ/cmd/templ@v0.3.977
 
 WORKDIR /src
 
 # Copy go.mod and go.sum first to leverage Docker cache
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
 # Copy the rest of the source code
 COPY . .
 
-# Generate templ files
-RUN go run github.com/a-h/templ/cmd/templ@latest generate
+# Generate templ files (reuse installed templ)
+RUN /go/bin/templ generate
 
-# Build the application
+# Build the application with cache
 # Use ldflags to embed version information
 ARG APP_VERSION=v0.0.0-dev
-RUN CGO_ENABLED=0 go build -ldflags="-w -s -X main.version=${APP_VERSION}" -o /app/main ./cmd/bot/
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build -ldflags="-w -s -X main.version=${APP_VERSION}" -o /app/main ./cmd/bot/
 
 
 # --- Final Stage ---
@@ -36,7 +39,8 @@ RUN apk add --no-cache \
   poppler-utils \
   git \
   ca-certificates \
-  tzdata
+  tzdata \
+  && rm -rf /var/cache/apk/*
 
 # Create a non-root user and group
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup

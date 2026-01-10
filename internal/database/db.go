@@ -33,7 +33,7 @@ func OpenDB() *DBClient {
 	token := os.Getenv("TURSO_AUTH_TOKEN")
 
 	if url == "" {
-		telemetry.ZapLogger.Sugar().Fatalw("TURSO_DATABASE_URL is missing", "url", url)
+		telemetry.Fatal("TURSO_DATABASE_URL is missing")
 	}
 
 	var db *sql.DB
@@ -45,13 +45,13 @@ func OpenDB() *DBClient {
 	} else {
 		// Handle remote Turso URLs
 		if token == "" {
-			telemetry.ZapLogger.Sugar().Fatalw("TURSO_AUTH_TOKEN is missing for remote database", "url", url)
+			telemetry.Fatal("TURSO_AUTH_TOKEN is missing for remote database")
 		}
 		dsn := url + "?authToken=" + token
 		db, err = sql.Open("libsql", dsn)
 	}
 	if err != nil {
-		telemetry.ZapLogger.Sugar().Fatalw("Failed to open database", "error", err)
+		telemetry.Fatal("Failed to open database: " + err.Error())
 	}
 
 	Client = &DBClient{
@@ -63,7 +63,7 @@ func OpenDB() *DBClient {
 
 // RunMigrations applies database migrations using a custom runner.
 func RunMigrations(db *sql.DB) {
-	telemetry.ZapLogger.Sugar().Info("Applying database migrations...")
+	telemetry.Info("Applying database migrations...")
 
 	// Create schema_migrations table if it doesn't exist
 	createMigrationsTableSQL := `
@@ -74,15 +74,15 @@ func RunMigrations(db *sql.DB) {
 	);
 `
 	if _, err := db.Exec(createMigrationsTableSQL); err != nil {
-		telemetry.ZapLogger.Sugar().Fatalw("Failed to create schema_migrations table", "error", err)
+		telemetry.Fatal("Failed to create schema_migrations table: " + err.Error())
 	}
 
 	// Get all migration files from the migrations directory
 	var migrationPaths []string
 	files, err := os.ReadDir("./internal/database/migrations")
 	if err != nil {
-		telemetry.ZapLogger.Sugar().Warnw("Migration directory not found, skipping migrations", "error", err)
-		telemetry.ZapLogger.Sugar().Info("Database migrations skipped (no migration files found)")
+		telemetry.Warn("Migration directory not found, skipping migrations: " + err.Error())
+		telemetry.Info("Database migrations skipped (no migration files found)")
 		return
 	}
 
@@ -102,17 +102,17 @@ func RunMigrations(db *sql.DB) {
 		var count int
 		err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE name = ?", migrationName).Scan(&count)
 		if err != nil {
-			telemetry.ZapLogger.Sugar().Fatalw("Failed to check migration status", "migration", migrationName, "error", err)
+			telemetry.Fatal("Failed to check migration status for " + migrationName + ": " + err.Error())
 		}
 		if count > 0 {
-			telemetry.ZapLogger.Sugar().Infow("Migration already applied, skipping.", "migration", migrationName)
+			telemetry.Info("Migration already applied, skipping: " + migrationName)
 			continue
 		}
 
 		// Apply migration
 		sqlContent, err := os.ReadFile(path)
 		if err != nil {
-			telemetry.ZapLogger.Sugar().Fatalw("Failed to read migration file", "migration", migrationName, "error", err)
+			telemetry.Fatal("Failed to read migration file " + migrationName + ": " + err.Error())
 		}
 
 		// Execute each statement in the migration file
@@ -122,23 +122,22 @@ func RunMigrations(db *sql.DB) {
 				continue
 			}
 			if _, err := db.Exec(trimmedStmt); err != nil {
-				// Handle specific SQLite errors for "duplicate column" if it's an ALTER TABLE ADD COLUMN
 				if strings.Contains(strings.ToLower(err.Error()), "duplicate column name") && strings.Contains(strings.ToLower(trimmedStmt), "alter table") && strings.Contains(strings.ToLower(trimmedStmt), "add column") {
-					telemetry.ZapLogger.Sugar().Warnw("Skipping ALTER TABLE ADD COLUMN due to duplicate column name (likely already applied)", "migration", migrationName, "statement", trimmedStmt, "error", err)
+					telemetry.Warn("Skipping ALTER TABLE ADD COLUMN due to duplicate column name (likely already applied): " + migrationName)
 				} else {
-					telemetry.ZapLogger.Sugar().Fatalw("Failed to execute SQL statement", "migration", migrationName, "statement", trimmedStmt, "error", err)
+					telemetry.Fatal("Failed to execute SQL statement in " + migrationName + ": " + err.Error())
 				}
 			}
 		}
 
 		// Record migration as applied
 		if _, err := db.Exec("INSERT INTO schema_migrations (name) VALUES (?)", migrationName); err != nil {
-			telemetry.ZapLogger.Sugar().Fatalw("Failed to record migration", "migration", migrationName, "error", err)
+			telemetry.Fatal("Failed to record migration " + migrationName + ": " + err.Error())
 		}
-		telemetry.ZapLogger.Sugar().Infow("Migration applied successfully.", "migration", migrationName)
+		telemetry.Info("Migration applied successfully: " + migrationName)
 	}
 
-	telemetry.ZapLogger.Sugar().Info("Database migrations applied successfully.")
+	telemetry.Info("Database migrations applied successfully.")
 }
 
 const HEARTBEAT_THRESHOLD = 30 * time.Second
@@ -161,9 +160,9 @@ func CheckExistingInstance(ctx context.Context) error {
 
 	// If the heartbeat is older than the threshold, consider the instance stale.
 	if time.Since(startedAt) > HEARTBEAT_THRESHOLD {
-		telemetry.ZapLogger.Sugar().Warnw("Stale instance found, removing and starting new instance", "pid", pid, "last_heartbeat", startedAt)
+		telemetry.Warn("Stale instance found, removing and starting new instance, pid: " + fmt.Sprintf("%d", pid))
 		if err := Client.Queries.DeleteInstance(ctx); err != nil {
-			telemetry.ZapLogger.Sugar().Errorw("Failed to delete stale instance", "pid", pid, "error", err)
+			telemetry.Error("Failed to delete stale instance, pid: " + fmt.Sprintf("%d", pid) + ": " + err.Error())
 			return fmt.Errorf("failed to delete stale instance with pid %d: %w", pid, err)
 		}
 		return nil // Stale instance removed, safe to start
@@ -179,9 +178,9 @@ func CheckExistingInstance(ctx context.Context) error {
 	// If the process is not running but the heartbeat is recent, something is wrong.
 	// This could happen if the bot crashed and the container is still up.
 	// We'll treat it as a stale instance and remove it.
-	telemetry.ZapLogger.Sugar().Warnw("Instance with recent heartbeat but no running process found, removing stale instance", "pid", pid, "last_heartbeat", startedAt)
+	telemetry.Warn("Instance with recent heartbeat but no running process found, removing stale instance, pid: " + fmt.Sprintf("%d", pid))
 	if err := Client.Queries.DeleteInstance(ctx); err != nil {
-		telemetry.ZapLogger.Sugar().Errorw("Failed to delete stale instance", "pid", pid, "error", err)
+		telemetry.Error("Failed to delete stale instance, pid: " + fmt.Sprintf("%d", pid) + ": " + err.Error())
 		return fmt.Errorf("failed to delete stale instance with pid %d: %w", pid, err)
 	}
 

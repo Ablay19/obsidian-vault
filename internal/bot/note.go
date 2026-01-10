@@ -69,7 +69,7 @@ func createObsidianNote(ctx context.Context, bot Bot, aiService ai.AIServiceInte
 	notePath := filepath.Join("vault", "Inbox", noteFilename)
 	err := os.WriteFile(notePath, []byte(builder.String()), 0644)
 	if err != nil {
-		telemetry.ZapLogger.Sugar().Errorw("Error writing note file", "error", err)
+		telemetry.Error("Error writing note file: " + err.Error())
 		bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Error saving the note."))
 		return
 	}
@@ -77,7 +77,7 @@ func createObsidianNote(ctx context.Context, bot Bot, aiService ai.AIServiceInte
 	// Save to database
 	hash, err := getFileHash(filePath)
 	if err != nil {
-		telemetry.ZapLogger.Sugar().Errorw("Error getting file hash", "error", err)
+		telemetry.Error("Error getting file hash: " + err.Error())
 	} else {
 		contentType := "unknown"
 		if fileType == "image" {
@@ -100,7 +100,7 @@ func createObsidianNote(ctx context.Context, bot Bot, aiService ai.AIServiceInte
 			message.From.ID,
 		)
 		if err != nil {
-			telemetry.ZapLogger.Sugar().Errorw("Error saving processed file to DB", "error", err)
+			telemetry.Error("Error saving processed file to DB: " + err.Error())
 		}
 	}
 

@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"obsidian-automation/internal/telemetry"
 	"sync"
 
 	"github.com/google/generative-ai-go/genai"
-	"go.uber.org/zap"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
@@ -24,14 +24,14 @@ type GeminiProvider struct {
 // NewGeminiProvider creates a new Gemini provider for a single API key.
 func NewGeminiProvider(ctx context.Context, apiKey string, modelName string, opts ...option.ClientOption) *GeminiProvider {
 	if apiKey == "" {
-		zap.S().Info("Gemini API key is empty. Gemini AI will be unavailable for this provider instance.")
+		telemetry.Info("Gemini API key is empty. Gemini AI will be unavailable for this provider instance.")
 		return nil
 	}
 
 	finalOpts := append([]option.ClientOption{option.WithAPIKey(apiKey)}, opts...)
 	client, err := genai.NewClient(ctx, finalOpts...)
 	if err != nil {
-		zap.S().Error("Error creating Gemini client", "error", err)
+		telemetry.Error("Error creating Gemini client", "error", err)
 		return nil
 	}
 
@@ -141,7 +141,7 @@ func (p *GeminiProvider) StreamCompletion(ctx context.Context, req *RequestModel
 }
 
 func (p *GeminiProvider) mapError(err error) error {
-	zap.S().Error("Gemini API error", "error", err, "model", p.modelName)
+	telemetry.Error("Gemini API error", "error", err, "model", p.modelName)
 	var gerr *googleapi.Error
 	if errors.As(err, &gerr) {
 		if gerr.Code == 429 {

@@ -68,7 +68,7 @@ func (h *processCommandHandler) Handle(ctx context.Context, message *tgbotapi.Me
 	fileBytes, err := os.ReadFile(state.PendingFile)
 	if err != nil {
 		cmdCtx.Bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Failed to read staged file."))
-		telemetry.ZapLogger.Sugar().Errorw("Read file error", "error", err)
+		telemetry.Error("Read file error: " + err.Error())
 		return err
 	}
 

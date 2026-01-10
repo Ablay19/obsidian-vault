@@ -49,9 +49,9 @@ export class BotUtils {
 
     static async processAIRequest(prompt, env, provider = 'cloudflare') {
         try {
-            // Try Cloudflare Workers AI first
-            if (env.AI && provider === 'cloudflare') {
-                const response = await env.AI.run('@cf/meta/llama-3.3-70b-instruct', {
+            // Use Cloudflare Workers AI for all requests
+            if (env.AI) {
+                const response = await env.AI.run('@cf/meta/llama-2-7b-chat-int8', {
                     prompt: this.sanitizeInput(prompt),
                     max_tokens: 1000,
                     temperature: 0.7
@@ -60,16 +60,16 @@ export class BotUtils {
                 return {
                     success: true,
                     provider: 'cloudflare',
-                    model: '@cf/meta/llama-3.3-70b-instruct',
+                    model: '@cf/meta/llama-2-7b-chat-int8',
                     response: response.response
                 };
             }
 
-            // For other providers, return not implemented yet
+            // Fallback if no AI binding
             return {
                 success: false,
-                error: `Provider ${provider} not yet implemented in worker version`,
-                providers_available: ['cloudflare']
+                error: 'Cloudflare AI not configured',
+                provider: provider
             };
 
         } catch (error) {
@@ -83,184 +83,11 @@ export class BotUtils {
 
     static formatAIResponse(result) {
         if (!result.success) {
-            return `🤖 **AI Currently Unavailable**\\n\\nError: ${result.error}\\n\\n⚠️ *Worker Mode: Limited functionality*\\n\\nI'll process your message when AI services are available.`;
+            return `AI Currently Unavailable\\n\\nError: ${result.error}\\n\\nWorker Mode: Basic functionality\\n\\nPlease try again or contact support if the issue persists.`;
         }
 
-        return `🤖 **AI Response**\\n\\n${result.response}\\n\\n🌍 *Provider: ${result.provider}*\\n🔧 *Model: ${result.model}*`;
-    }
-
-    static getUserState(userState, userId) {
-        return userState.get(userId) || {};
-    }
-
-    static setUserState(userState, userId, state) {
-        userState.set(userId, state);
-    }
-
-    static handleCommand(message, userState, botToken) {
-        const text = message.text || '';
-        const command = text.split(' ')[0]?.substring(1);
-        const args = text.split(' ').slice(1);
-
-        switch (command) {
-            case 'start':
-                return this.handleStartMessage(botToken, message.chat.id);
-            case 'help':
-                return this.handleHelpMessage(botToken, message.chat.id);
-            case 'ai':
-            case 'provider':
-                return this.handleProviderCommand(botToken, message.chat.id, args);
-            case 'health':
-                return this.handleHealthCommand(botToken, message.chat.id);
-            case 'status':
-                return this.handleStatusCommand(botToken, message.chat.id, userState);
-            default:
-                return this.handleUnknownCommand(botToken, message.chat.id, command);
-        }
-    }
-
-    static async handleStartMessage(botToken, chatId) {
-        const text = `🤖 **Obsidian Bot - Cloudflare Worker Edition**\\n\\nWelcome! I'm your AI-powered assistant running on Cloudflare Workers.\\n\\n**Available Commands:**\\n• /help - Show this help\\n• /status - Show your current status\\n• /provider - Check AI provider status\\n• /health - System health check\\n\\n**Features:**\\n• 💬 AI chat responses\\n• 📊 System status\\n• 🔄 Provider management\\n\\nI'm running on Cloudflare Workers with global edge coverage!`;
-        
-        return await this.sendTelegramMessage(botToken, chatId, text);
-    }
-
-    static async handleHelpMessage(botToken, chatId) {
-        const text = `📚 **Help & Commands**\\n\\n**Bot Commands:**\\n• /start - Welcome message\\n• /help - Show this help\\n• /status - Your current status\\n• /provider [name] - Check AI provider status\\n• /health - System health check\\n\\n**AI Interaction:**\\n• Send any text for AI response\\n• Use /provider to check available AI services\\n\\n**Worker Features:**\\n• Serverless architecture\\n• Global edge distribution\\n• Built-in AI capabilities\\n• 99.9%+ uptime guarantee\\n\\nNote: External AI providers coming soon!`;
-        
-        return await this.sendTelegramMessage(botToken, chatId, text);
-    }
-
-    static async handleProviderCommand(botToken, chatId, args) {
-        if (args.length === 0) {
-            const availableProviders = ['cloudflare'];
-            let healthText = '🤖 **AI Provider Status**\\n\\n';
-            
-            for (const provider of availableProviders) {
-                const icon = provider === 'cloudflare' ? '✅' : '❌';
-                healthText += `${icon} *${provider.charAt(0).toUpperCase() + provider.slice(1)}*: Available\\n`;
-            }
-            
-            healthText += `\\n📍 *Current: Using Cloudflare Workers AI*`;
-            return await this.sendTelegramMessage(botToken, chatId, healthText);
-        } else {
-            return await this.sendTelegramMessage(botToken, chatId, `❌ Provider switching not implemented yet. Available: cloudflare`);
-        }
-    }
-
-    static async handleHealthCommand(botToken, chatId) {
-        const healthText = `🏥 **System Health**\\n\\n**Worker Status:**\\n✅ Operational\\n**AI Services:**\\n✅ Cloudflare Workers AI Available\\n**Global Network:**\\n✅ Edge Network Active\\n**Uptime:**\\n99.9%+\\n\\n**Memory Usage:**\\n${Math.round((process.env.memoryUsage || 128) / 1024)}MB\\n\\n**Response Time:**\\n${Math.random() * 50 + 100}ms`;
-        
-        return await this.sendTelegramMessage(botToken, chatId, healthText);
-    }
-
-    static async handleStatusCommand(botToken, chatId, userState, env) {
-        const statusText = `📊 **Your Status**\\n\\n🤖 *Last Activity:* ${userState.lastActivity || 'None'}\\n🔄 *Messages Processed:* ${userState.messageCount || 0}\\n⚙️ *AI Provider:* Cloudflare Workers AI\\n🌍 *Environment:* ${env?.ENVIRONMENT || 'production'}\\n📍 *Edge Location:* Global Network`;
-        
-        return await this.sendTelegramMessage(botToken, chatId, statusText);
-    }
-
-    static async handleUnknownCommand(botToken, chatId, command) {
-        const text = `❓ Unknown command: /${command}\\n\\nType /help to see available commands.`;
-        return await this.sendTelegramMessage(botToken, chatId, text);
-    }
-
-    static async handleTextMessage(message, userState, botToken, env) {
-        const text = message.text || '';
-        if (!text.trim()) return;
-
-        await this.log(`Processing text message: ${text.substring(0, 50)}...`);
-
-        try {
-            // Process with AI
-            const aiResult = await this.processAIRequest(text, env);
-            const responseText = this.formatAIResponse(aiResult);
-            
-            await this.sendTelegramMessage(botToken, message.chat.id, responseText);
-            
-            // Update user state
-            userState.lastActivity = new Date().toISOString();
-            userState.messageCount = (userState.messageCount || 0) + 1;
-            this.setUserState(userState, message.from.id, userState);
-            
-        } catch (error) {
-            await this.log(`Text processing error: ${error}`, 'error');
-            await this.sendTelegramMessage(botToken, message.chat.id, '❌ Sorry, I encountered an error processing your message. Please try again.');
-        }
-    }
-
-    static async handlePhotoMessage(message, userState, botToken) {
-        const photo = message.photo[message.photo.length - 1]; // Get largest photo
-        await this.log(`Processing photo from ${message.from.id}`);
-
-        try {
-            // Acknowledge photo
-            await this.sendTelegramMessage(botToken, message.chat.id, '📷 Photo received! Processing...');
-            
-            // For now, we'll acknowledge and store for future processing
-            // In production, this would download and process the image
-            const responseText = `📷 **Image Processing**\\n\\n📋 *File:* ${photo.file_name || 'image.jpg'}\\n📏 *Size:* ${photo.file_size ? `${Math.round(photo.file_size / 1024)}KB` : 'Unknown'}\\n\\n🔄 **Status:** Received for processing\\n\\nNote: Full image processing will be available in production version.`;
-            
-            await this.sendTelegramMessage(botToken, message.chat.id, responseText);
-            
-            // Update user state
-            userState.lastActivity = new Date().toISOString();
-            this.setUserState(userState, message.from.id, userState);
-            
-        } catch (error) {
-            await this.log(`Photo processing error: ${error}`, 'error');
-            await this.sendTelegramMessage(botToken, message.chat.id, '❌ Failed to process photo. Please try again.');
-        }
-    }
-
-    static async handleDocumentMessage(message, userState, botToken) {
-        const document = message.document;
-        await this.log(`Processing document from ${message.from.id}`);
-
-        try {
-            // Acknowledge document
-            await this.sendTelegramMessage(botToken, message.chat.id, '📄 Document received! Processing...');
-            
-            // For now, we'll acknowledge and store for future processing
-            const responseText = `📄 **Document Processing**\\n\\n📋 *File:* ${document.file_name}\\n📏 *Size:* ${document.file_size ? `${Math.round(document.file_size / 1024)}KB` : 'Unknown'}\\n\\n🔄 **Status:** Received for processing\\n\\nNote: Full document processing will be available in production version.`;
-            
-            await this.sendTelegramMessage(botToken, message.chat.id, responseText);
-            
-            // Update user state
-            userState.lastActivity = new Date().toISOString();
-            this.setUserState(userState, message.from.id, userState);
-            
-        } catch (error) {
-            await this.log(`Document processing error: ${error}`, 'error');
-            await this.sendTelegramMessage(botToken, message.chat.id, '❌ Failed to process document. Please try again.');
-        }
-    }
-
-    static async handleMessage(update, userState, botToken, env) {
-        try {
-            await this.log(`Received update type: ${update.message ? 'message' : 'callback_query'}`);
-
-            if (update.message) {
-                const message = update.message;
-                const currentUserState = this.getUserState(userState, message.from.id);
-
-                // Handle commands
-                if (message.text?.startsWith('/')) {
-                    return await this.handleCommand(message, currentUserState, botToken);
-                }
-
-                // Handle different message types
-                if (message.photo) {
-                    return await this.handlePhotoMessage(message, currentUserState, botToken);
-                } else if (message.document) {
-                    return await this.handleDocumentMessage(message, currentUserState, botToken);
-                } else if (message.text) {
-                    return await this.handleTextMessage(message, currentUserState, botToken, env);
-                }
-            }
-
-        } catch (error) {
-            await this.log(`Message handling error: ${error}`, 'error');
-        }
+        return `AI Response\\n\\n${result.response}\\n\\nProvider: ${result.provider}\\nModel: ${result.model}`;
     }
 }
+
+

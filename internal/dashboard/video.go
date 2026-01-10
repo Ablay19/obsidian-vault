@@ -38,7 +38,7 @@ func (h *VideoHandler) RegisterRoutes(router *gin.Engine) {
 func (h *VideoHandler) GenerateVideo(c *gin.Context) {
 	userID := c.GetString("user_id")
 	if userID == "" {
-		telemetry.ZapLogger.Sugar().Warnw("Video generation attempted without authentication")
+		telemetry.Warn("Video generation attempted without authentication")
 		c.JSON(401, gin.H{"error": "Unauthorized"})
 		return
 	}
@@ -50,50 +50,30 @@ func (h *VideoHandler) GenerateVideo(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		telemetry.ZapLogger.Sugar().Warnw("Invalid video generation request",
-			"user_id", userID,
-			"error", err)
+		telemetry.Warn("Invalid video generation request for user: " + userID)
 		c.JSON(400, gin.H{"error": "Invalid request"})
 		return
 	}
 
-	if req.RetentionHours <= 0 || req.RetentionHours > 720 { // Max 30 days
-		req.RetentionHours = 72 // Default 3 days
+	if req.RetentionHours <= 0 || req.RetentionHours > 720 {
+		req.RetentionHours = 72
 	}
 
-	telemetry.ZapLogger.Sugar().Infow("Video generation request received",
-		"user_id", userID,
-		"prompt_length", len(req.Prompt),
-		"title", req.Title,
-		"retention_hours", req.RetentionHours)
+	telemetry.Info("Video generation request received from user: " + userID)
 
 	// Create video generation service
 	videoGenService := NewVideoGenerationService(h.aiService, h.videoStorage)
 
 	// Generate video asynchronously
 	go func() {
-		ctx := context.Background() // TODO: Use request context with timeout
-		metadata, err := videoGenService.GenerateVideoFromPrompt(ctx, userID, req.Prompt, req.Title, req.RetentionHours)
+		ctx := context.Background()
+		_, err := videoGenService.GenerateVideoFromPrompt(ctx, userID, req.Prompt, req.Title, req.RetentionHours)
 
 		if err != nil {
-			// TODO: Store error status in database and notify user via websocket
-			telemetry.ZapLogger.Sugar().Errorw("Video generation failed",
-				"user_id", userID,
-				"prompt_truncated", func() string {
-					if len(req.Prompt) > 100 {
-						return req.Prompt[:100] + "..."
-					}
-					return req.Prompt
-				}(),
-				"error", err)
-			return
+			telemetry.Error("Video generation failed for user " + userID + ": " + err.Error())
+		} else {
+			telemetry.Info("Video generation completed successfully for user: " + userID)
 		}
-
-		// TODO: Notify user via websocket that video is ready
-		telemetry.ZapLogger.Sugar().Infow("Video generation completed successfully",
-			"video_id", metadata.ID,
-			"user_id", userID,
-			"video_size_bytes", metadata.FileSizeBytes)
 	}()
 
 	c.JSON(202, gin.H{

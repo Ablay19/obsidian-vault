@@ -17,27 +17,27 @@ import (
 var DB *gorm.DB
 
 func InitDB() {
-	telemetry.ZapLogger.Sugar().Debug("InitDB called")
+	telemetry.Debug("InitDB called")
 	var err error
 
 	// Revert to local SQLite
 	DB, err = gorm.Open(sqlite.Open("ssh_users.db"), &gorm.Config{})
-	telemetry.ZapLogger.Sugar().Infow("Connecting SSH DB to local SQLite", "path", "ssh_users.db")
+	telemetry.Info("Connecting SSH DB to local SQLite: ssh_users.db")
 
 	if err != nil {
-		telemetry.ZapLogger.Sugar().Errorf("Failed to connect SSH user database: %v", err)
+		telemetry.Error("Failed to connect SSH user database: " + err.Error())
 		os.Exit(1)
 	}
-	telemetry.ZapLogger.Sugar().Debugf("SSH DB initialized: %p", DB)
+	telemetry.Debug("SSH DB initialized")
 
 	// AutoMigrate will create/update tables for the User model
-	telemetry.ZapLogger.Sugar().Debug("Running AutoMigrate for User model")
+	telemetry.Debug("Running AutoMigrate for User model")
 	DB.AutoMigrate(&User{})
-	telemetry.ZapLogger.Sugar().Debug("AutoMigrate completed")
+	telemetry.Debug("AutoMigrate completed")
 }
 
 func GenerateKeyPair(username string) (privateKey []byte, err error) {
-	telemetry.ZapLogger.Sugar().Debugf("GenerateKeyPair called for %s, DB state: %p", username, DB)
+	telemetry.Debug("GenerateKeyPair called for " + username)
 	key, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
 		return nil, err
@@ -59,7 +59,7 @@ func GenerateKeyPair(username string) (privateKey []byte, err error) {
 
 	if DB == nil {
 
-		telemetry.ZapLogger.Sugar().Error("GORM DB is nil in GenerateKeyPair!")
+		telemetry.Error("GORM DB is nil in GenerateKeyPair!")
 
 		return nil, fmt.Errorf("SSH database is not initialized")
 
@@ -74,12 +74,9 @@ func GenerateKeyPair(username string) (privateKey []byte, err error) {
 		// User does not exist, create new
 
 		if err := DB.Create(&user).Error; err != nil {
-
 			return nil, fmt.Errorf("failed to create SSH user: %w", err)
-
 		}
-
-		telemetry.ZapLogger.Sugar().Infow("Created new SSH user", "username", username)
+		telemetry.Info("Created new SSH user: " + username)
 
 	} else if result.Error != nil {
 
@@ -92,12 +89,9 @@ func GenerateKeyPair(username string) (privateKey []byte, err error) {
 		// User exists, update public key
 
 		if err := DB.Model(&existingUser).Update("public_key", user.PublicKey).Error; err != nil {
-
 			return nil, fmt.Errorf("failed to update public key for existing user: %w", err)
-
 		}
-
-		telemetry.ZapLogger.Sugar().Infow("Updated public key for existing SSH user", "username", username)
+		telemetry.Info("Updated public key for existing SSH user: " + username)
 
 	}
 
