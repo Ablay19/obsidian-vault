@@ -275,6 +275,8 @@ class AIRequestProcessor {
   }
 }
 
+export { AIRequestProcessor };
+
 export default {
   async fetch(request, env, ctx) {
     const processor = new AIRequestProcessor(env);

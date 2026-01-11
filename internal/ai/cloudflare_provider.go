@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"obsidian-automation/internal/telemetry"
 	"time"
 )
 
@@ -15,6 +16,7 @@ type CloudflareProvider struct {
 	endpoint string
 	client   *http.Client
 	model    string
+	provider string
 }
 
 type CloudflareRequest struct {
@@ -24,16 +26,32 @@ type CloudflareRequest struct {
 type CloudflareResponse struct {
 	Response string `json:"response"`
 	Success  bool   `json:"success"`
+	Error    string `json:"error"`
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
 }
 
 // NewCloudflareProvider creates a new Cloudflare Worker provider
 func NewCloudflareProvider(workerURL string) *CloudflareProvider {
 	return &CloudflareProvider{
-		endpoint: workerURL + "/ai/proxy/cloudflare",
+		endpoint: workerURL + "/ai",
 		client: &http.Client{
 			Timeout: 60 * time.Second,
 		},
-		model: "@cf/meta/llama-3.3-70b-instruct",
+		model:    "worker-proxy",
+		provider: "cloudflare", // default
+	}
+}
+
+// NewCloudflareProviderWithProvider creates a provider for a specific provider via worker
+func NewCloudflareProviderWithProvider(workerURL, provider string) *CloudflareProvider {
+	return &CloudflareProvider{
+		endpoint: workerURL + "/ai",
+		client: &http.Client{
+			Timeout: 60 * time.Second,
+		},
+		model:    provider + "-via-worker",
+		provider: provider,
 	}
 }
 
@@ -42,11 +60,18 @@ func (p *CloudflareProvider) GenerateCompletion(ctx context.Context, req *Reques
 	// Combine system and user prompts
 	fullPrompt := req.SystemPrompt + "\n" + req.UserPrompt
 
-	// Prepare request - send as raw text
-	reqBody := bytes.NewBufferString(fullPrompt)
+	// Prepare request as JSON
+	requestBody := map[string]interface{}{
+		"prompt":   fullPrompt,
+		"provider": p.provider,
+	}
+	jsonBody, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
 
 	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.endpoint, reqBody)
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.endpoint, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -67,10 +92,28 @@ func (p *CloudflareProvider) GenerateCompletion(ctx context.Context, req *Reques
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
+	telemetry.Info("Cloudflare response status: " + fmt.Sprintf("%d", resp.StatusCode) + ", body length: " + fmt.Sprintf("%d", len(body)))
+
 	// Check status
 	if resp.StatusCode != http.StatusOK {
+		telemetry.Error("Cloudflare Worker error: " + fmt.Sprintf("%d", resp.StatusCode))
 		return nil, fmt.Errorf("Cloudflare Worker error: %d %s", resp.StatusCode, string(body))
 	}
+
+	// Log first 100 chars of response for debugging
+	telemetry.Info("Cloudflare response preview: " + string(body[:min(100, len(body))]))
+
+	telemetry.Info("Cloudflare response status: " + fmt.Sprintf("%d", resp.StatusCode) + ", body length: " + fmt.Sprintf("%d", len(body)))
+
+	// Check status
+	if resp.StatusCode != http.StatusOK {
+		telemetry.Error("Cloudflare Worker error: " + fmt.Sprintf("%d", resp.StatusCode) + " Body: " + string(body[:min(200, len(body))]))
+		return nil, fmt.Errorf("Cloudflare Worker error: %d %s", resp.StatusCode, string(body))
+	}
+
+	// Log first 100 chars of response for debugging
+	responseStr := string(body)
+	telemetry.Info("Cloudflare response preview: " + responseStr[:min(100, len(responseStr))])
 
 	// Parse response
 	var cfResp CloudflareResponse
@@ -78,8 +121,11 @@ func (p *CloudflareProvider) GenerateCompletion(ctx context.Context, req *Reques
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
-	if !cfResp.Success && cfResp.Response == "" {
-		cfResp.Success = true // Worker returns success implicitly
+	if !cfResp.Success {
+		if cfResp.Error != "" {
+			return nil, fmt.Errorf("worker error: %s", cfResp.Error)
+		}
+		return nil, fmt.Errorf("worker returned unsuccessful response")
 	}
 
 	return &ResponseModel{
@@ -91,8 +137,8 @@ func (p *CloudflareProvider) GenerateCompletion(ctx context.Context, req *Reques
 		},
 		Cached: false, // Worker doesn't provide cache info
 		ProviderInfo: ModelInfo{
-			ProviderName: "cloudflare",
-			ModelName:    p.model,
+			ProviderName: cfResp.Provider,
+			ModelName:    cfResp.Model,
 			KeyID:        "",
 			Enabled:      true,
 			Blocked:      false,

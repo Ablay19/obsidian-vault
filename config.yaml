@@ -1,6 +1,10 @@
 providers:
   gemini:
     model: gemini-pro
+  google:
+    model: gemini-1.5-flash
+  deepseek:
+    model: deepseek-chat
   groq:
     model: llama2-70b-4096
   huggingface:
@@ -9,8 +13,46 @@ providers:
   openrouter:
     api_key: ""
     model: ""
+  cloudflare:
+    model: "cf-workers-ai"
 
-provider_profiles: {}
+provider_profiles:
+  cloudflare:
+    input_cost_per_token: 0.000001
+    max_input_tokens: 32768
+    latency_ms_threshold: 500
+    accuracy_pct_threshold: 0.85
+    supports_vision: false
+  gemini:
+    input_cost_per_token: 0.000001
+    max_input_tokens: 32768
+    latency_ms_threshold: 500
+    accuracy_pct_threshold: 0.9
+    supports_vision: true
+  google:
+    input_cost_per_token: 0.000001
+    max_input_tokens: 32768
+    latency_ms_threshold: 300
+    accuracy_pct_threshold: 0.92
+    supports_vision: true
+  deepseek:
+    input_cost_per_token: 0.00000014  # DeepSeek pricing (very cheap)
+    max_input_tokens: 32768
+    latency_ms_threshold: 800
+    accuracy_pct_threshold: 0.91
+    supports_vision: false  # DeepSeek-VL2 is separate from chat API
+  groq:
+    input_cost_per_token: 0.0000005
+    max_input_tokens: 8192
+    latency_ms_threshold: 100
+    accuracy_pct_threshold: 0.88
+    supports_vision: false
+  openai:
+    input_cost_per_token: 0.0000015
+    max_input_tokens: 128000
+    latency_ms_threshold: 200
+    accuracy_pct_threshold: 0.95
+    supports_vision: true
 
 switching_rules:
   default_provider: gemini
@@ -27,10 +69,17 @@ whatsapp:
   app_secret: ""
 
 classification:
-  patterns: {}
+  patterns:
+    technical: ["code", "api", "function", "algorithm", "programming", "software", "database", "server", "network"]
+    business: ["meeting", "project", "strategy", "revenue", "business", "market", "client", "sales", "financial"]
+    academic: ["research", "study", "analysis", "paper", "university", "academic", "thesis", "experiment"]
+    personal: ["note", "reminder", "personal", "diary", "thought", "todo", "schedule", "appointment"]
+    document: ["report", "document", "file", "record", "information", "data", "record", "form"]
+    image: ["photo", "picture", "image", "screenshot", "diagram", "chart", "graph"]
+    pdf: ["pdf", "document", "form", "application", "contract", "agreement", "certificate"]
 
 language_detection:
-  french_words: []
+  french_words: ["le", "la", "les", "et", "est", "dans", "pour", "avec", "une", "des", "par", "sur", "pour", "nous", "vous", "ils", "elles", "ce", "cette", "cet", "mon", "ma", "mes", "ton", "ta", "tes", "son", "sa", "ses", "notre", "votre", "leurs"]
 
 dashboard:
   port: 8080
@@ -41,8 +90,17 @@ auth:
   google_redirect_url: ""
   session_secret: ""
 
+vision:
+  enabled: true
+  encoder_model: "deepseek"  # Options: deepseek, gemini, openai
+  fusion_method: "cross_attention"  # Options: concatenation, cross_attention, average, weighted
+  min_confidence: 0.6
+  max_image_size: 1024
+  supported_formats: ["jpg", "png", "jpeg", "webp", "pdf"]
+  quality_threshold: 0.7
+
 git:
-  user_name: ""
-  user_email: ""
-  vault_path: ""
+  user_name: "Obsidian Bot"
+  user_email: "bot@obsidian-vault.local"
+  vault_path: "/home/testablay/obsidian-vault/vault"
   remote_url: ""

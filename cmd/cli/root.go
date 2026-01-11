@@ -47,10 +47,10 @@ var emailCmd = &cobra.Command{
 		body := "This is a test email from the Obsidian CLI."
 		err := email.Send(to, subject, body)
 		if err != nil {
-			telemetry.ZapLogger.Sugar().Errorw("Error sending test email", "error", err)
+			telemetry.Error("Error sending test email: " + err.Error())
 			return
 		}
-		telemetry.ZapLogger.Sugar().Infow("Test email sent successfully", "to", to, "subject", subject)
+		telemetry.Info("Test email sent successfully to: " + to[0])
 	},
 }
 
@@ -68,25 +68,19 @@ var addUserCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		username := args[0]
-		privateKey, err := ssh.GenerateKeyPair(username)
+		_, err := ssh.GenerateKeyPair(username)
 		if err != nil {
-			telemetry.ZapLogger.Sugar().Errorw("Error generating key pair for user", "username", username, "error", err)
+			telemetry.Error("Error generating key pair for user " + username + ": " + err.Error())
 			return
 		}
-		telemetry.ZapLogger.Sugar().Infow("Private key generated for user", "username", username, "private_key", string(privateKey))
+		telemetry.Info("Private key generated for user: " + username)
 	},
 }
 
 func init() {
-	// Initialize telemetry logger as early as possible
-	if _, err := telemetry.Init("obsidian-cli"); err != nil {
-		fmt.Printf("Failed to initialize telemetry: %v\n", err) // Use fmt.Printf here as logger might not be fully ready
-		os.Exit(1)
-	}
-
+	telemetry.Init("obsidian-cli")
 	carapace.Gen(rootCmd)
 	config.Init()
-	// logger.Init() // Removed old logger init
 	database.Init()
 	rootCmd.AddCommand(tuiCmd)
 	rootCmd.AddCommand(emailCmd)
@@ -96,6 +90,6 @@ func init() {
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		telemetry.ZapLogger.Sugar().Fatalw("CLI execution failed", "error", err)
+		telemetry.Fatal("CLI execution failed: " + err.Error())
 	}
 }

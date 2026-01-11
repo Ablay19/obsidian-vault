@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/auth"
 	"obsidian-automation/internal/bot"
@@ -21,6 +22,7 @@ import (
 	"obsidian-automation/internal/dashboard/ws"
 	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/middleware"
+	"obsidian-automation/internal/rag"
 	"obsidian-automation/internal/ssh"
 	"obsidian-automation/internal/state"
 	"obsidian-automation/internal/telemetry"
@@ -71,22 +73,26 @@ func (l *AppLogger) Success(msg string, fields ...zap.Field) {
 }
 
 // setupGracefulShutdown handles graceful shutdown
-func setupGracefulShutdown(srv *http.Server, logger *AppLogger) {
+func setupGracefulShutdown(srv *http.Server, logger *AppLogger) <-chan struct{} {
+	done := make(chan struct{})
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
 		<-stop
-		logger.Info("🛑 Shutting down gracefully...")
+		logger.Info("Shutting down gracefully...")
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
 		if err := srv.Shutdown(ctx); err != nil {
 			logger.Error("Server shutdown error", zap.Error(err))
 		} else {
-			logger.Info("🎉 Server stopped gracefully")
+			logger.Info("Server stopped gracefully")
 		}
+		close(done)
 	}()
+
+	return done
 }
 
 func initConfig() {
@@ -170,10 +176,8 @@ func validateEnvironment(logger *AppLogger) {
 }
 
 func initTelemetry(logger *AppLogger) {
-	if _, err := telemetry.Init("obsidian-bot"); err != nil {
-		logger.Error("Failed to initialize telemetry", zap.Error(err))
-		os.Exit(1)
-	}
+	telemetry.Init("obsidian-bot")
+	logger.Info("Telemetry initialized")
 }
 
 func initDatabase(logger *AppLogger) *sql.DB {
@@ -270,6 +274,11 @@ func startBot(db *sql.DB, aiService *ai.AIService, rcm *state.RuntimeConfigManag
 	}()
 }
 
+// Global variables
+var (
+	globalRAGChain *rag.RAGChain // RAG chain instance
+)
+
 func main() {
 	logger := NewAppLogger(os.Getenv("ENABLE_COLORFUL_LOGS") == "true")
 
@@ -286,7 +295,11 @@ func main() {
 	aiService, authService, wsManager, videoStorage := initServices(context.Background(), db, rcm, logger)
 
 	// Initialize vector store for RAG
-	vectorStore := vectorstore.NewMemoryVectorStore()
+	vectorStore, err := vectorstore.NewSQLiteVectorStore(db)
+	if err != nil {
+		logger.Error("Failed to initialize vector store", zap.Error(err))
+		return
+	}
 
 	router := setupRouter(logger)
 
@@ -308,7 +321,7 @@ func main() {
 	startServer(server, logger)
 	startBot(db, aiService, rcm, wsManager, vectorStore, logger)
 
-	setupGracefulShutdown(server, logger)
+	done := setupGracefulShutdown(server, logger)
 
-	select {}
+	<-done
 }

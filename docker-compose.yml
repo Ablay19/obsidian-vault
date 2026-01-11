@@ -1,15 +1,16 @@
-version: '3.3'
+version: '3.8'
 
 services:
   # Main Obsidian Bot Service
   bot:
     build:
       context: .
-      dockerfile: Dockerfile.production
+      dockerfile: Dockerfile
+      target: production
       args:
         APP_VERSION: ${APP_VERSION:-v1.0.0}
-        GO_VERSION: ${GO_VERSION:-1.25.4}
-        ALPINE_VERSION: ${ALPINE_VERSION:-3.19}
+        GO_VERSION: ${GO_VERSION:-1.23.4}
+        ALPINE_VERSION: ${ALPINE_VERSION:-3.20}
     container_name: obsidian-bot
     env_file:
       - .env
@@ -22,23 +23,25 @@ services:
     ports:
       - "${BOT_PORT:-8080}:8080"
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     environment:
       - ENVIRONMENT=production
       - PORT=8080
       - LOG_LEVEL=INFO
+      - GIN_MODE=release
       - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-}
       - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
       - ENABLE_GOOGLE_LOGGING=${ENABLE_GOOGLE_LOGGING:-false}
     restart: unless-stopped
-    
+
     healthcheck:
       test: ["CMD", "/app/healthcheck.sh"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
-    
+      start_period: 10s
+
     deploy:
       resources:
         limits:
@@ -47,6 +50,12 @@ services:
         reservations:
           memory: 256M
           cpus: '0.25'
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # SSH Server Service (Optional, for secure access)
   ssh:

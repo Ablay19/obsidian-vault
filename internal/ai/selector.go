@@ -3,10 +3,27 @@ package ai
 import (
 	"obsidian-automation/internal/config"
 	"sort"
+	"strings"
 )
 
 // select_provider selects the best AI provider based on task complexity and cost constraints.
-func select_provider(task_tokens int, task_depth int, max_cost float64, profiles map[string]config.ProviderConfig, rules config.SwitchingRules) string {
+// If activeProvider is specified, it will be preferred if it's enabled.
+func select_provider(task_tokens int, task_depth int, max_cost float64, profiles map[string]config.ProviderConfig, rules config.SwitchingRules, activeProvider string) string {
+	// First, check if activeProvider is specified and is a valid/known provider
+	if activeProvider != "" {
+		// Normalize case for lookup
+		normalizedActive := strings.ToLower(activeProvider)
+		for name := range profiles {
+			if strings.ToLower(name) == normalizedActive {
+				return activeProvider
+			}
+		}
+		// If activeProvider is not in profiles, still return it - it will be validated later
+		if activeProvider != "" {
+			return activeProvider
+		}
+	}
+
 	type candidate struct {
 		name     string
 		cost     float64

@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -17,13 +18,13 @@ import (
 func LoadConfig() {
 	// Load secrets from Vault (optional)
 	if err := loadSecretsFromVault(); err != nil {
-		fmt.Printf("Could not load secrets from Vault. Falling back to environment variables: %v\n", err)
+		slog.Warn("Could not load secrets from Vault. Falling back to environment variables: %v\n", err)
 		// Continue with environment variables instead of exiting
 	}
 
 	// Unmarshal into AppConfig struct
 	if err := viper.Unmarshal(&AppConfig); err != nil {
-		fmt.Printf("Unable to decode into struct: %v\n", err)
+		slog.Warn("Unable to decode into struct: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -34,7 +35,7 @@ func loadSecretsFromVault() error {
 
 	// If Vault credentials not set, that's okay for development
 	if vaultAddr == "" || vaultToken == "" {
-		fmt.Printf("Vault credentials not found, using environment variables only\n")
+		slog.Warn("Vault credentials not found, using environment variables only\n")
 		return nil // Don't return error, just skip Vault loading
 	}
 
@@ -57,10 +58,10 @@ func loadSecretsFromVault() error {
 
 	for key, value := range secret.Data {
 		viper.Set(key, value)
-		fmt.Printf("Loaded secret from Vault: %s\n", key)
+		slog.Info("Loaded secret from Vault: %s\n", key)
 	}
 
-	fmt.Println("Successfully loaded secrets from Vault.")
+	slog.Info("Successfully loaded secrets from Vault.")
 	return nil
 }
 
@@ -70,9 +71,9 @@ var AppConfig Config
 func init() {
 	// 1. Load .env file using godotenv (actually sets OS environment variables)
 	if err := godotenv.Load(); err != nil {
-		fmt.Printf("No .env file found or error loading it: %v\n", err)
+		slog.Warn("No .env file found or error loading it: %v\n", err)
 	} else {
-		fmt.Println(".env file loaded into environment successfully")
+		slog.Info(".env file loaded into environment successfully")
 	}
 
 	// 2. Set Defaults
@@ -89,15 +90,15 @@ func init() {
 	viper.AddConfigPath(".")
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			fmt.Println("config.yaml not found, using defaults")
+			slog.Warn("config.yaml not found, using defaults")
 		} else {
-			fmt.Printf("Error reading config.yaml: %v\n", err)
+			slog.Error("Error reading config.yaml: %v\n", err)
 		}
 	}
 
 	// 6. Unmarshal into AppConfig struct
 	if err := viper.Unmarshal(&AppConfig); err != nil {
-		fmt.Printf("Unable to decode into struct: %v\n", err)
+		slog.Error("Unable to decode into struct: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -119,6 +120,7 @@ type ProviderConfig struct {
 	MaxOutputTokens      int     `mapstructure:"max_output_tokens"`
 	LatencyMsThreshold   int     `mapstructure:"latency_ms_threshold"`
 	AccuracyPctThreshold float64 `mapstructure:"accuracy_pct_threshold"`
+	SupportsVision       bool    `mapstructure:"supports_vision"`
 }
 
 // SwitchingRules defines the rules for switching between AI providers.
@@ -171,6 +173,15 @@ type Config struct {
 		GoogleRedirectURL  string `mapstructure:"google_redirect_url"`
 		SessionSecret      string `mapstructure:"session_secret"`
 	} `mapstructure:"auth"`
+	Vision struct {
+		Enabled          bool     `mapstructure:"enabled"`
+		EncoderModel     string   `mapstructure:"encoder_model"`
+		FusionMethod     string   `mapstructure:"fusion_method"`
+		MinConfidence    float64  `mapstructure:"min_confidence"`
+		MaxImageSize     int      `mapstructure:"max_image_size"`
+		SupportedFormats []string `mapstructure:"supported_formats"`
+		QualityThreshold float64  `mapstructure:"quality_threshold"`
+	} `mapstructure:"vision"`
 	Git struct {
 		UserName  string `mapstructure:"user_name"`
 		UserEmail string `mapstructure:"user_email"`

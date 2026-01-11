@@ -8,10 +8,13 @@ import (
 	"time"
 
 	"obsidian-automation/internal/config"
+	"obsidian-automation/internal/telemetry"
 )
 
 func TestAuthService_SessionManagement(t *testing.T) {
-	// Setup
+	// Setup - ensure telemetry is initialized first
+	telemetry.Init("test")
+
 	cfg := config.Config{}
 	cfg.Auth.SessionSecret = "test-secret-key-12345"
 	cfg.Auth.GoogleClientID = "test-client-id"
@@ -65,6 +68,9 @@ func TestAuthService_SessionManagement(t *testing.T) {
 }
 
 func TestAuthService_Middleware(t *testing.T) {
+	// Initialize telemetry
+	telemetry.Init("test")
+
 	cfg := config.Config{}
 	cfg.Auth.SessionSecret = "test-secret"
 	authService := NewAuthService(cfg)
@@ -103,6 +109,9 @@ func TestAuthService_Middleware(t *testing.T) {
 }
 
 func TestAuthService_GetLoginURL(t *testing.T) {
+	// Initialize telemetry
+	telemetry.Init("test")
+
 	cfg := config.Config{}
 	cfg.Auth.GoogleClientID = "test-client-id"
 	cfg.Auth.GoogleRedirectURL = "http://localhost:8080/callback"

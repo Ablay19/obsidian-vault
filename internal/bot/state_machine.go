@@ -6,6 +6,7 @@ import (
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/database"
 	"obsidian-automation/internal/telemetry"
+	"regexp"
 	"strings"
 	"time"
 
@@ -35,7 +36,18 @@ func NewMessageProcessor(aiService ai.AIServiceInterface) *MessageProcessor {
 
 // ProcessMessage processes non-command text messages
 func (mp *MessageProcessor) ProcessMessage(ctx context.Context, bot Bot, message *tgbotapi.Message, state *UserState) error {
-	telemetry.ZapLogger.Sugar().Infow("Processing non-command text as AI prompt", "chat_id", message.Chat.ID, "text_len", len(message.Text))
+	telemetry.Info("Processing non-command text as AI prompt", "chat_id", message.Chat.ID, "text_len", len(message.Text))
+
+	// Add user message to conversation history
+	state.AddToConversation("user", message.Text)
+
+	// Set user's preferred provider on AI service
+	if state.Provider != "" {
+		providerName := normalizeProviderName(state.Provider)
+		if err := mp.aiService.SetProvider(providerName); err != nil {
+			telemetry.Warn("Failed to set user provider", "provider", providerName, "error", err)
+		}
+	}
 
 	// Send thinking message
 	_, _ = bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Thinking..."))
@@ -43,18 +55,54 @@ func (mp *MessageProcessor) ProcessMessage(ctx context.Context, bot Bot, message
 	var responseText strings.Builder
 	systemPrompt := fmt.Sprintf("Respond in %s. Output your response as valid HTML, with proper headings, paragraphs, and LaTeX formulas using MathJax syntax.", state.Language)
 
+	// Build conversation context
+	conversationHistory := state.GetConversationHistory()
+	var conversationContext strings.Builder
+
+	// Add system prompt
+	conversationContext.WriteString(systemPrompt)
+	conversationContext.WriteString("\n\n")
+
+	// Add conversation history
+	for _, msg := range conversationHistory {
+		if msg.Role == "user" {
+			conversationContext.WriteString("User: ")
+			conversationContext.WriteString(msg.Content)
+			conversationContext.WriteString("\n")
+		} else if msg.Role == "assistant" {
+			conversationContext.WriteString("Assistant: ")
+			conversationContext.WriteString(msg.Content)
+			conversationContext.WriteString("\n")
+		}
+	}
+
+	// Add current user message
+	conversationContext.WriteString("User: ")
+	conversationContext.WriteString(message.Text)
+	conversationContext.WriteString("\nAssistant: ")
+
 	reqCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
 	req := &ai.RequestModel{
 		SystemPrompt: systemPrompt,
-		UserPrompt:   message.Text,
+		UserPrompt:   conversationContext.String(),
 		Temperature:  0.7,
 	}
 
+	// Track which provider will be used
+	providerToUse := state.Provider
+	if providerToUse == "" {
+		providerToUse = mp.aiService.GetActiveProviderName()
+	}
+
+	// Track response time
+	startTime := time.Now()
 	err := mp.aiService.Chat(reqCtx, req, func(chunk string) {
 		responseText.WriteString(chunk)
 	})
+	responseTime := time.Since(startTime)
+	TrackResponseTime(responseTime)
 
 	if err != nil {
 		userMsg := "Sorry, I had trouble thinking right now. Please try again later."
@@ -63,19 +111,51 @@ func (mp *MessageProcessor) ProcessMessage(ctx context.Context, bot Bot, message
 		}
 		_, sendErr := bot.Send(tgbotapi.NewMessage(message.Chat.ID, userMsg))
 		if sendErr != nil {
-			telemetry.ZapLogger.Sugar().Errorw("Failed to send error message", "error", sendErr)
+			telemetry.Error("Failed to send error message", "error", sendErr)
 		}
 		return fmt.Errorf("AI chat failed: %w", err)
 	}
 
-	msg := tgbotapi.NewMessage(message.Chat.ID, responseText.String())
+	// Track provider usage
+	TrackProviderUsage(providerToUse)
+
+	// Clean the response - strip unsupported HTML tags
+	cleanResponse := cleanTelegramResponse(responseText.String())
+
+	msg := tgbotapi.NewMessage(message.Chat.ID, cleanResponse)
 	msg.ParseMode = tgbotapi.ModeHTML
 	sentMsg, err := bot.Send(msg)
 	if err == nil {
-		database.SaveMessage(ctx, message.From.ID, message.Chat.ID, sentMsg.MessageID, "out", "text", responseText.String(), "")
+		// Add assistant response to conversation history
+		state.AddToConversation("assistant", cleanResponse)
+		database.SaveMessage(ctx, message.From.ID, message.Chat.ID, sentMsg.MessageID, "out", "text", cleanResponse, "")
+
+		// Trigger webhook event
+		go TriggerMessageEvent(message, cleanResponse)
 	}
 
 	return err
+}
+
+// cleanTelegramResponse removes unsupported HTML tags from the response
+func cleanTelegramResponse(response string) string {
+	// Remove unsupported HTML tags (h1-h6, div, span, etc.)
+	re := regexp.MustCompile(`<(/?)(h[1-6]|div|span|section|article|header|footer|main|nav|aside)(\s[^>]*)?>`)
+	cleaned := re.ReplaceAllString(response, "")
+
+	// Convert markdown headers to bold
+	re = regexp.MustCompile(`(?m)^#+\s+(.+)$`)
+	cleaned = re.ReplaceAllString(cleaned, "<b>$1</b>")
+
+	// Convert markdown lists to HTML lists
+	re = regexp.MustCompile(`(?m)^\s*[-*]\s+(.+)$`)
+	cleaned = re.ReplaceAllString(cleaned, "• $1")
+
+	// Clean up multiple newlines
+	re = regexp.MustCompile(`\n{3,}`)
+	cleaned = re.ReplaceAllString(cleaned, "\n\n")
+
+	return strings.TrimSpace(cleaned)
 }
 
 // StagingStateMachine handles the staging state machine
@@ -144,14 +224,20 @@ type CommandHandlerManager struct {
 
 // HandleCommand processes commands and text messages
 func (chm *CommandHandlerManager) HandleCommand(ctx context.Context, bot Bot, message *tgbotapi.Message, state *UserState) error {
-	telemetry.ZapLogger.Sugar().Infow("Processing command/text", "chat_id", message.Chat.ID, "text", message.Text)
+	telemetry.Info("Processing command/text", "chat_id", message.Chat.ID, "text", message.Text)
 
 	// Upsert user
 	database.UpsertUser(ctx, message.From)
 
+	// Track message
+	TrackMessage()
+
 	if !message.IsCommand() {
 		return chm.stateMachine.ProcessMessage(ctx, bot, message, state)
 	}
+
+	// Track command usage
+	TrackCommand(message.Command())
 
 	return chm.stateMachine.ProcessCommand(ctx, bot, message, state, chm.commandRouter, chm.cmdCtx)
 }
@@ -177,8 +263,11 @@ func NewFileHandler(stateMachine StateMachine) *FileHandler {
 func (fh *FileHandler) HandlePhoto(ctx context.Context, bot Bot, message *tgbotapi.Message, filename string) error {
 	database.UpsertUser(ctx, message.From)
 
-	state := getUserState(message.From.ID)
+	state := GetUserState(message.From.ID)
 	fh.stateMachine.StageFile(state, filename, "image", message.Caption)
+
+	// Track image processed
+	TrackImageProcessed()
 
 	bot.Send(tgbotapi.NewMessage(message.Chat.ID, "🖼️ Image staged. Send additional text context, or type /process to analyze."))
 	return nil
@@ -188,8 +277,11 @@ func (fh *FileHandler) HandlePhoto(ctx context.Context, bot Bot, message *tgbota
 func (fh *FileHandler) HandleDocument(ctx context.Context, bot Bot, message *tgbotapi.Message, filename string) error {
 	database.UpsertUser(ctx, message.From)
 
-	state := getUserState(message.From.ID)
+	state := GetUserState(message.From.ID)
 	fh.stateMachine.StageFile(state, filename, "pdf", message.Caption)
+
+	// Track document processed
+	TrackDocumentProcessed()
 
 	bot.Send(tgbotapi.NewMessage(message.Chat.ID, "📄 PDF staged. Send additional text context, or type /process to analyze."))
 	return nil

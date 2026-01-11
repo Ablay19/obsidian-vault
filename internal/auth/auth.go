@@ -33,20 +33,19 @@ type UserSession struct {
 	TestUser bool   `json:"test_user"`
 }
 
-// TestUserConfig for test user management
 type TestUserConfig struct {
-	Email    string `json:"email"`
-	Name     string `json:"name"`
-	Password string `json:"password"`
-	Enabled  bool   `json:"enabled"`
+	Email    string
+	Name     string
+	Password string
+	Enabled  bool
 }
 
 func NewAuthService(cfg config.Config) *AuthService {
-	telemetry.ZapLogger.Sugar().Info("Initializing Auth Service", "redirect_url", cfg.Auth.GoogleRedirectURL)
+	telemetry.Info("Initializing Auth Service with redirect URL: " + cfg.Auth.GoogleRedirectURL)
 
 	// Validate required OAuth configuration
 	if cfg.Auth.GoogleClientID == "" || cfg.Auth.GoogleClientSecret == "" {
-		telemetry.ZapLogger.Sugar().Warn("OAuth not configured, using test mode")
+		telemetry.Warn("OAuth not configured, using test mode")
 	}
 
 	return &AuthService{
@@ -156,9 +155,7 @@ func (s *AuthService) createTestUserSession(ctx context.Context, code string) (*
 	// In production, this would verify against actual test user database
 	for email, user := range testUsers {
 		if strings.Contains(code, email) && user.Enabled {
-			// Check if this is a valid test user request
-			telemetry.ZapLogger.Sugar().Info("Test user login", "email", email)
-
+			telemetry.Info("Test user login: " + email)
 			return &UserSession{
 				GoogleID: "test_" + email,
 				Email:    user.Email,
@@ -251,7 +248,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 			// If we are in dev mode and have no session, we'll allow a "dev-session"
 			_, err := s.VerifySession(r)
 			if err != nil {
-				telemetry.ZapLogger.Sugar().Info("Dev mode detected: Bypassing real OAuth")
+				telemetry.Info("Dev mode detected: Bypassing real OAuth")
 				devSession, _ := s.CreateDevSession()
 				ctx := context.WithValue(r.Context(), "session", devSession)
 				next.ServeHTTP(w, r.WithContext(ctx))
@@ -284,7 +281,7 @@ func (s *AuthService) GinMiddleware() gin.HandlerFunc {
 		// Check for dev bypass
 		if os.Getenv("ENVIRONMENT_MODE") == "dev" {
 			// If we are in dev mode, always allow dev session
-			telemetry.ZapLogger.Sugar().Info("Dev mode detected: Using development session")
+			telemetry.Info("Dev mode detected: Using development session")
 			devSession, _ := s.CreateDevSession()
 			c.Set("session", devSession)
 			c.Next()

@@ -77,12 +77,12 @@ func NewDashboard(aiService *ai.AIService, rcm *state.RuntimeConfigManager, db *
 	whatsappService := whatsapp.NewService(
 		whatsappConfig,
 		whatsappPipeline,
-		telemetry.ZapLogger,
-		whatsapp.NewLocalMediaStorage("attachments/whatsapp", telemetry.ZapLogger),
-		whatsapp.NewDefaultValidator(validatorConfig, telemetry.ZapLogger),
+		nil,
+		whatsapp.NewLocalMediaStorage("attachments/whatsapp", nil),
+		whatsapp.NewDefaultValidator(validatorConfig, nil),
 	)
 
-	whatsappHandler := whatsapp.NewHandler(whatsappService, telemetry.ZapLogger)
+	whatsappHandler := whatsapp.NewHandler(whatsappService, nil)
 
 	return &Dashboard{
 		aiService:       aiService,
@@ -216,14 +216,14 @@ func (d *Dashboard) handleQA(c *gin.Context) {
 	}
 
 	// Stream the response back
-	telemetry.ZapLogger.Sugar().Info("Handling QA request", "question", question)
+	telemetry.Info("Handling QA request", "question", question)
 	err := d.aiService.Chat(c.Request.Context(), req, func(chunk string) {
 		fmt.Fprint(c.Writer, chunk)
 		c.Writer.Flush()
 	})
 
 	if err != nil {
-		telemetry.ZapLogger.Sugar().Errorw("QA request failed", "error", err)
+		telemetry.Error("QA request failed: " + err.Error())
 		fmt.Fprintf(c.Writer, "<div class='text-red-500'>Error: %v</div>", err)
 	}
 }
@@ -248,9 +248,9 @@ func (d *Dashboard) handleStatsPanel(c *gin.Context) {
 
 // handleChatHistoryPanel serves the ChatHistoryPanel HTML fragment.
 func (d *Dashboard) handleChatHistoryPanel(c *gin.Context) {
-	history, err := database.GetChatHistory(context.Background(), 0, 50) // UserID 0 as placeholder for "all" or just demo
+	history, err := database.GetChatHistory(context.Background(), 0, 50)
 	if err != nil {
-		telemetry.ZapLogger.Sugar().Errorw("Failed to get chat history", "error", err)
+		telemetry.Error("Failed to get chat history: " + err.Error())
 	}
 	ChatHistoryPanel(history).Render(c.Request.Context(), c.Writer)
 }
@@ -263,7 +263,7 @@ func (d *Dashboard) handleEnvironmentPanel(c *gin.Context) {
 
 // handleWhatsAppPanel serves the WhatsAppPanel HTML fragment.
 func (d *Dashboard) handleWhatsAppPanel(c *gin.Context) {
-	telemetry.ZapLogger.Sugar().Info("Handling WhatsApp panel request")
+	telemetry.Info("Handling WhatsApp panel request")
 	WhatsAppPanel().Render(c.Request.Context(), c.Writer)
 }
 
@@ -765,10 +765,10 @@ func (d *Dashboard) handleTelegramWebhook(c *gin.Context) {
 	}
 	userSession := session.(*auth.UserSession)
 
-	telemetry.ZapLogger.Sugar().Infow("Linking accounts via webhook", "email", userSession.Email, "telegram_id", telegramID)
+	telemetry.Info("Linking accounts via webhook for: " + userSession.Email)
 
 	if err := database.LinkTelegramToEmail(c.Request.Context(), telegramID, userSession.Email); err != nil {
-		telemetry.ZapLogger.Sugar().Errorw("Webhook linking failed", "error", err)
+		telemetry.Error("Webhook linking failed: " + err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal error"})
 		return
 	}

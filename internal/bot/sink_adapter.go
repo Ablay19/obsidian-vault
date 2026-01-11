@@ -36,7 +36,7 @@ func (s *BotSink) Save(ctx context.Context, job pipeline.Job, result pipeline.Re
 		return fmt.Errorf("invalid output type")
 	}
 
-	telemetry.ZapLogger.Sugar().Info("Sink saving result", "job_id", result.JobID, "category", content.Category)
+	telemetry.Info("Sink saving result", "job_id", result.JobID, "category", content.Category)
 
 	// 1. Create Note Content
 	var builder strings.Builder
@@ -87,7 +87,7 @@ func (s *BotSink) Save(ctx context.Context, job pipeline.Job, result pipeline.Re
 		os.MkdirAll("pdfs", 0755)
 		pdfPath = filepath.Join("pdfs", pdfFilename)
 		if err := converter.ConvertMarkdownToPDF(markdownContent, pdfPath); err != nil {
-			telemetry.ZapLogger.Sugar().Errorw("PDF conversion failed", "error", err)
+			telemetry.Error("PDF conversion failed: " + err.Error())
 		}
 	}
 
@@ -113,7 +113,7 @@ func (s *BotSink) Save(ctx context.Context, job pipeline.Job, result pipeline.Re
 		content.AIProvider,
 		userID,
 	); err != nil {
-		telemetry.ZapLogger.Sugar().Errorw("Failed to save to DB", "error", err)
+		telemetry.Error("Failed to save to DB: " + err.Error())
 	}
 
 	// 5. Organize - this functionality has been removed, manual organization expected for now
@@ -124,9 +124,9 @@ func (s *BotSink) Save(ctx context.Context, job pipeline.Job, result pipeline.Re
 		go func() {
 			commitMsg := fmt.Sprintf("chore: auto commit document %s info about %s", noteFilename, content.Category)
 			if err := s.gitManager.SyncAutoCommit(commitMsg); err != nil {
-				telemetry.ZapLogger.Sugar().Errorw("Git sync failed", "job_id", job.ID, "error", err)
+				telemetry.Error("Git sync failed for job " + job.ID + ": " + err.Error())
 			} else {
-				telemetry.ZapLogger.Sugar().Infow("Git sync successful", "job_id", job.ID)
+				telemetry.Info("Git sync successful for job: " + job.ID)
 			}
 		}()
 	}

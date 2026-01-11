@@ -12,11 +12,8 @@ import (
 )
 
 func main() {
-	// Initialize telemetry
-	_, err := telemetry.Init("obsidian-bot-test")
-	if err != nil {
-		log.Fatal("Failed to initialize telemetry:", err)
-	}
+	telemetry.Init("obsidian-bot-test")
+	log.Println("Telemetry initialized")
 
 	// Test database connection
 	dbClient := database.OpenDB()

@@ -61,9 +61,9 @@ func isTelegramLinked(email string) bool { // Added context
 	var telegramID sql.NullInt64
 	err := database.Client.DB.QueryRow("SELECT telegram_id FROM users WHERE email = ?", email).Scan(&telegramID)
 	if err != nil {
-		telemetry.ZapLogger.Sugar().Debugw("isTelegramLinked check failed", "email", email, "error", err)
+		telemetry.Debug("isTelegramLinked check failed for: " + email)
 		return false
 	}
-	telemetry.ZapLogger.Sugar().Debugw("isTelegramLinked check successful", "email", email, "valid", telegramID.Valid, "id", telegramID.Int64)
+	telemetry.Debug("isTelegramLinked check successful for: " + email)
 	return telegramID.Valid
 }
