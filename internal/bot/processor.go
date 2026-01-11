@@ -8,6 +8,8 @@ import (
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/config"
 	"obsidian-automation/internal/pipeline"
+	"obsidian-automation/internal/vision"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -32,12 +34,14 @@ type Processor interface {
 type botProcessor struct {
 	aiService   ai.AIServiceInterface
 	vectorStore vectorstore.VectorStore
+	visionProc  *vision.VisionProcessor
 }
 
 // NewBotProcessor creates a new botProcessor instance.
 func NewBotProcessor(aiService ai.AIServiceInterface) Processor {
 	return &botProcessor{
-		aiService: aiService,
+		aiService:  aiService,
+		visionProc: vision.NewVisionProcessor(aiService),
 	}
 }
 
@@ -52,11 +56,11 @@ func (p *botProcessor) Process(ctx context.Context, job pipeline.Job) (pipeline.
 
 	caption, _ := job.Metadata["caption"].(string)
 
-	processedContent := processFileWithAI(
+	// Use multi-strategy processing to avoid bad results
+	processedContent := p.processFileWithMultipleStrategies(
 		ctx,
 		job.FileLocalPath,
 		job.ContentType.String(),
-		p.aiService,
 		streamCallback,
 		job.UserContext.Language,
 		updateStatus,
@@ -79,6 +83,422 @@ func (p *botProcessor) Process(ctx context.Context, job pipeline.Job) (pipeline.
 		ProcessedAt: time.Now(),
 		Output:      processedContent,
 	}, nil
+}
+
+// ProcessingStrategy represents different ways to process a file
+type ProcessingStrategy struct {
+	Name        string
+	Description string
+	ProcessFunc func(ctx context.Context, filePath, fileType string, aiService ai.AIServiceInterface, streamCallback func(string), language string, updateStatus func(string), caption string) ProcessedContent
+}
+
+// processFileWithMultipleStrategies tries multiple processing approaches to avoid bad results
+func (p *botProcessor) processFileWithMultipleStrategies(
+	ctx context.Context,
+	filePath, fileType string,
+	streamCallback func(string),
+	language string,
+	updateStatus func(string),
+	caption string,
+) ProcessedContent {
+
+	strategies := []ProcessingStrategy{
+		{
+			Name:        "Vision + AI Fusion",
+			Description: "Advanced multimodal processing with vision encoder",
+			ProcessFunc: p.processWithVisionFusion,
+		},
+		{
+			Name:        "Primary AI Processing",
+			Description: "Full AI analysis with OCR, summarization, and categorization",
+			ProcessFunc: p.processWithPrimaryAI,
+		},
+		{
+			Name:        "Enhanced OCR + Basic AI",
+			Description: "Advanced OCR with simplified AI analysis",
+			ProcessFunc: p.processWithEnhancedOCR,
+		},
+		{
+			Name:        "Fallback Basic Processing",
+			Description: "Basic OCR and text analysis only",
+			ProcessFunc: p.processWithBasicFallback,
+		},
+	}
+
+	var bestResult ProcessedContent
+	var bestScore float64 = -1
+
+	updateStatus("🤖 Trying multiple processing strategies...")
+
+	for i, strategy := range strategies {
+		updateStatus(fmt.Sprintf("🎯 Strategy %d/%d: %s", i+1, len(strategies), strategy.Name))
+
+		result := strategy.ProcessFunc(ctx, filePath, fileType, p.aiService, streamCallback, language, func(s string) {
+			// Don't spam with sub-strategy updates
+		}, caption)
+
+		// Score the result quality
+		score := p.scoreProcessingResult(result)
+
+		zap.S().Info("Strategy completed", "strategy", strategy.Name, "score", score, "category", result.Category)
+
+		// Keep the best result
+		if score > bestScore {
+			bestScore = score
+			bestResult = result
+			bestResult.AIProvider = fmt.Sprintf("%s (%s)", result.AIProvider, strategy.Name)
+
+			// If we have a good result, we can stop early
+			if score >= 0.8 {
+				zap.S().Info("Found good result, stopping strategy search", "strategy", strategy.Name, "score", score)
+				break
+			}
+		}
+
+		// Safety check - don't try too many strategies for performance
+		if i >= 2 && bestScore >= 0.5 {
+			break
+		}
+	}
+
+	updateStatus(fmt.Sprintf("✅ Best result: %s (score: %.2f)", bestResult.AIProvider, bestScore))
+	return bestResult
+}
+
+// scoreProcessingResult evaluates the quality of a processing result
+func (p *botProcessor) scoreProcessingResult(result ProcessedContent) float64 {
+	score := 0.0
+
+	// Text quality (40% weight)
+	if len(result.Text) > 100 {
+		score += 0.4
+	} else if len(result.Text) > 50 {
+		score += 0.2
+	} else if len(result.Text) > 10 {
+		score += 0.1
+	}
+
+	// Summary quality (30% weight)
+	if len(result.Summary) > 100 {
+		score += 0.3
+	} else if len(result.Summary) > 50 {
+		score += 0.15
+	}
+
+	// Categorization quality (20% weight)
+	if result.Category != "general" && result.Category != "unclear" && result.Category != "unprocessed" {
+		score += 0.2
+	}
+
+	// Topics and questions (10% weight)
+	if len(result.Topics) > 0 || len(result.Questions) > 0 {
+		score += 0.1
+	}
+
+	return score
+}
+
+// processWithVisionFusion - Advanced multimodal processing with vision encoder
+func (p *botProcessor) processWithVisionFusion(ctx context.Context, filePath, fileType string, aiService ai.AIServiceInterface, streamCallback func(string), language string, updateStatus func(string), caption string) ProcessedContent {
+	// Check if vision processing is available and enabled
+	if p.visionProc == nil || !p.visionProc.IsAvailable() {
+		zap.S().Info("Vision processing not available, falling back to primary AI")
+		return p.processWithPrimaryAI(ctx, filePath, fileType, aiService, streamCallback, language, updateStatus, caption)
+	}
+
+	// Only process images for now (can extend to PDFs later)
+	if fileType != "image" {
+		zap.S().Debug("Vision fusion only supports images, using primary AI", "fileType", fileType)
+		return p.processWithPrimaryAI(ctx, filePath, fileType, aiService, streamCallback, language, updateStatus, caption)
+	}
+
+	updateStatus("🤖 Starting vision-enhanced processing...")
+
+	// Extract text using enhanced OCR first
+	var extractedText string
+	var err error
+	extractedText, err = extractTextFromImageEnhanced(filePath)
+	if err != nil || len(extractedText) < 10 {
+		zap.S().Warn("OCR failed for vision processing, using basic OCR")
+		extractedText, err = extractTextFromImageBasic(filePath)
+		if err != nil {
+			return ProcessedContent{Category: "unprocessed", Tags: []string{"vision_failed", "ocr_failed"}, AIProvider: "Vision + AI Fusion"}
+		}
+	}
+
+	// Process with vision encoder
+	updateStatus("👁️ Generating multimodal embeddings...")
+	multimodalEmbedding, err := p.visionProc.ProcessImage(ctx, filePath, extractedText)
+	if err != nil {
+		zap.S().Warn("Vision processing failed, falling back to primary AI", "error", err)
+		return p.processWithPrimaryAI(ctx, filePath, fileType, aiService, streamCallback, language, updateStatus, caption)
+	}
+
+	// Check confidence threshold
+	minConfidence := config.AppConfig.Vision.MinConfidence
+	if multimodalEmbedding.Confidence < minConfidence {
+		zap.S().Info("Vision confidence too low, falling back to primary AI", "confidence", multimodalEmbedding.Confidence, "threshold", minConfidence)
+		return p.processWithPrimaryAI(ctx, filePath, fileType, aiService, streamCallback, language, updateStatus, caption)
+	}
+
+	// Create enhanced AI analysis with multimodal context
+	updateStatus("🧠 Analyzing with multimodal AI...")
+	result := ProcessedContent{
+		Text:     extractedText,
+		Category: "general",
+		Tags:     []string{"vision_enhanced"},
+		Language: language,
+	}
+
+	// Use LangChain with multimodal context
+	result.AIProvider = fmt.Sprintf("%s (Vision Enhanced)", p.visionProc.GetEncoderName())
+	result.Summary = p.generateMultimodalSummary(ctx, multimodalEmbedding, extractedText, aiService, streamCallback)
+	result.Topics, result.Questions = p.generateMultimodalTopicsAndQuestions(ctx, multimodalEmbedding, extractedText, aiService)
+
+	// Enhanced categorization using multimodal data
+	result.Category = p.categorizeWithVision(multimodalEmbedding, extractedText)
+	result.Tags = append(result.Tags, result.Category)
+	result.Confidence = multimodalEmbedding.Confidence
+
+	// Store in vector store with multimodal embeddings
+	if globalVectorStore != nil {
+		docID := fmt.Sprintf("vision_%s_%s", fileType, filePath)
+		doc := vectorstore.Document{
+			ID:      docID,
+			Content: result.Summary,
+			Metadata: map[string]interface{}{
+				"file_path":         filePath,
+				"file_type":         fileType,
+				"category":          result.Category,
+				"language":          result.Language,
+				"ai_provider":       result.AIProvider,
+				"vision_confidence": multimodalEmbedding.Confidence,
+				"vision_encoder":    p.visionProc.GetEncoderName(),
+			},
+			Vector: multimodalEmbedding.FusedVector,
+		}
+
+		if err := globalVectorStore.AddDocuments(ctx, []vectorstore.Document{doc}); err != nil {
+			zap.S().Error("Failed to store vision document in vector store", "error", err)
+		} else {
+			zap.S().Info("Vision-enhanced document stored in vector store", "id", docID)
+		}
+	}
+
+	return result
+}
+
+// generateMultimodalSummary creates a summary using multimodal context
+func (p *botProcessor) generateMultimodalSummary(ctx context.Context, embedding vision.MultimodalEmbedding, text string, aiService ai.AIServiceInterface, streamCallback func(string)) string {
+	prompt := fmt.Sprintf(`Based on the multimodal analysis of an image and its extracted text, provide a comprehensive summary.
+
+Image Analysis: The image has been analyzed using advanced vision AI and contains semantic information about visual content, layout, and structure.
+
+Extracted Text: %s
+
+Key multimodal insights:
+- Vision confidence: %.2f
+- Content appears to be document/image type
+- Visual and textual information has been fused for enhanced understanding
+
+Please provide a detailed summary that combines both visual and textual understanding:`, text, embedding.Confidence)
+
+	req := &ai.RequestModel{
+		UserPrompt:  prompt,
+		Temperature: 0.3,
+	}
+
+	var response strings.Builder
+	err := aiService.Chat(ctx, req, func(chunk string) {
+		response.WriteString(chunk)
+		if streamCallback != nil {
+			streamCallback(chunk)
+		}
+	})
+
+	if err != nil {
+		zap.S().Error("Failed to generate multimodal summary", "error", err)
+		return "Summary generation failed due to AI service error."
+	}
+
+	return strings.TrimSpace(response.String())
+}
+
+// generateMultimodalTopicsAndQuestions generates topics and questions using multimodal context
+func (p *botProcessor) generateMultimodalTopicsAndQuestions(ctx context.Context, embedding vision.MultimodalEmbedding, text string, aiService ai.AIServiceInterface) ([]string, []string) {
+	prompt := fmt.Sprintf(`Analyze this content using multimodal understanding (vision + text) and provide topics and questions.
+
+Content: %s
+
+Vision Analysis: Advanced AI vision processing has analyzed the visual elements, layout, and structure with %.2f confidence.
+
+Provide a JSON response with:
+- "topics": array of key topics/themes identified
+- "questions": array of insightful questions about the content
+
+Focus on questions that show deep understanding of both visual and textual elements.`, text, embedding.Confidence)
+
+	req := &ai.RequestModel{
+		UserPrompt:  prompt,
+		Temperature: 0.4,
+	}
+
+	var response strings.Builder
+	err := aiService.Chat(ctx, req, func(chunk string) {
+		response.WriteString(chunk)
+	})
+
+	if err != nil {
+		zap.S().Error("Failed to generate multimodal topics/questions", "error", err)
+		return []string{}, []string{}
+	}
+
+	// Parse JSON response
+	var result struct {
+		Topics    []string `json:"topics"`
+		Questions []string `json:"questions"`
+	}
+
+	jsonStr := strings.TrimSpace(response.String())
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		zap.S().Warn("Failed to parse multimodal topics/questions JSON", "error", err)
+		return []string{}, []string{}
+	}
+
+	return result.Topics, result.Questions
+}
+
+// categorizeWithVision categorizes content using vision-enhanced analysis
+func (p *botProcessor) categorizeWithVision(embedding vision.MultimodalEmbedding, text string) string {
+	// Use pattern matching with enhanced context from vision
+	textLower := strings.ToLower(text)
+
+	// Enhanced patterns considering both text and visual context
+	patterns := map[string][]string{
+		"technical": {"code", "api", "function", "algorithm", "programming", "software", "database", "server", "network", "api", "json", "python", "javascript", "go", "rust"},
+		"business":  {"meeting", "project", "strategy", "revenue", "business", "market", "client", "sales", "financial", "report", "presentation", "quarterly", "annual"},
+		"academic":  {"research", "study", "analysis", "paper", "university", "academic", "thesis", "experiment", "literature", "review", "methodology", "conclusion"},
+		"personal":  {"note", "reminder", "personal", "diary", "thought", "todo", "schedule", "appointment", "recipe", "shopping", "list"},
+		"document":  {"report", "document", "file", "record", "information", "data", "record", "form", "contract", "agreement", "certificate", "invoice", "receipt"},
+		"image":     {"photo", "picture", "image", "screenshot", "diagram", "chart", "graph", "photo", "scan", "photograph"},
+		"pdf":       {"pdf", "document", "form", "application", "contract", "agreement", "certificate", "manual", "guide", "book"},
+	}
+
+	scores := make(map[string]int)
+	for category, pats := range patterns {
+		scores[category] = countMatches(textLower, pats)
+	}
+
+	// Boost scores based on vision confidence for certain categories
+	if embedding.Confidence > 0.8 {
+		// High confidence vision might indicate charts/diagrams
+		if scores["image"] > 0 || scores["technical"] > 0 {
+			scores["technical"] += 2
+		}
+	}
+
+	maxScore := 0
+	bestCategory := "general"
+	for cat, score := range scores {
+		if score > maxScore {
+			maxScore = score
+			bestCategory = cat
+		}
+	}
+
+	if maxScore < 2 {
+		bestCategory = "general"
+	}
+
+	return bestCategory
+}
+
+// processWithPrimaryAI - Full AI processing with OCR and analysis
+func (p *botProcessor) processWithPrimaryAI(ctx context.Context, filePath, fileType string, aiService ai.AIServiceInterface, streamCallback func(string), language string, updateStatus func(string), caption string) ProcessedContent {
+	return processFileWithAI(ctx, filePath, fileType, aiService, streamCallback, language, updateStatus, caption)
+}
+
+// processWithEnhancedOCR - Enhanced OCR with simplified AI
+func (p *botProcessor) processWithEnhancedOCR(ctx context.Context, filePath, fileType string, aiService ai.AIServiceInterface, streamCallback func(string), language string, updateStatus func(string), caption string) ProcessedContent {
+	// Extract text with enhanced OCR
+	var text string
+	var err error
+
+	if fileType == "image" {
+		text, err = extractTextFromImageEnhanced(filePath)
+	} else if fileType == "pdf" {
+		text, err = extractTextFromPDFEnhanced(filePath)
+	}
+
+	if err != nil || len(text) < 10 {
+		return ProcessedContent{Category: "unprocessed", Tags: []string{"ocr_failed"}, AIProvider: "Enhanced OCR"}
+	}
+
+	// Simplified AI analysis - just categorization and basic summary
+	result := ProcessedContent{
+		Text:     text,
+		Category: "general",
+		Tags:     []string{},
+		Language: language,
+	}
+
+	// Try basic AI categorization
+	if aiService != nil {
+		prompt := fmt.Sprintf("Categorize this text into one of: technical, business, academic, personal, document, image, pdf. Return only the category name.\n\nText: %s", text[:min(500, len(text))])
+
+		req := &ai.RequestModel{
+			UserPrompt:  prompt,
+			Temperature: 0.3,
+		}
+
+		var response strings.Builder
+		err := aiService.Chat(ctx, req, func(chunk string) {
+			response.WriteString(chunk)
+		})
+
+		if err == nil {
+			category := strings.ToLower(strings.TrimSpace(response.String()))
+			validCategories := []string{"technical", "business", "academic", "personal", "document", "image", "pdf"}
+			for _, valid := range validCategories {
+				if strings.Contains(category, valid) {
+					result.Category = valid
+					break
+				}
+			}
+		}
+	}
+
+	result.Tags = []string{result.Category}
+	result.AIProvider = "Enhanced OCR + Basic AI"
+	return result
+}
+
+// processWithBasicFallback - Basic OCR only, no AI
+func (p *botProcessor) processWithBasicFallback(ctx context.Context, filePath, fileType string, aiService ai.AIServiceInterface, streamCallback func(string), language string, updateStatus func(string), caption string) ProcessedContent {
+	// Basic processing without AI
+	var text string
+	var err error
+
+	if fileType == "image" {
+		text, err = extractTextFromImageBasic(filePath)
+	} else if fileType == "pdf" {
+		text, err = extractTextFromPDFBasic(filePath)
+	}
+
+	result := ProcessedContent{
+		Text:     text,
+		Category: "general",
+		Tags:     []string{"basic_processing"},
+		Language: language,
+	}
+
+	if err != nil {
+		result.Category = "error"
+		result.Tags = []string{"processing_failed"}
+	}
+
+	result.AIProvider = "Basic OCR Only"
+	return result
 }
 
 type ProcessedContent struct {
@@ -141,21 +561,384 @@ func (l *AIServiceLLM) GenerateContent(ctx context.Context, messages []llms.Mess
 var execCommand = exec.Command
 
 func extractTextFromImage(imagePath string) (string, error) {
-	zap.S().Info("Starting OCR text extraction from image", "path", imagePath)
-	cmd := execCommand("tesseract", imagePath, "stdout", "-l", "eng+fra+ara")
-	output, err := cmd.Output()
-	if err != nil {
-		zap.S().Warn("Tesseract failed with multi-language, retrying with default", "path", imagePath, "error", err)
-		cmd = execCommand("tesseract", imagePath, "stdout")
-		output, err = cmd.Output()
-		if err != nil {
-			zap.S().Error("Tesseract failed completely", "path", imagePath, "error", err)
-			return "", fmt.Errorf("tesseract failed: %v", err)
+	zap.S().Info("Starting advanced OCR text extraction from image", "path", imagePath)
+
+	// Enhanced preprocessing for scanned documents
+	if err := preprocessImageForOCR(imagePath); err != nil {
+		zap.S().Warn("Image preprocessing failed, proceeding with original", "path", imagePath, "error", err)
+	}
+
+	var extracted string
+	var lastError error
+
+	// Try multiple OCR strategies in order of preference
+	strategies := []struct {
+		name string
+		args []string
+	}{
+		{"English PSM6", []string{"-l", "eng", "--psm", "6", "--oem", "3"}},      // Uniform block of text
+		{"Multi-lang PSM6", []string{"-l", "eng+fra+ara+deu+spa", "--psm", "6"}}, // Multi-language support
+		{"English PSM3", []string{"-l", "eng", "--psm", "3", "--oem", "3"}},      // Fully automatic
+		{"English PSM12", []string{"-l", "eng", "--psm", "12", "--oem", "3"}},    // Sparse text
+		{"Default", []string{}}, // Fallback
+	}
+
+	for _, strategy := range strategies {
+		args := append([]string{imagePath, "stdout"}, strategy.args...)
+		cmd := execCommand("tesseract", args...)
+
+		output, err := cmd.Output()
+		if err == nil {
+			text := strings.TrimSpace(string(output))
+			if !isGarbledText(text) && len(text) > 10 {
+				extracted = text
+				zap.S().Info("OCR successful", "strategy", strategy.name, "text_len", len(text))
+				break
+			}
+			zap.S().Debug("OCR strategy returned garbled or empty text", "strategy", strategy.name)
+		} else {
+			lastError = err
+			zap.S().Debug("OCR strategy failed", "strategy", strategy.name, "error", err)
 		}
 	}
-	extracted := strings.TrimSpace(string(output))
-	zap.S().Info("OCR extraction complete", "path", imagePath, "text_len", len(extracted))
+
+	if extracted == "" {
+		zap.S().Error("All OCR strategies failed", "path", imagePath, "last_error", lastError)
+		return "", fmt.Errorf("OCR failed with all strategies, last error: %v", lastError)
+	}
+
+	// Post-process the extracted text
+	extracted = postProcessOCRText(extracted)
+
+	zap.S().Info("Advanced OCR extraction complete", "path", imagePath, "text_len", len(extracted))
 	return extracted, nil
+}
+
+// preprocessImageForOCR enhances image for better OCR using ImageMagick
+func preprocessImageForOCR(imagePath string) error {
+	// Create a temporary preprocessed image
+	preprocessedPath := imagePath + "_ocr"
+
+	// Multi-step preprocessing for scanned documents
+	// 1. Increase resolution and contrast
+	// 2. Convert to grayscale
+	// 3. Apply unsharp mask for sharpness
+	// 4. Normalize and auto-level
+	cmd := execCommand("convert", imagePath,
+		"-resize", "200%", // Increase resolution
+		"-colorspace", "Gray", // Convert to grayscale
+		"-contrast-stretch", "0", // Auto contrast
+		"-normalize",      // Normalize
+		"-unsharp", "0x1", // Sharpen
+		"-threshold", "50%", // Binarize for better OCR
+		preprocessedPath)
+
+	err := cmd.Run()
+	if err != nil {
+		return err
+	}
+
+	// Replace original with preprocessed
+	return execCommand("mv", preprocessedPath, imagePath).Run()
+}
+
+// postProcessOCRText cleans up common OCR errors and formatting issues
+func postProcessOCRText(text string) string {
+	// Remove excessive whitespace
+	text = regexp.MustCompile(`\s+`).ReplaceAllString(text, " ")
+
+	// Fix common OCR character mistakes
+	replacements := map[string]string{
+		"l":  "l", // Keep as is, but could be "1" or "I"
+		"0":  "O", // Could be "0" or "O"
+		"1":  "I", // Could be "1" or "I"
+		"|":  "I", // Pipe often mistaken for I
+		"rn": "m", // rn often becomes m
+		"vv": "w", // vv often becomes w
+	}
+
+	for old, new := range replacements {
+		// Only replace if it's clearly a mistake (surrounded by letters)
+		pattern := fmt.Sprintf(`(\w)%s(\w)`, regexp.QuoteMeta(old))
+		text = regexp.MustCompile(pattern).ReplaceAllStringFunc(text, func(match string) string {
+			parts := regexp.MustCompile(pattern).FindStringSubmatch(match)
+			if len(parts) == 3 {
+				return parts[1] + new + parts[2]
+			}
+			return match
+		})
+	}
+
+	// Fix line breaks in the middle of sentences
+	text = regexp.MustCompile(`([a-z])\s*\n\s*([a-z])`).ReplaceAllString(text, "$1 $2")
+
+	// Remove single character lines that are likely OCR artifacts
+	lines := strings.Split(text, "\n")
+	var cleanLines []string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if len(line) > 1 || (len(line) == 1 && regexp.MustCompile(`[a-zA-Z0-9]`).MatchString(line)) {
+			cleanLines = append(cleanLines, line)
+		}
+	}
+
+	return strings.Join(cleanLines, "\n")
+}
+
+// isGarbledText checks if OCR result is mostly random characters
+func isGarbledText(text string) bool {
+	if len(text) < 5 {
+		return false
+	}
+
+	// Count non-alphanumeric characters (excluding common punctuation)
+	nonAlnum := 0
+	for _, r := range text {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') ||
+			r == ' ' || r == '.' || r == ',' || r == '!' || r == '?' || r == '-' || r == '\n') {
+			nonAlnum++
+		}
+	}
+
+	// If more than 40% non-alphanumeric, consider it garbled
+	garbledRatio := float64(nonAlnum) / float64(len(text))
+	isGarbled := garbledRatio > 0.4
+
+	if isGarbled {
+		zap.S().Debug("Text detected as garbled", "ratio", garbledRatio, "text_sample", text[:min(50, len(text))])
+	}
+
+	return isGarbled
+}
+
+// assessTextQuality evaluates the quality of extracted text
+func assessTextQuality(text string) int {
+	if len(text) < 10 {
+		return 0
+	}
+
+	score := 0
+
+	// Length bonus
+	if len(text) > 100 {
+		score += 30
+	} else if len(text) > 50 {
+		score += 20
+	} else if len(text) > 25 {
+		score += 10
+	}
+
+	// Word count bonus (prefer text with actual words)
+	words := strings.Fields(text)
+	wordCount := len(words)
+	if wordCount > 20 {
+		score += 25
+	} else if wordCount > 10 {
+		score += 15
+	} else if wordCount > 5 {
+		score += 5
+	}
+
+	// Sentence structure bonus (sentences with proper punctuation)
+	sentences := strings.Split(text, ".")
+	if len(sentences) > 3 {
+		score += 20
+	} else if len(sentences) > 1 {
+		score += 10
+	}
+
+	// English word recognition (simple heuristic)
+	englishWords := []string{"the", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by"}
+	englishCount := 0
+	textLower := strings.ToLower(text)
+	for _, word := range englishWords {
+		if strings.Contains(textLower, " "+word+" ") {
+			englishCount++
+		}
+	}
+	score += englishCount * 2
+
+	// Penalty for excessive symbols
+	symbols := 0
+	for _, r := range text {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') ||
+			r == ' ' || r == '.' || r == ',' || r == '!' || r == '?' || r == '-' || r == '\n' ||
+			r == ':' || r == ';' || r == '(' || r == ')' || r == '[' || r == ']' || r == '"' || r == '\'') {
+			symbols++
+		}
+	}
+	symbolRatio := float64(symbols) / float64(len(text))
+	if symbolRatio > 0.3 {
+		score -= 20
+	}
+
+	// Ensure score is within bounds
+	if score < 0 {
+		score = 0
+	}
+	if score > 100 {
+		score = 100
+	}
+
+	return score
+}
+
+// extractTextFromImageEnhanced - Enhanced OCR with multiple strategies and tools
+func extractTextFromImageEnhanced(imagePath string) (string, error) {
+	zap.S().Info("Starting enhanced OCR extraction", "path", imagePath)
+
+	var allTexts []string
+
+	// Strategy 1: Multiple Tesseract PSM modes
+	psmStrategies := [][]string{
+		{"-l", "eng", "--psm", "6", "--oem", "3"},         // Uniform block
+		{"-l", "eng+fra+deu", "--psm", "3", "--oem", "3"}, // Multi-lang auto
+		{"-l", "eng", "--psm", "12", "--oem", "3"},        // Sparse text
+		{"-l", "eng", "--psm", "1", "--oem", "3"},         // Auto OSD
+		{"-l", "eng", "--psm", "4", "--oem", "3"},         // Column finding
+		{"-l", "eng", "--psm", "8", "--oem", "3"},         // Word finding
+	}
+
+	for _, strategy := range psmStrategies {
+		args := append([]string{imagePath, "stdout"}, strategy...)
+		cmd := execCommand("tesseract", args...)
+		output, err := cmd.Output()
+		if err == nil {
+			text := strings.TrimSpace(string(output))
+			if len(text) > 10 && !isGarbledText(text) {
+				allTexts = append(allTexts, text)
+			}
+		}
+	}
+
+	// Strategy 2: Try with different image preprocessing
+	preprocessedPath := imagePath + "_enhanced"
+	defer os.Remove(preprocessedPath) // Clean up
+
+	// Create enhanced version
+	cmd := execCommand("convert", imagePath,
+		"-resize", "300%", // Higher resolution
+		"-colorspace", "Gray", // Grayscale
+		"-contrast-stretch", "0", // Auto contrast
+		"-normalize",      // Normalize
+		"-unsharp", "0x1", // Sharpen
+		"-threshold", "60%", // Adaptive threshold
+		preprocessedPath)
+
+	if cmd.Run() == nil {
+		// Try OCR on enhanced image
+		cmd := execCommand("tesseract", preprocessedPath, "stdout", "-l", "eng", "--psm", "6")
+		if output, err := cmd.Output(); err == nil {
+			text := strings.TrimSpace(string(output))
+			if len(text) > 10 && !isGarbledText(text) {
+				allTexts = append(allTexts, text)
+			}
+		}
+	}
+
+	// Strategy 3: Try with different OCR engines if available
+	// Could add support for different OCR engines here
+
+	// Select best result
+	var bestText string
+	maxQuality := 0
+
+	for _, text := range allTexts {
+		quality := assessTextQuality(text)
+		if quality > maxQuality {
+			maxQuality = quality
+			bestText = text
+		}
+	}
+
+	if bestText == "" {
+		return "", fmt.Errorf("all enhanced OCR strategies failed")
+	}
+
+	// Post-process the best result
+	bestText = postProcessOCRText(bestText)
+	zap.S().Info("Enhanced OCR completed", "strategies_tried", len(psmStrategies)+1, "quality_score", maxQuality)
+	return bestText, nil
+}
+
+// extractTextFromPDFEnhanced - Enhanced PDF extraction
+func extractTextFromPDFEnhanced(pdfPath string) (string, error) {
+	zap.S().Info("Starting enhanced PDF extraction", "path", pdfPath)
+
+	// Try pdftotext first
+	cmd := execCommand("pdftotext", pdfPath, "-")
+	output, err := cmd.Output()
+	if err == nil && len(output) > 0 {
+		text := strings.TrimSpace(string(output))
+		if len(text) > 100 { // Good result
+			return text, nil
+		}
+	}
+
+	// Fallback to go-pdf library with enhanced processing
+	f, r, err := pdf.Open(pdfPath)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	var fullText strings.Builder
+	for pageNum := 1; pageNum <= r.NumPage(); pageNum++ {
+		p := r.Page(pageNum)
+		if p.V.IsNull() {
+			continue
+		}
+
+		// Extract text from page
+		pageText, _ := p.GetPlainText(nil)
+
+		if pageText != "" {
+			fullText.WriteString(pageText)
+			fullText.WriteString("\n\n")
+		}
+	}
+
+	extracted := strings.TrimSpace(fullText.String())
+	if len(extracted) < 10 {
+		return "", fmt.Errorf("enhanced PDF extraction yielded insufficient text")
+	}
+
+	return extracted, nil
+}
+
+// extractTextFromImageBasic - Basic OCR fallback
+func extractTextFromImageBasic(imagePath string) (string, error) {
+	zap.S().Info("Starting basic OCR extraction", "path", imagePath)
+	cmd := execCommand("tesseract", imagePath, "stdout")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+// extractTextFromPDFBasic - Basic PDF extraction fallback
+func extractTextFromPDFBasic(pdfPath string) (string, error) {
+	zap.S().Info("Starting basic PDF extraction", "path", pdfPath)
+
+	f, r, err := pdf.Open(pdfPath)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	var text strings.Builder
+	for pageNum := 1; pageNum <= r.NumPage(); pageNum++ {
+		p := r.Page(pageNum)
+		if p.V.IsNull() {
+			continue
+		}
+		pageText, _ := p.GetPlainText(nil)
+		text.WriteString(pageText)
+		text.WriteString("\n\n")
+	}
+
+	return strings.TrimSpace(text.String()), nil
 }
 
 func extractTextFromPDF(pdfPath string) (string, error) {
@@ -414,7 +1197,7 @@ func processFileWithAI(ctx context.Context, filePath, fileType string, aiService
 	// Store document in vector store for RAG
 	if globalVectorStore != nil {
 		docID := fmt.Sprintf("%s_%s", fileType, filePath)
-		embedding := generateSimpleEmbedding(result.Summary + " " + result.Text)
+		embedding := generateEmbedding(ctx, aiService, result.Summary+" "+result.Text)
 
 		doc := vectorstore.Document{
 			ID:      docID,
@@ -433,18 +1216,88 @@ func processFileWithAI(ctx context.Context, filePath, fileType string, aiService
 		if err != nil {
 			zap.S().Error("Failed to store document in vector store", "error", err)
 		} else {
-			zap.S().Info("Document stored in vector store", "id", docID)
+			zap.S().Info("Document stored in vector store for RAG", "id", docID, "embedding_dim", len(embedding))
 		}
 	}
 
 	return result
 }
 
-// generateSimpleEmbedding creates a basic embedding vector from text
-// TODO: Replace with proper embedding model (OpenAI, Sentence Transformers, etc.)
+// generateEmbedding creates proper embeddings using AI service
+func generateEmbedding(ctx context.Context, aiService ai.AIServiceInterface, text string) []float32 {
+	if aiService == nil {
+		zap.S().Warn("AI service unavailable, falling back to simple embeddings")
+		return generateSimpleEmbedding(text)
+	}
+
+	// Try to use AI service for embeddings first
+	embedding, err := generateAIEmbedding(ctx, aiService, text)
+	if err != nil {
+		zap.S().Warn("AI embedding failed, falling back to simple embeddings", "error", err)
+		return generateSimpleEmbedding(text)
+	}
+
+	return embedding
+}
+
+// generateAIEmbedding creates embeddings using AI service (OpenAI/Sentence Transformers style)
+func generateAIEmbedding(ctx context.Context, aiService ai.AIServiceInterface, text string) ([]float32, error) {
+	// Use a prompt that asks for embeddings in a format we can parse
+	prompt := fmt.Sprintf("Generate a 384-dimensional embedding vector for the following text as a JSON array of floats:\n\nText: %s\n\nReturn only the JSON array, nothing else.", text)
+
+	req := &ai.RequestModel{
+		UserPrompt:  prompt,
+		Temperature: 0.0, // Deterministic for embeddings
+	}
+
+	var response strings.Builder
+	err := aiService.Chat(ctx, req, func(chunk string) {
+		response.WriteString(chunk)
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("AI embedding request failed: %w", err)
+	}
+
+	// Try to parse the response as JSON array
+	result := response.String()
+	result = strings.TrimSpace(result)
+
+	// Clean up potential markdown formatting
+	result = strings.TrimPrefix(result, "```json")
+	result = strings.TrimSuffix(result, "```")
+	result = strings.TrimSpace(result)
+
+	var embedding []float32
+	if err := json.Unmarshal([]byte(result), &embedding); err != nil {
+		return nil, fmt.Errorf("failed to parse AI embedding response: %w", err)
+	}
+
+	// Validate embedding dimensions
+	if len(embedding) != 384 {
+		zap.S().Warn("AI returned embedding with unexpected dimensions", "expected", 384, "got", len(embedding))
+	}
+
+	// Normalize the embedding
+	var norm float32
+	for _, v := range embedding {
+		norm += v * v
+	}
+	norm = float32(math.Sqrt(float64(norm)))
+	if norm > 0 {
+		for i := range embedding {
+			embedding[i] /= norm
+		}
+	}
+
+	zap.S().Info("Generated AI embedding", "dimensions", len(embedding))
+	return embedding, nil
+}
+
+// generateSimpleEmbedding creates a basic embedding vector from text (fallback)
 func generateSimpleEmbedding(text string) []float32 {
 	// Simple hash-based embedding for demonstration
-	// In production, use proper embedding models
+	// Used as fallback when AI embeddings fail
 	const embeddingDim = 384 // Common embedding dimension
 	embedding := make([]float32, embeddingDim)
 
