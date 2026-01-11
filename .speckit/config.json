@@ -1,0 +1,44 @@
+{
+  "name": "vision-bot",
+  "version": "1.0.0",
+  "description": "Advanced multimodal vision processing bot for Obsidian",
+  "editor": "code",
+  "qualityThreshold": {
+    "specification": 85,
+    "plan": 85,
+    "implementation": 80
+  },
+  "outputFormat": "markdown",
+  "docsOutputDir": "docs",
+  "pluginsDir": ".speckit/plugins",
+  "agentsDir": ".claude/agents",
+  "templatesDir": ".speckit/templates",
+  "phases": {
+    "constitute": {
+      "status": "completed",
+      "completedAt": "2026-01-11T14:00:00Z"
+    },
+    "specify": {
+      "status": "completed",
+      "completedAt": "2026-01-11T14:00:00Z"
+    },
+    "plan": {
+      "status": "completed",
+      "completedAt": "2026-01-11T14:00:00Z"
+    },
+    "implement": {
+      "status": "completed",
+      "completedAt": "2026-01-11T14:00:00Z"
+    }
+  },
+  "features": [
+    "advanced-vision-processing",
+    "deepseek-ocr-pipeline",
+    "multimodal-fusion",
+    "mathematical-enhancement",
+    "progress-bars",
+    "multi-provider-ai",
+    "latex-conversion",
+    "rich-output-format"
+  ]
+}
