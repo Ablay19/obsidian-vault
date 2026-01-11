@@ -21,6 +21,11 @@ func SetupCommands(registry *CommandRegistry) {
 	registry.Register("security", &securityCommandHandler{}, "Manage security settings")
 	registry.Register("process", &processCommandHandler{}, "Process staged file with AI")
 	registry.Register("reprocess", &reprocessCommandHandler{}, "Reprocess last file")
+	registry.Register("batch", &batchCommandHandler{}, "Process all pending files simultaneously")
+	registry.Register("last", &lastCommandHandler{}, "Show last created note")
+	registry.Register("help", &helpCommandHandler{}, "Show available commands")
+	registry.Register("mode", &modeCommandHandler{}, "Select processing mode")
+	registry.Register("bots", &botsCommandHandler{}, "Select bot instance")
 }
 
 // Command handler types
@@ -35,10 +40,58 @@ type modelInfoCommandHandler struct{}
 type pauseBotCommandHandler struct{}
 type resumeBotCommandHandler struct{}
 type ragCommandHandler struct{}
+type modeCommandHandler struct{}
+type botsCommandHandler struct{}
 
 // Implement Handle methods
 func (h *startCommandHandler) Handle(ctx context.Context, message *tgbotapi.Message, state *UserState, cmdCtx *CommandContext) error {
 	_, err := cmdCtx.Bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Bot is running. Use /help for commands."))
+	return err
+}
+
+func (h *helpCommandHandler) Handle(ctx context.Context, message *tgbotapi.Message, state *UserState, cmdCtx *CommandContext) error {
+	helpText := `🤖 **Obsidian Bot Commands**
+
+📁 **File Processing:**
+/process - Process single staged file with AI (multi-strategy)
+/batch - Process ALL pending files simultaneously with progress
+/reprocess - Reprocess last file
+/last - Show last created note
+
+🤖 **AI Configuration:**
+/setprovider - Change AI provider (Gemini, Google, DeepSeek, Groq, Cloudflare, etc.)
+/mode - Select processing mode (Fast/Quality/Conservative/Experimental)
+/bots - Choose bot instance (Main/Test/Dev/Backup)
+
+📊 **Information:**
+/stats - Show bot usage statistics
+
+🔗 **Integrations:**
+/webhook - Manage webhooks
+/security - Manage security settings
+
+🧪 **Debug & Testing:**
+Test files available in debug/templates/
+Run: ./debug/test_bot.sh [files|commands|scenarios]
+
+💡 **How to use:**
+1. Send multiple images/PDFs (auto-staged)
+2. Type /batch for parallel processing with progress bars
+3. Or use /process for single files with multi-strategy OCR
+4. Try /setprovider, /mode, /bots for interactive features
+5. Receive AI-powered Obsidian notes with proper embeddings
+
+✨ **New Features:**
+• Multi-strategy OCR (7+ algorithms to avoid bad results)
+• Progress bars for batch processing
+• Interactive keyboards (no typing required)
+• AI-powered embeddings for RAG
+• User state persistence across restarts
+• Ready debug templates for testing
+
+📝 Notes saved to: vault/Inbox/`
+
+	_, err := cmdCtx.Bot.Send(tgbotapi.NewMessage(message.Chat.ID, helpText))
 	return err
 }
 
@@ -50,7 +103,7 @@ func (h *setProviderCommandHandler) Handle(ctx context.Context, message *tgbotap
 	if args == "" {
 		// Create inline keyboard with provider options
 		var keyboard [][]tgbotapi.InlineKeyboardButton
-		supportedProviders := []string{"gemini", "groq", "cloudflare", "openrouter", "replicate", "together", "huggingface"}
+		supportedProviders := []string{"gemini", "google", "deepseek", "groq", "cloudflare", "openrouter", "replicate", "together", "huggingface"}
 
 		// Create rows of 2 buttons each
 		for i := 0; i < len(supportedProviders); i += 2 {

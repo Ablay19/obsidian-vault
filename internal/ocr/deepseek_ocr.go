@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"obsidian-automation/internal/ai"
+	"obsidian-automation/internal/mathocr"
 	"regexp"
 	"strings"
 
@@ -39,13 +40,15 @@ type Rect struct {
 
 // DeepSeekOCR implements advanced OCR using DeepSeek's document understanding
 type DeepSeekOCR struct {
-	aiService ai.AIServiceInterface
+	aiService     ai.AIServiceInterface
+	mathProcessor *mathocr.MathOCRProcessor
 }
 
 // NewDeepSeekOCR creates a new DeepSeek OCR processor
 func NewDeepSeekOCR(aiService ai.AIServiceInterface) *DeepSeekOCR {
 	return &DeepSeekOCR{
-		aiService: aiService,
+		aiService:     aiService,
+		mathProcessor: mathocr.NewMathOCRProcessor(),
 	}
 }
 
@@ -216,6 +219,18 @@ Return the complete extracted text with proper formatting.`, layout.Title, len(l
 
 	// Update sections with enhanced text
 	enhancedText := strings.TrimSpace(response.String())
+
+	// Apply mathematical OCR enhancements
+	enhancedText, formulas := ocr.mathProcessor.EnhanceOCROutput(enhancedText)
+
+	// Log detected formulas
+	if len(formulas) > 0 {
+		zap.S().Info("Detected mathematical formulas", "count", len(formulas))
+		for _, formula := range formulas {
+			zap.S().Debug("Formula detected", "type", formula.Type, "text", formula.Text, "confidence", formula.Confidence)
+		}
+	}
+
 	layout.Sections = ocr.parseEnhancedTextIntoSections(enhancedText)
 
 	return layout, nil

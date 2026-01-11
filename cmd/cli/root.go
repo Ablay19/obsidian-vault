@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/carapace-sh/carapace"
 	"github.com/spf13/cobra"

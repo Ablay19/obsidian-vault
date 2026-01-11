@@ -40,18 +40,33 @@ func OpenDB() *DBClient {
 	var err error
 
 	// Handle file:// URLs for local SQLite
-	if url == "file:./test.db" || (url == "file:./dev.db" || url == "file:./obsidian.db") {
-		db, err = sql.Open("sqlite", url)
+	if strings.HasPrefix(url, "file:") || !strings.Contains(url, "turso.io") {
+		// Local SQLite database
+		dbPath := strings.TrimPrefix(url, "file:")
+
+		// Ensure directory exists
+		if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
+			telemetry.Fatal("Failed to create database directory: " + err.Error())
+		}
+
+		db, err = sql.Open("sqlite", dbPath)
+		if err != nil {
+			telemetry.Fatal("Failed to open SQLite database: " + err.Error())
+		}
+
+		telemetry.Info("Connected to local SQLite database", "path", dbPath)
 	} else {
-		// Handle remote Turso URLs
+		// Remote Turso database
 		if token == "" {
 			telemetry.Fatal("TURSO_AUTH_TOKEN is missing for remote database")
 		}
 		dsn := url + "?authToken=" + token
 		db, err = sql.Open("libsql", dsn)
-	}
-	if err != nil {
-		telemetry.Fatal("Failed to open database: " + err.Error())
+		if err != nil {
+			telemetry.Fatal("Failed to open Turso database: " + err.Error())
+		}
+
+		telemetry.Info("Connected to remote Turso database")
 	}
 
 	Client = &DBClient{

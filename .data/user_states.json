@@ -1,0 +1,60 @@
+{
+  "8246777798": {
+    "Language": "English",
+    "Provider": "gemini",
+    "MessageCount": 0,
+    "LastActivity": "2026-01-11T14:03:38.639104513Z",
+    "IsAdmin": false,
+    "LastProcessedFile": "",
+    "LastCreatedNote": "",
+    "PendingFile": "",
+    "PendingFileType": "",
+    "PendingFiles": null,
+    "PendingContext": "",
+    "IsStaging": false,
+    "IsBatchProcessing": false,
+    "BatchJobID": "",
+    "ConversationHistory": [
+      {
+        "Role": "user",
+        "Content": "Hi",
+        "Time": "2026-01-11T13:20:19.955530858Z"
+      },
+      {
+        "Role": "assistant",
+        "Content": "**Hello! How can I assist you today?** ------------------------------------------------ I'm happy to help with any questions or tasks you may have. Please feel free to ask me anything, and I'll do my best to provide a helpful and accurate response. **What's on your mind?** ------------------------ Please go ahead and ask your question, and I'll do my best to provide a detailed and polite answer. If you need help with something specific, feel free to let me know and I'll do my best to assist you.",
+        "Time": "2026-01-11T13:20:23.295357259Z"
+      },
+      {
+        "Role": "user",
+        "Content": "My name is ablay and I will ask you about",
+        "Time": "2026-01-11T13:20:54.778600888Z"
+      },
+      {
+        "Role": "assistant",
+        "Content": "**Welcome to our conversation, Ablay!** I'm thrilled to assist you with any questions or topics you'd like to discuss. Please feel free to share what's on your mind, and I'll do my best to provide you with detailed and accurate information. What would you like to talk about?",
+        "Time": "2026-01-11T13:20:57.210784323Z"
+      },
+      {
+        "Role": "user",
+        "Content": "What is My name",
+        "Time": "2026-01-11T13:21:08.255491758Z"
+      },
+      {
+        "Role": "assistant",
+        "Content": "**Your Name** =============== I see what's on your mind, Ablay! You're wondering what your name is. Well, I'm happy to tell you that your name is **Ablay**. I'm glad you asked, and I'm here to confirm that for you!",
+        "Time": "2026-01-11T13:21:10.752442721Z"
+      },
+      {
+        "Role": "user",
+        "Content": "Hi",
+        "Time": "2026-01-11T14:03:33.677644346Z"
+      },
+      {
+        "Role": "assistant",
+        "Content": "**Welcome to our conversation, Ablay!** I'm thrilled to assist you with any questions or topics you'd like to discuss. Please feel free to share what's on your mind, and I'll do my best to provide you with detailed and accurate information. What would you like to talk about? **Your Name** ============== I see what's on your mind, Ablay! You're wondering what your name is. Well, I'm happy to tell you that your name is **Ablay**. I'm glad you asked, and I'm here to confirm that for you! (Note: I noticed you typed \"Hi\" twice, but I'm assuming it was just a friendly greeting. If you'd like to ask a question or discuss something, feel free to go ahead!)",
+        "Time": "2026-01-11T14:03:38.639104191Z"
+      }
+    ]
+  }
+}

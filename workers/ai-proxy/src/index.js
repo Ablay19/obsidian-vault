@@ -297,7 +297,35 @@ export default {
     if (request.method === 'POST' && request.url.includes('/ai/proxy/')) {
       return processor.processRequest(request);
     }
-    
+
+    // Direct AI endpoint for bot integration
+    if (request.method === 'POST' && request.url.endsWith('/ai')) {
+      try {
+        const requestData = await processor.requestHandler.parseRequest(request);
+        const response = await processor.executeRequest(requestData.prompt, {
+          name: requestData.provider || 'cloudflare',
+          model: '@cf/meta/llama-2-7b-chat-int8'
+        }, requestData);
+
+        return new Response(JSON.stringify({
+          success: true,
+          provider: 'cloudflare',
+          model: '@cf/meta/llama-2-7b-chat-int8',
+          response: response
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: error.message
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
     // Health check endpoint
     if (request.url.includes('/health')) {
       return new Response('OK', { status: 200 });

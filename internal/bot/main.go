@@ -76,6 +76,11 @@ func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.Runt
 		globalRAGChain = ragChain
 	}
 
+	// Initialize user state persistence
+	if err := InitUserStatePersistence(); err != nil {
+		telemetry.Warn("Failed to initialize user state persistence: " + err.Error())
+	}
+
 	// Check external binary dependencies first
 	if err := ValidateBinaries(); err != nil {
 		telemetry.Error("Binary validation failed: " + err.Error())
@@ -157,8 +162,14 @@ func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.Runt
 	fileHandler := NewFileHandler(stagingStateMachine)
 
 	commands := registry.GetBotCommands()
-	if _, err := bot.Request(tgbotapi.NewSetMyCommands(commands...)); err != nil {
-		telemetry.Error("Error setting bot commands: " + err.Error())
+	if len(commands) > 0 {
+		if _, err := bot.Request(tgbotapi.NewSetMyCommands(commands...)); err != nil {
+			telemetry.Error("Error setting bot commands: " + err.Error())
+		} else {
+			telemetry.Info(fmt.Sprintf("Successfully registered %d bot commands", len(commands)))
+		}
+	} else {
+		telemetry.Warn("No bot commands registered - check command setup")
 	}
 
 	telemetry.Info("Authorized on account: " + bot.Self.UserName)
@@ -256,7 +267,7 @@ func handleCallbackQuery(ctx context.Context, bot Bot, callback *tgbotapi.Callba
 		userState := GetUserState(callback.From.ID)
 
 		// Validate provider
-		supportedProviders := []string{"gemini", "groq", "cloudflare", "openrouter", "replicate", "together", "huggingface"}
+		supportedProviders := []string{"gemini", "google", "deepseek", "groq", "cloudflare", "openrouter", "replicate", "together", "huggingface"}
 		supported := false
 		for _, p := range supportedProviders {
 			if provider == p {
@@ -283,7 +294,7 @@ func handleCallbackQuery(ctx context.Context, bot Bot, callback *tgbotapi.Callba
 			// Trigger webhook event
 			go TriggerProviderEvent(callback.From.ID, "", provider)
 
-			// Edit the message to show success and remove keyboard
+			// Edit the message to show success and remove keyboard (no notification to user)
 			editMsg := tgbotapi.NewEditMessageText(
 				callback.Message.Chat.ID,
 				callback.Message.MessageID,
@@ -307,6 +318,46 @@ func handleCallbackQuery(ctx context.Context, bot Bot, callback *tgbotapi.Callba
 			bot.Send(editMsg)
 		}
 	}
+
+	// Handle mode selection callbacks
+	if strings.HasPrefix(callback.Data, "mode_") {
+		mode := strings.TrimPrefix(callback.Data, "mode_")
+		userState := GetUserState(callback.From.ID)
+
+		// Store processing mode in user state (you can extend this later)
+		userState.UpdateProvider(mode) // Temporarily using provider field for mode
+
+		// Update message and remove keyboard
+		editMsg := tgbotapi.NewEditMessageText(
+			callback.Message.Chat.ID,
+			callback.Message.MessageID,
+			fmt.Sprintf("🎯 Processing mode set to: **%s**", strings.Title(mode)),
+		)
+		editMsg.ParseMode = tgbotapi.ModeMarkdown
+		editMsg.ReplyMarkup = &tgbotapi.InlineKeyboardMarkup{
+			InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{},
+		}
+		bot.Send(editMsg)
+		return
+	}
+
+	// Handle bot instance selection callbacks
+	if strings.HasPrefix(callback.Data, "bot_") {
+		botInstance := strings.TrimPrefix(callback.Data, "bot_")
+
+		// For now, just show selection (you can implement actual bot switching later)
+		editMsg := tgbotapi.NewEditMessageText(
+			callback.Message.Chat.ID,
+			callback.Message.MessageID,
+			fmt.Sprintf("🔄 Switched to bot instance: **%s**", strings.Title(strings.Replace(botInstance, "_", " ", -1))),
+		)
+		editMsg.ParseMode = tgbotapi.ModeMarkdown
+		editMsg.ReplyMarkup = &tgbotapi.InlineKeyboardMarkup{
+			InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{},
+		}
+		bot.Send(editMsg)
+		return
+	}
 }
 
 // handleCommand processes text messages and commands.
@@ -329,11 +380,14 @@ func handlePhoto(ctx context.Context, bot Bot, message *tgbotapi.Message, token 
 		return
 	}
 
-	// Store the file in user state for /process command
+	// Add file to pending batch for user
 	userState := GetUserState(message.From.ID)
-	userState.PendingFile = filename
-	userState.PendingFileType = "image"
+	userState.AddPendingFile(filename, "image", message.Caption)
 
+	// Send confirmation
+	bot.Send(tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("🖼️ Image added to batch (%d files pending). Send more files or use /batch to process all simultaneously.", len(userState.GetPendingFiles()))))
+
+	// Legacy file handler for compatibility
 	err := fileHandler.HandlePhoto(ctx, bot, message, filename)
 	if err != nil {
 		telemetry.Error("Failed to handle photo: " + err.Error())
@@ -357,11 +411,14 @@ func handleDocument(ctx context.Context, bot Bot, message *tgbotapi.Message, tok
 		return
 	}
 
-	// Store the file in user state for /process command
+	// Add file to pending batch for user
 	userState := GetUserState(message.From.ID)
-	userState.PendingFile = filename
-	userState.PendingFileType = "document"
+	userState.AddPendingFile(filename, "pdf", message.Caption)
 
+	// Send confirmation
+	bot.Send(tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("📄 PDF added to batch (%d files pending). Send more files or use /batch to process all simultaneously.", len(userState.GetPendingFiles()))))
+
+	// Legacy file handler for compatibility
 	err := fileHandler.HandleDocument(ctx, bot, message, filename)
 	if err != nil {
 		telemetry.Error("Failed to handle document: " + err.Error())

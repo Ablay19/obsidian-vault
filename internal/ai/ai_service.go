@@ -110,6 +110,11 @@ func (s *AIService) InitializeProviders(ctx context.Context) {
 					provider = NewReplicateProvider(keyState.Value, modelName)
 				case "Together":
 					provider = NewTogetherProvider(keyState.Value, modelName)
+				case "Google":
+					// Use Gemini for Google provider
+					provider = NewGeminiProvider(ctx, keyState.Value, modelName)
+				case "DeepSeek":
+					provider = NewDeepSeekProvider(keyState.Value, modelName)
 				default:
 					telemetry.Warn("Unknown provider", "name", providerName)
 					continue

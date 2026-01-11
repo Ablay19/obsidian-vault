@@ -53,7 +53,7 @@ func (mp *MessageProcessor) ProcessMessage(ctx context.Context, bot Bot, message
 	_, _ = bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Thinking..."))
 
 	var responseText strings.Builder
-	systemPrompt := fmt.Sprintf("Respond in %s. Output your response as valid HTML, with proper headings, paragraphs, and LaTeX formulas using MathJax syntax.", state.Language)
+	systemPrompt := fmt.Sprintf("Respond in %s. Use Markdown formatting for your response with proper headings, paragraphs, and code blocks. Do NOT use HTML tags.", state.Language)
 
 	// Build conversation context
 	conversationHistory := state.GetConversationHistory()
@@ -122,8 +122,12 @@ func (mp *MessageProcessor) ProcessMessage(ctx context.Context, bot Bot, message
 	// Clean the response - strip unsupported HTML tags
 	cleanResponse := cleanTelegramResponse(responseText.String())
 
+	// Debug logging
+	telemetry.Info("Original HTML response: " + responseText.String()[:min(200, len(responseText.String()))])
+	telemetry.Info("Cleaned response: " + cleanResponse[:min(200, len(cleanResponse))])
+
 	msg := tgbotapi.NewMessage(message.Chat.ID, cleanResponse)
-	msg.ParseMode = tgbotapi.ModeHTML
+	msg.ParseMode = tgbotapi.ModeMarkdown
 	sentMsg, err := bot.Send(msg)
 	if err == nil {
 		// Add assistant response to conversation history
@@ -137,23 +141,28 @@ func (mp *MessageProcessor) ProcessMessage(ctx context.Context, bot Bot, message
 	return err
 }
 
-// cleanTelegramResponse removes unsupported HTML tags from the response
+// cleanTelegramResponse cleans response for Markdown mode in Telegram
 func cleanTelegramResponse(response string) string {
-	// Remove unsupported HTML tags (h1-h6, div, span, etc.)
-	re := regexp.MustCompile(`<(/?)(h[1-6]|div|span|section|article|header|footer|main|nav|aside)(\s[^>]*)?>`)
+	// Remove ALL HTML tags (including nested tags)
+	re := regexp.MustCompile(`<[^>]*>`)
 	cleaned := re.ReplaceAllString(response, "")
 
-	// Convert markdown headers to bold
-	re = regexp.MustCompile(`(?m)^#+\s+(.+)$`)
-	cleaned = re.ReplaceAllString(cleaned, "<b>$1</b>")
+	// Fix common HTML entities that might appear
+	cleaned = strings.ReplaceAll(cleaned, "&lt;", "<")
+	cleaned = strings.ReplaceAll(cleaned, "&gt;", ">")
+	cleaned = strings.ReplaceAll(cleaned, "&amp;", "&")
 
-	// Convert markdown lists to HTML lists
-	re = regexp.MustCompile(`(?m)^\s*[-*]\s+(.+)$`)
-	cleaned = re.ReplaceAllString(cleaned, "• $1")
+	// Clean up multiple spaces and newlines
+	re = regexp.MustCompile(`\s+`)
+	cleaned = re.ReplaceAllString(cleaned, " ")
 
-	// Clean up multiple newlines
+	// Clean up excessive newlines while preserving paragraph structure
 	re = regexp.MustCompile(`\n{3,}`)
 	cleaned = re.ReplaceAllString(cleaned, "\n\n")
+
+	// Ensure proper spacing around headers
+	re = regexp.MustCompile(`(\n#+)([^\s])`)
+	cleaned = re.ReplaceAllString(cleaned, "$1 $2")
 
 	return strings.TrimSpace(cleaned)
 }

@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/ledongthuc/pdf"
 	"github.com/tmc/langchaingo/chains"
 	"github.com/tmc/langchaingo/llms"
@@ -51,8 +52,27 @@ func (p *botProcessor) Process(ctx context.Context, job pipeline.Job) (pipeline.
 	streamCallback := func(chunk string) {
 		zap.S().Debug("Stream chunk", "chunk", chunk)
 	}
-	updateStatus := func(statusMsg string) {
-		zap.S().Info("Processing status", "status", statusMsg)
+
+	// Extract bot and chat info for progress updates
+	var updateStatus func(string)
+	if bot, ok := job.Metadata["bot"].(Bot); ok {
+		if chatID, ok := job.Metadata["chat_id"].(int64); ok {
+			if messageID, ok := job.Metadata["message_id"].(int); ok {
+				updateStatus = func(statusMsg string) {
+					zap.S().Info("Processing status", "status", statusMsg)
+					// Send progress update to user
+					editMsg := tgbotapi.NewEditMessageText(chatID, messageID, statusMsg)
+					bot.Send(editMsg)
+				}
+			}
+		}
+	}
+
+	// Fallback to logging only if bot context not available
+	if updateStatus == nil {
+		updateStatus = func(statusMsg string) {
+			zap.S().Info("Processing status", "status", statusMsg)
+		}
 	}
 
 	caption, _ := job.Metadata["caption"].(string)
@@ -230,6 +250,7 @@ func (p *botProcessor) processWithVisionFusion(ctx context.Context, filePath, fi
 	updateStatus(tracker.RenderCurrent())
 
 	var extractedText string
+	var enhancedText string
 	var err error
 
 	// Progress through OCR steps
@@ -268,6 +289,9 @@ func (p *botProcessor) processWithVisionFusion(ctx context.Context, filePath, fi
 	tracker.GetCurrent().Complete()
 	updateStatus(tracker.RenderCurrent())
 
+	// Get the enhanced text from vision processing
+	enhancedText = extractedText // Default fallback
+
 	// Check confidence threshold
 	minConfidence := config.AppConfig.Vision.MinConfidence
 	if multimodalEmbedding.Confidence < minConfidence {
@@ -302,20 +326,23 @@ func (p *botProcessor) processWithVisionFusion(ctx context.Context, filePath, fi
 	tracker.GetCurrent().Update(50)
 	updateStatus("Generating summary... " + tracker.RenderCurrent())
 
-	result.Summary = p.generateMultimodalSummary(ctx, multimodalEmbedding, extractedText, aiService, streamCallback)
+	result.Summary = p.generateMultimodalSummary(ctx, multimodalEmbedding, enhancedText, aiService, streamCallback)
 
 	tracker.GetCurrent().Update(75)
 	updateStatus("Extracting topics and questions... " + tracker.RenderCurrent())
 
-	result.Topics, result.Questions = p.generateMultimodalTopicsAndQuestions(ctx, multimodalEmbedding, extractedText, aiService)
+	result.Topics, result.Questions = p.generateMultimodalTopicsAndQuestions(ctx, multimodalEmbedding, enhancedText, aiService)
 
 	tracker.GetCurrent().Complete()
 	updateStatus(tracker.RenderCurrent())
 
 	// Stage 6: Enhanced categorization
-	result.Category = p.categorizeWithVision(multimodalEmbedding, extractedText)
+	result.Category = p.categorizeWithVision(multimodalEmbedding, enhancedText)
 	result.Tags = append(result.Tags, result.Category)
 	result.Confidence = multimodalEmbedding.Confidence
+
+	// Update result text with enhanced version
+	result.Text = enhancedText
 
 	// Stage 7: Summarization (already done)
 	tracker.SetCurrent("summarization")
@@ -396,9 +423,10 @@ Please provide a detailed summary that combines both visual and textual understa
 	return strings.TrimSpace(response.String())
 }
 
-// generateMultimodalTopicsAndQuestions generates topics and questions using multimodal context
+// generateMultimodalTopicsAndQuestions generates topics, questions, and answers using multimodal context
 func (p *botProcessor) generateMultimodalTopicsAndQuestions(ctx context.Context, embedding vision.MultimodalEmbedding, text string, aiService ai.AIServiceInterface) ([]string, []string) {
-	prompt := fmt.Sprintf(`Analyze this content using multimodal understanding (vision + text) and provide topics and questions.
+	// First, generate topics and questions
+	topicsPrompt := fmt.Sprintf(`Analyze this content using multimodal understanding (vision + text) and provide topics and questions.
 
 Content: %s
 
@@ -411,7 +439,7 @@ Provide a JSON response with:
 Focus on questions that show deep understanding of both visual and textual elements.`, text, embedding.Confidence)
 
 	req := &ai.RequestModel{
-		UserPrompt:  prompt,
+		UserPrompt:  topicsPrompt,
 		Temperature: 0.4,
 	}
 
@@ -426,18 +454,72 @@ Focus on questions that show deep understanding of both visual and textual eleme
 	}
 
 	// Parse JSON response
-	var result struct {
+	var topicsResult struct {
 		Topics    []string `json:"topics"`
 		Questions []string `json:"questions"`
 	}
 
 	jsonStr := strings.TrimSpace(response.String())
-	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+	if err := json.Unmarshal([]byte(jsonStr), &topicsResult); err != nil {
 		zap.S().Warn("Failed to parse multimodal topics/questions JSON", "error", err)
 		return []string{}, []string{}
 	}
 
-	return result.Topics, result.Questions
+	// Now generate answers for the questions
+	if len(topicsResult.Questions) > 0 {
+		answersPrompt := fmt.Sprintf(`Based on the content and your understanding, provide detailed answers to these questions:
+
+Content: %s
+
+Questions to answer:
+%s
+
+Provide a JSON response with:
+- "answers": array of detailed answers corresponding to each question
+
+Be thorough and use the content to support your answers.`, text, p.formatQuestionsForAnswering(topicsResult.Questions))
+
+		answerReq := &ai.RequestModel{
+			UserPrompt:  answersPrompt,
+			Temperature: 0.3, // Lower temperature for more accurate answers
+		}
+
+		var answerResponse strings.Builder
+		err := aiService.Chat(ctx, answerReq, func(chunk string) {
+			answerResponse.WriteString(chunk)
+		})
+
+		if err == nil {
+			var answersResult struct {
+				Answers []string `json:"answers"`
+			}
+
+			answerJsonStr := strings.TrimSpace(answerResponse.String())
+			if err := json.Unmarshal([]byte(answerJsonStr), &answersResult); err == nil {
+				// Combine questions and answers for display
+				combinedQuestions := make([]string, len(topicsResult.Questions))
+				for i, question := range topicsResult.Questions {
+					answer := ""
+					if i < len(answersResult.Answers) {
+						answer = answersResult.Answers[i]
+					}
+					combinedQuestions[i] = fmt.Sprintf("Q: %s\nA: %s", question, answer)
+				}
+				return topicsResult.Topics, combinedQuestions
+			}
+		}
+	}
+
+	return topicsResult.Topics, topicsResult.Questions
+}
+
+// formatQuestionsForAnswering formats questions as a numbered list for the AI to answer
+func (p *botProcessor) formatQuestionsForAnswering(questions []string) string {
+	var formatted strings.Builder
+	for i, question := range questions {
+		formatted.WriteString(fmt.Sprintf("%d. %s\n", i+1, question))
+	}
+	return formatted.String()
 }
 
 // categorizeWithVision categorizes content using vision-enhanced analysis

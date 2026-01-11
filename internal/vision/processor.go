@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/config"
+	"obsidian-automation/internal/mathocr"
 	"obsidian-automation/internal/ocr"
 	"strings"
 
@@ -44,6 +45,7 @@ type VisionProcessor struct {
 	aiService     ai.AIServiceInterface
 	minConfidence float64
 	documentOCR   *ocr.DeepSeekOCR
+	mathProcessor *mathocr.MathOCRProcessor
 }
 
 // NewVisionProcessor creates a new vision processor
@@ -76,12 +78,16 @@ func NewVisionProcessor(aiService ai.AIServiceInterface) *VisionProcessor {
 		documentOCR = ocr.NewDeepSeekOCR(aiService)
 	}
 
+	// Initialize math OCR processor
+	mathProcessor := mathocr.NewMathOCRProcessor()
+
 	return &VisionProcessor{
 		encoder:       encoder,
 		fusionMethod:  fusionMethod,
 		aiService:     aiService,
 		minConfidence: config.AppConfig.Vision.MinConfidence,
 		documentOCR:   documentOCR,
+		mathProcessor: mathProcessor,
 	}
 }
 
@@ -101,9 +107,23 @@ func (vp *VisionProcessor) ProcessImage(ctx context.Context, imagePath string, e
 		layout, err := vp.documentOCR.ProcessDocument(ctx, imagePath)
 		if err == nil && layout.Confidence > 0.7 {
 			enhancedText = vp.documentOCR.ExtractText(layout)
+
+			// Apply mathematical OCR enhancements
+			enhancedText, formulas := vp.mathProcessor.EnhanceOCROutput(enhancedText)
+			if len(formulas) > 0 {
+				zap.S().Info("Mathematical formulas detected and enhanced", "count", len(formulas))
+			}
+
 			zap.S().Info("Enhanced OCR completed", "original_len", len(extractedText), "enhanced_len", len(enhancedText), "confidence", layout.Confidence)
 		} else {
 			zap.S().Warn("DeepSeek OCR failed or low confidence, using basic text", "error", err)
+		}
+	} else {
+		// Even for non-document images, apply basic mathematical enhancements
+		var formulas []mathocr.MathFormula
+		enhancedText, formulas = vp.mathProcessor.EnhanceOCROutput(extractedText)
+		if len(formulas) > 0 {
+			zap.S().Info("Mathematical content enhanced in general image", "formulas", len(formulas))
 		}
 	}
 

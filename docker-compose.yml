@@ -1,15 +1,12 @@
-version: '3.8'
-
 services:
   # Main Obsidian Bot Service
   bot:
     build:
       context: .
       dockerfile: Dockerfile
-      target: production
       args:
         APP_VERSION: ${APP_VERSION:-v1.0.0}
-        GO_VERSION: ${GO_VERSION:-1.23.4}
+        GO_VERSION: ${GO_VERSION:-1.25.4}
         ALPINE_VERSION: ${ALPINE_VERSION:-3.20}
     container_name: obsidian-bot
     env_file:
