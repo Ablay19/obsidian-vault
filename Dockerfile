@@ -1,68 +1,140 @@
-# ARG for build-time variables
-ARG GO_VERSION=1.25.4
-ARG ALPINE_VERSION=3.19
+# Multi-stage Dockerfile for Obsidian Bot
+# Optimized for production deployment with security best practices
 
-# --- Builder Stage ---
-FROM golang:${GO_VERSION}-alpine AS builder
+# ============================================
+# Build Arguments
+# ============================================
+ARG GO_VERSION=1.23.4
+ARG ALPINE_VERSION=3.20
 
-# Install build dependencies and templ once
-RUN apk add --no-cache build-base git
-RUN go install github.com/a-h/templ/cmd/templ@v0.3.977
+# ============================================
+# Builder Stage
+# ============================================
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS builder
 
+# Install build dependencies
+RUN apk add --no-cache \
+    build-base \
+    git \
+    ca-certificates \
+    tzdata
+
+# Set working directory
 WORKDIR /src
 
-# Copy go.mod and go.sum first to leverage Docker cache
+# Copy go.mod and go.sum first for better caching
 COPY go.mod go.sum ./
-RUN --mount=type=cache,target=/go/pkg/mod \
-    go mod download
+RUN go mod download && go mod verify
 
-# Copy the rest of the source code
+# Copy rest of source code
 COPY . .
 
-# Generate templ files (reuse installed templ)
+# Generate templ files for dashboard UI
+RUN go install github.com/a-h/templ/cmd/templ@v0.3.977
 RUN /go/bin/templ generate
 
-# Build the application with cache
-# Use ldflags to embed version information
+# Build arguments
 ARG APP_VERSION=v0.0.0-dev
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -ldflags="-w -s -X main.version=${APP_VERSION}" -o /app/main ./cmd/bot/
+ARG TARGETOS
+ARG TARGETARCH
 
+# Build with optimizations
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build \
+    -ldflags="-w -s -X main.version=${APP_VERSION} -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -tags=netgo \
+    -installsuffix netgo \
+    -o /app/bot \
+    ./cmd/bot
 
-# --- Final Stage ---
-FROM alpine:${ALPINE_VERSION}
+# ============================================
+# Production Stage
+# ============================================
+FROM alpine:${ALPINE_VERSION} AS production
 
 # Install runtime dependencies
-# Tesseract for OCR, Poppler for PDF handling (pdftotext), Git for vault sync
+# - tesseract-ocr: OCR for image analysis
+# - poppler-utils: PDF processing
+# - git: vault sync
+# - curl: health checks
 RUN apk add --no-cache \
-  tesseract-ocr \
-  poppler-utils \
-  git \
-  ca-certificates \
-  tzdata \
-  && rm -rf /var/cache/apk/*
+    tesseract-ocr \
+    tesseract-ocr-data-eng \
+    poppler-utils \
+    git \
+    ca-certificates \
+    tzdata \
+    curl \
+    && rm -rf /var/cache/apk/* \
+    && rm -rf /tmp/*
 
-# Create a non-root user and group
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# Create non-root user with proper permissions
+RUN addgroup -S -g 1000 appgroup && \
+    adduser -S -u 1000 -G appgroup appuser
 
-# Set up the application directory
+# Set working directory
 WORKDIR /app
 
-# Copy the compiled binary from the builder stage
-COPY --from=builder /app/main /app/main
+# Copy binary from builder
+COPY --from=builder /app/bot /app/bot
 
-# Copy necessary assets
-COPY internal/dashboard/static/ ./internal/dashboard/static
+# Copy dashboard static files
+COPY --from=builder /src/internal/dashboard/static/ ./internal/dashboard/static
 
-# Create directories for data and ensure correct permissions
-RUN mkdir -p attachments vault && \
-    chown -R appuser:appgroup /app
+# Create required directories
+RUN mkdir -p \
+    attachments \
+    vault \
+    data \
+    logs \
+    && chown -R appuser:appgroup /app \
+    && chmod 755 /app/bot
 
-# Switch to the non-root user
+# Health check script
+COPY --from=builder /src <<'EOF' /app/healthcheck.sh
+#!/bin/sh
+set -e
+
+# Check if process is running
+if ! pgrep -f "bot" > /dev/null 2>&1; then
+    echo "Bot process not running"
+    exit 1
+fi
+
+# Check HTTP endpoint
+if ! curl -sf http://localhost:8080/api/services/status > /dev/null 2>&1; then
+    echo "Health endpoint not responding"
+    exit 1
+fi
+
+echo "OK"
+exit 0
+EOF
+
+RUN chmod +x /app/healthcheck.sh && chown appuser:appgroup /app/healthcheck.sh
+
+# Switch to non-root user
 USER appuser
 
-# Expose the dashboard port
+# Expose application port
 EXPOSE 8080
 
-# Set the entrypoint
-ENTRYPOINT ["/app/main"]
+# Environment variables
+ENV ENVIRONMENT=production
+ENV PORT=8080
+ENV LOG_LEVEL=INFO
+ENV GIN_MODE=release
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD /app/healthcheck.sh
+
+# Entrypoint
+ENTRYPOINT ["/app/bot"]
+
+# Labels
+LABEL maintainer="abdoullah.elvogani@example.com" \
+      version="${APP_VERSION}" \
+      description="Obsidian Bot - AI-powered Telegram assistant with Cloudflare integration" \
+      org.opencontainers.image.source="https://github.com/Ablay19/obsidian-vault" \
+      org.opencontainers.image.licenses="MIT"

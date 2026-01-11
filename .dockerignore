@@ -1,68 +1,152 @@
-# Ignore directories
+# ============================================
+# Docker Ignore File for Obsidian Bot
+# ============================================
+
+# ============================================
+# Version Control
+# ============================================
 .git/
-.github/
+.gitignore
+.gitattributes
+.gitmodules
+
+# ============================================
+# IDE and Editor
+# ============================================
 .idea/
 .vscode/
-attachments/
-coverage/
-data/
-doc/
-pdfs/
-specs/
-vault/
-logs/
-scripts/
-node_modules/
-vendor/
-
-# Ignore large files and binaries
-*.db
-*.sqlite
-*.sqlite3
-obsidian-automation*
-obsidian-bot*
-telegram-bot*
-termux-*
-bot
-test*.go
-
-# Ignore configuration and secrets files
-*.env
-*.env.*
-id_rsa*
-credentials.json
-service-account-key*.json
-
-# Ignore build and cache files
-*.log*
-*.test
-*.prof
-*.out
+*.swp
+*.swo
+*~
 .DS_Store
 Thumbs.db
 
-# Ignore temporary and development files
+# ============================================
+# Build Outputs and Artifacts
+# ============================================
+bot
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.prof
+coverage/
+coverage.out
+*.coverprofile
+
+# Go build outputs
+/bin/
+/pkg/
+/tmp/
+
+# ============================================
+# Dependencies
+# ============================================
+vendor/
+node_modules/
+go/pkg/mod/
+.cache/
+
+# ============================================
+# Local Data and Files
+# ============================================
+attachments/
+data/
+vault/
+logs/
+pdfs/
+specs/
+scripts/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# SSH keys and secrets
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+*.crt
+*.cert
+secrets/
+
+# ============================================
+# Configuration
+# ============================================
+*.env
+*.env.*
+!.env.example
+.env.local
+.env.production
+credentials.json
+service-account*.json
+*.key.json
+
+# ============================================
+# Documentation
+# ============================================
+*.md
+!README.md
+!*.md
+doc/
+docs/
+
+# ============================================
+# Testing
+# ============================================
+*_test.go
+coverage.out
+htmlcov/
+
+# ============================================
+# Temporary Files
+# ============================================
 tmp/
 temp/
-coverage.out
-noname.gv
-stats.json
+*.tmp
+*.log
+*.log.*
+access.log
+error.log
 
-# Ignore Docker-specific files
-Dockerfile.dev
-docker-compose.override.yml
+# ============================================
+# Docker
+# ============================================
+Dockerfile*
+docker-compose*.yml
+docker-compose*.override.yml
 .dockerignore
 
-# Keep important files (exceptions)
+# ============================================
+# Cloudflare Workers
+# ============================================
+workers/node_modules/
+workers/.wrangler/
+workers/dist/
+workers/*.log
+
+# ============================================
+# Archive and Obsolete
+# ============================================
+archive/
+*.bak
+*.old
+*.orig
+*.rej
+
+# ============================================
+# Keep Important Files
+# ============================================
 !*.md
-!Dockerfile*
-!docker-compose*.yml
+!config.yaml
 !config.yml
 !go.mod
 !go.sum
-!cmd/
-!internal/
-!workers/
-
-# Keep startup scripts
-!start.sh
+!Dockerfile*
+!docker-compose*.yml
