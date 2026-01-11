@@ -19,22 +19,6 @@ success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# Update system
-log "Updating system packages..."
-sudo apt-get update -qq && sudo apt-get upgrade -y -qq
-
-# Install core dependencies
-log "Installing core dependencies..."
-sudo apt-get install -y -qq curl wget git build-essential software-properties-common
-
-# Install Go 1.21+
-log "Installing Go 1.21+..."
-wget -q https://go.dev/dl/go1.21.5.linux-amd64.tar.gz
-sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.21.5.linux-amd64.tar.gz
-rm go1.21.5.linux-amd64.tar.gz
-export PATH=$PATH:/usr/local/go/bin
-echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
-
 # Install Tesseract OCR
 log "Installing Tesseract OCR..."
 sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-eng tesseract-ocr-fra tesseract-ocr-ara tesseract-ocr-deu tesseract-ocr-spa
@@ -42,18 +26,6 @@ sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-eng tesseract-ocr-fra te
 # Install ImageMagick
 log "Installing ImageMagick..."
 sudo apt-get install -y -qq imagemagick
-
-# Install Node.js
-log "Installing Node.js..."
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash - >/dev/null 2>&1
-sudo apt-get install -y -qq nodejs
-
-# Setup Go workspace
-export GOPATH=$HOME/go
-mkdir -p $GOPATH/bin $GOPATH/src $GOPATH/pkg
-export PATH=$PATH:$GOPATH/bin
-echo "export GOPATH=$HOME/go" >> ~/.bashrc
-echo "export PATH=\$PATH:\$GOPATH/bin" >> ~/.bashrc
 
 # Clone repository
 log "Cloning repository..."
