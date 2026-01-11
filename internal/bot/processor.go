@@ -8,6 +8,7 @@ import (
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/config"
 	"obsidian-automation/internal/pipeline"
+	"obsidian-automation/internal/utils"
 	"obsidian-automation/internal/vision"
 	"os"
 	"os/exec"
@@ -198,7 +199,7 @@ func (p *botProcessor) scoreProcessingResult(result ProcessedContent) float64 {
 	return score
 }
 
-// processWithVisionFusion - Advanced multimodal processing with vision encoder
+// processWithVisionFusion - Advanced multimodal processing with vision encoder and progress tracking
 func (p *botProcessor) processWithVisionFusion(ctx context.Context, filePath, fileType string, aiService ai.AIServiceInterface, streamCallback func(string), language string, updateStatus func(string), caption string) ProcessedContent {
 	// Check if vision processing is available and enabled
 	if p.visionProc == nil || !p.visionProc.IsAvailable() {
@@ -212,37 +213,82 @@ func (p *botProcessor) processWithVisionFusion(ctx context.Context, filePath, fi
 		return p.processWithPrimaryAI(ctx, filePath, fileType, aiService, streamCallback, language, updateStatus, caption)
 	}
 
-	updateStatus("🤖 Starting vision-enhanced processing...")
+	// Initialize progress tracker
+	tracker := utils.CreateImageProcessingTracker()
 
-	// Extract text using enhanced OCR first
+	// Stage 1: Upload/Validation (already complete)
+	tracker.SetCurrent("upload")
+	tracker.GetCurrent().Complete()
+	updateStatus(tracker.RenderCurrent())
+
+	tracker.SetCurrent("validation")
+	tracker.GetCurrent().Complete()
+	updateStatus(tracker.RenderCurrent())
+
+	// Stage 2: OCR Extraction
+	tracker.SetCurrent("ocr_extraction")
+	updateStatus(tracker.RenderCurrent())
+
 	var extractedText string
 	var err error
+
+	// Progress through OCR steps
+	tracker.GetCurrent().Update(25)
+	updateStatus(tracker.RenderCurrent())
+
 	extractedText, err = extractTextFromImageEnhanced(filePath)
 	if err != nil || len(extractedText) < 10 {
-		zap.S().Warn("OCR failed for vision processing, using basic OCR")
+		zap.S().Warn("Enhanced OCR failed for vision processing, using basic OCR")
+		tracker.GetCurrent().Update(50)
+		updateStatus("Enhanced OCR failed, trying basic OCR... " + tracker.RenderCurrent())
+
 		extractedText, err = extractTextFromImageBasic(filePath)
 		if err != nil {
+			tracker.GetCurrent().Update(0) // Failed
+			updateStatus("OCR extraction failed")
 			return ProcessedContent{Category: "unprocessed", Tags: []string{"vision_failed", "ocr_failed"}, AIProvider: "Vision + AI Fusion"}
 		}
 	}
 
+	tracker.GetCurrent().Complete()
+	updateStatus(tracker.RenderCurrent())
+
+	// Stage 3: Vision Encoding
+	tracker.SetCurrent("vision_encoding")
+	updateStatus(tracker.RenderCurrent())
+
 	// Process with vision encoder
-	updateStatus("👁️ Generating multimodal embeddings...")
 	multimodalEmbedding, err := p.visionProc.ProcessImage(ctx, filePath, extractedText)
 	if err != nil {
 		zap.S().Warn("Vision processing failed, falling back to primary AI", "error", err)
+		updateStatus("Vision encoding failed, falling back to standard processing")
 		return p.processWithPrimaryAI(ctx, filePath, fileType, aiService, streamCallback, language, updateStatus, caption)
 	}
+
+	tracker.GetCurrent().Complete()
+	updateStatus(tracker.RenderCurrent())
 
 	// Check confidence threshold
 	minConfidence := config.AppConfig.Vision.MinConfidence
 	if multimodalEmbedding.Confidence < minConfidence {
 		zap.S().Info("Vision confidence too low, falling back to primary AI", "confidence", multimodalEmbedding.Confidence, "threshold", minConfidence)
+		updateStatus(fmt.Sprintf("Vision confidence (%.2f) below threshold (%.2f), using standard AI", multimodalEmbedding.Confidence, minConfidence))
 		return p.processWithPrimaryAI(ctx, filePath, fileType, aiService, streamCallback, language, updateStatus, caption)
 	}
 
+	// Stage 4: Multimodal Fusion
+	tracker.SetCurrent("multimodal_fusion")
+	updateStatus(tracker.RenderCurrent())
+
+	// Fusion is already done in ProcessImage, just mark as complete
+	tracker.GetCurrent().Complete()
+	updateStatus(tracker.RenderCurrent())
+
+	// Stage 5: AI Analysis
+	tracker.SetCurrent("ai_analysis")
+	updateStatus(tracker.RenderCurrent())
+
 	// Create enhanced AI analysis with multimodal context
-	updateStatus("🧠 Analyzing with multimodal AI...")
 	result := ProcessedContent{
 		Text:     extractedText,
 		Category: "general",
@@ -252,13 +298,33 @@ func (p *botProcessor) processWithVisionFusion(ctx context.Context, filePath, fi
 
 	// Use LangChain with multimodal context
 	result.AIProvider = fmt.Sprintf("%s (Vision Enhanced)", p.visionProc.GetEncoderName())
+
+	tracker.GetCurrent().Update(50)
+	updateStatus("Generating summary... " + tracker.RenderCurrent())
+
 	result.Summary = p.generateMultimodalSummary(ctx, multimodalEmbedding, extractedText, aiService, streamCallback)
+
+	tracker.GetCurrent().Update(75)
+	updateStatus("Extracting topics and questions... " + tracker.RenderCurrent())
+
 	result.Topics, result.Questions = p.generateMultimodalTopicsAndQuestions(ctx, multimodalEmbedding, extractedText, aiService)
 
-	// Enhanced categorization using multimodal data
+	tracker.GetCurrent().Complete()
+	updateStatus(tracker.RenderCurrent())
+
+	// Stage 6: Enhanced categorization
 	result.Category = p.categorizeWithVision(multimodalEmbedding, extractedText)
 	result.Tags = append(result.Tags, result.Category)
 	result.Confidence = multimodalEmbedding.Confidence
+
+	// Stage 7: Summarization (already done)
+	tracker.SetCurrent("summarization")
+	tracker.GetCurrent().Complete()
+	updateStatus(tracker.RenderCurrent())
+
+	// Stage 8: Storage
+	tracker.SetCurrent("storage")
+	updateStatus(tracker.RenderCurrent())
 
 	// Store in vector store with multimodal embeddings
 	if globalVectorStore != nil {
@@ -274,16 +340,22 @@ func (p *botProcessor) processWithVisionFusion(ctx context.Context, filePath, fi
 				"ai_provider":       result.AIProvider,
 				"vision_confidence": multimodalEmbedding.Confidence,
 				"vision_encoder":    p.visionProc.GetEncoderName(),
+				"processing_time":   time.Since(tracker.GetBar("upload").GetStartTime()).Seconds(),
 			},
 			Vector: multimodalEmbedding.FusedVector,
 		}
 
 		if err := globalVectorStore.AddDocuments(ctx, []vectorstore.Document{doc}); err != nil {
 			zap.S().Error("Failed to store vision document in vector store", "error", err)
+			updateStatus("Vector storage failed, but processing complete")
 		} else {
 			zap.S().Info("Vision-enhanced document stored in vector store", "id", docID)
 		}
 	}
+
+	tracker.GetCurrent().Complete()
+	totalTime := time.Since(tracker.GetBar("upload").GetStartTime()).Seconds()
+	updateStatus(fmt.Sprintf("Processing complete in %.1fs - %s", totalTime, tracker.RenderCurrent()))
 
 	return result
 }
