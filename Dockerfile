@@ -1,110 +1,98 @@
-# Multi-stage Dockerfile for Obsidian Bot
-# Optimized for production deployment with security best practices
+# Multi-stage Dockerfile for Enhanced Cloudflare Workers AI Proxy
+# Optimized for development and deployment with Wrangler CLI
 
 # ============================================
 # Build Arguments
 # ============================================
-ARG GO_VERSION=1.25.4
+ARG NODE_VERSION=18
 ARG ALPINE_VERSION=3.20
 
 # ============================================
 # Builder Stage
 # ============================================
-FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS builder
+FROM --platform=$BUILDPLATFORM node:${NODE_VERSION}-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache \
-    build-base \
-    git \
-    ca-certificates \
-    tzdata
+     git \
+     ca-certificates \
+     tzdata \
+     python3 \
+     make \
+     g++
 
 # Set working directory
 WORKDIR /src
 
-# Copy go.mod and go.sum first for better caching
-COPY go.mod go.sum ./
-RUN go mod download && go mod verify
+# Copy package files first for better caching
+COPY package*.json ./
+RUN npm ci --only=production && npm cache clean --force
 
-# Copy rest of source code
+# Copy source code
 COPY . .
 
-# Generate templ files for dashboard UI
-RUN go install github.com/a-h/templ/cmd/templ@v0.3.977
-RUN /go/bin/templ generate
-
-# Build arguments
-ARG APP_VERSION=v0.0.0-dev
-ARG TARGETOS
-ARG TARGETARCH
-
-# Build with optimizations
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build \
-    -ldflags="-w -s -X main.version=${APP_VERSION} -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    -tags=netgo \
-    -installsuffix netgo \
-    -o /app/bot \
-    ./cmd/bot
+# Build the project (if build script exists)
+RUN npm run build 2>/dev/null || echo "No build script found, skipping"
 
 # ============================================
 # Production Stage
 # ============================================
-FROM alpine:${ALPINE_VERSION} AS production
+FROM node:${NODE_VERSION}-alpine AS production
 
 # Install runtime dependencies
-# - tesseract-ocr: OCR for image analysis
-# - poppler-utils: PDF processing
-# - git: vault sync
-# - curl: health checks
+# - wrangler: Cloudflare Workers CLI
+# - curl: health checks and API calls
+# - git: version control for deployments
 RUN apk add --no-cache \
-    tesseract-ocr \
-    tesseract-ocr-data-eng \
-    poppler-utils \
-    git \
-    ca-certificates \
-    tzdata \
-    curl \
-    && rm -rf /var/cache/apk/* \
-    && rm -rf /tmp/*
+     wrangler \
+     curl \
+     git \
+     ca-certificates \
+     tzdata \
+     && rm -rf /var/cache/apk/* \
+     && rm -rf /tmp/*
 
 # Create non-root user with proper permissions
 RUN addgroup -S -g 1000 appgroup && \
-    adduser -S -u 1000 -G appgroup appuser
+     adduser -S -u 1000 -G appgroup appuser
 
 # Set working directory
 WORKDIR /app
 
-# Copy binary from builder
-COPY --from=builder /app/bot /app/bot
+# Copy built application from builder
+COPY --from=builder /src /app
 
-# Copy dashboard static files
-COPY --from=builder /src/internal/dashboard/static/ ./internal/dashboard/static
+# Copy package files and install production dependencies
+COPY package*.json ./
+RUN npm ci --only=production && npm cache clean --force
 
 # Create required directories
 RUN mkdir -p \
-    attachments \
-    vault \
-    data \
-    logs \
-    && chown -R appuser:appgroup /app \
-    && chmod 755 /app/bot
+     logs \
+     .wrangler \
+     && chown -R appuser:appgroup /app
 
-# Health check script
-COPY --from=builder /src <<'EOF' /app/healthcheck.sh
+# Health check script for workers deployment
+RUN cat <<'EOF' > /app/healthcheck.sh
 #!/bin/sh
 set -e
 
-# Check if process is running
-if ! pgrep -f "bot" > /dev/null 2>&1; then
-    echo "Bot process not running"
-    exit 1
+# Check if wrangler is available
+if ! command -v wrangler >/dev/null 2>&1; then
+     echo "Wrangler CLI not found"
+     exit 1
 fi
 
-# Check HTTP endpoint
-if ! curl -sf http://localhost:8080/api/services/status > /dev/null 2>&1; then
-    echo "Health endpoint not responding"
-    exit 1
+# Check if package.json exists
+if [ ! -f "package.json" ]; then
+     echo "package.json not found"
+     exit 1
+fi
+
+# Check if wrangler.toml exists
+if [ ! -f "wrangler.toml" ]; then
+     echo "wrangler.toml not found"
+     exit 1
 fi
 
 echo "OK"
@@ -116,25 +104,24 @@ RUN chmod +x /app/healthcheck.sh && chown appuser:appgroup /app/healthcheck.sh
 # Switch to non-root user
 USER appuser
 
-# Expose application port
-EXPOSE 8080
+# Expose port for local development (if needed)
+EXPOSE 8787
 
 # Environment variables
+ENV NODE_ENV=production
 ENV ENVIRONMENT=production
-ENV PORT=8080
-ENV LOG_LEVEL=INFO
-ENV GIN_MODE=release
+ENV LOG_LEVEL=info
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD /app/healthcheck.sh
+HEALTHCHECK --interval=60s --timeout=10s --start-period=10s --retries=3 \
+     CMD /app/healthcheck.sh
 
-# Entrypoint
-ENTRYPOINT ["/app/bot"]
+# Default command - deploy workers
+CMD ["npm", "run", "deploy"]
 
 # Labels
 LABEL maintainer="abdoullah.elvogani@example.com" \
-      version="${APP_VERSION}" \
-      description="Obsidian Bot - AI-powered Telegram assistant with Cloudflare integration" \
-      org.opencontainers.image.source="https://github.com/Ablay19/obsidian-vault" \
-      org.opencontainers.image.licenses="MIT"
+       version="2.0.0" \
+       description="Enhanced Cloudflare Workers AI Proxy - High-performance AI proxy with analytics and caching" \
+       org.opencontainers.image.source="https://github.com/Ablay19/obsidian-vault" \
+       org.opencontainers.image.licenses="MIT"
