@@ -1,0 +1,75 @@
+name: "example-tool"
+description: "Example tool configuration for reference"
+version: "1.0.0"
+category: "utility"
+
+parameters:
+  - name: "input"
+    type: "string"
+    required: true
+    description: "Primary input for the tool"
+    validation:
+      min_length: 1
+      max_length: 1000
+      pattern: "^[a-zA-Z0-9\\s]+$"
+      
+  - name: "options"
+    type: "object"
+    required: false
+    description: "Optional configuration object"
+    properties:
+      mode:
+        type: "string"
+        enum: ["fast", "precise", "balanced"]
+        default: "balanced"
+      timeout:
+        type: "number"
+        min: 1000
+        max: 300000
+        default: 30000
+
+settings:
+  default_mode: "balanced"
+  default_timeout: 30000
+  parallel_execution: true
+  max_concurrent_operations: 5
+
+security:
+  requires_permission: false
+  access_level: "user"
+  rate_limit:
+    requests_per_minute: 100
+    burst_limit: 20
+
+validation:
+  input_sanitization: true
+  output_validation: true
+  error_handling: "graceful"
+
+usage_examples:
+  - input: "example data"
+    description: "Basic tool usage"
+  - input: "example data"
+    options:
+      mode: "fast"
+      timeout: 10000
+    description: "Fast mode with custom timeout"
+
+integration:
+  hooks:
+    before_execution: "validateInput"
+    after_execution: "logResult"
+  dependencies:
+    - "core-utils"
+    - "validator"
+
+testing:
+  unit_tests: true
+  integration_tests: true
+  performance_tests: false
+  test_coverage_threshold: 80
+
+documentation:
+  readme: "./docs/example-tool.md"
+  api_reference: "./docs/api.md"
+  examples: "./examples/"

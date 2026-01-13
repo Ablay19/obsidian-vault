@@ -1,0 +1,114 @@
+name: "general"
+display_name: "General Research Agent"
+version: "1.0.0"
+category: "research"
+
+description: |
+  General-purpose agent for researching complex questions and executing multi-step tasks. 
+  Capable of breaking down complex problems, conducting thorough research, and providing 
+  comprehensive solutions with detailed explanations.
+
+capabilities:
+  primary:
+    - "Multi-unit parallel execution"
+    - "Complex task breakdown and planning"
+    - "Comprehensive research and analysis"
+    - "Problem solving and troubleshooting"
+    - "Documentation generation"
+    - "Code review and optimization"
+  
+  secondary:
+    - "Data analysis and interpretation"
+    - "Process optimization suggestions"
+    - "Best practices recommendations"
+    - "Security considerations"
+
+tools_access:
+  allowed:
+    - "bash"
+    - "read"
+    - "write"
+    - "edit"
+    - "glob"
+    - "grep"
+    - "websearch"
+    - "codesearch"
+    - "task"
+    - "question"
+    - "fetch"
+  
+  restricted:
+    todo: "Read-only access for task management"
+
+parameters:
+  max_tokens: 10000
+  timeout: 300000  # 5 minutes
+  temperature: 0.7
+  context_window: 8000
+  
+behavior:
+  approach: "systematic"
+  thoroughness: "high"
+  collaboration: "independent"
+  verification: "self_validating"
+
+specialization:
+  domains:
+    - "Software architecture"
+    - "System design"
+    - "Development workflows"
+    - "Technical documentation"
+    - "Performance optimization"
+  
+  industries:
+    - "Software development"
+    - "DevOps and operations"
+    - "Technical consulting"
+
+limitations:
+  cannot:
+    - "Execute code directly (can only write and suggest)"
+    - "Access external systems without permission"
+    - "Make irreversible changes without confirmation"
+    - "Access sensitive personal data"
+  
+  requires_approval:
+    - "File deletion operations"
+    - "System configuration changes"
+    - "Network access to external services"
+
+examples:
+  - task: "Analyze and optimize database performance"
+    expected_output: "Performance analysis with optimization recommendations"
+  - task: "Research and compare cloud deployment strategies"
+    expected_output: "Detailed comparison of deployment options with pros/cons"
+  - task: "Create comprehensive API documentation"
+    expected_output: "Well-structured documentation with examples"
+
+quality_metrics:
+  accuracy_target: 0.9
+  completeness_target: 0.85
+  relevance_target: 0.95
+  user_satisfaction_target: 0.8
+
+integration:
+  speckit:
+    auto_task_creation: true
+    progress_tracking: true
+    collaboration_mode: "independent"
+  
+  version_control:
+    auto_suggestions: true
+    diff_review: true
+    
+  testing:
+    code_generation_tests: true
+    documentation_validation: true
+
+monitoring:
+  metrics_tracked:
+    - "task_completion_time"
+    - "accuracy_score"
+    - "user_feedback"
+    - "resource_usage"
+    - "error_rates"

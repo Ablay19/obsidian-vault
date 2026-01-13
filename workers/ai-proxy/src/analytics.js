@@ -1,13 +1,104 @@
-// Analytics and Monitoring for AI Proxy
-export class Analytics {
+// Enhanced Analytics and Monitoring for AI Proxy
+export class WorkerAnalytics {
   constructor(env) {
     this.env = env;
     this.batchSize = 100;
     this.flushInterval = 60000; // 1 minute
     this.events = [];
+
+    // Enhanced metrics storage
+    this.metrics = {
+      requests: 0,
+      errors: 0,
+      responseTime: [],
+      memoryUsage: [],
+      cpuUsage: [],
+      cacheHits: 0,
+      cacheMisses: 0,
+      startTime: Date.now()
+    };
+
     this.startBatchFlush();
   }
-  
+
+  // Enhanced tracking methods
+  trackRequest(duration, success, endpoint) {
+    this.metrics.requests++;
+    if (!success) this.metrics.errors++;
+
+    this.metrics.responseTime.push({
+      duration,
+      endpoint,
+      timestamp: Date.now()
+    });
+
+    // Keep only last 1000 entries to prevent memory issues
+    if (this.metrics.responseTime.length > 1000) {
+      this.metrics.responseTime.shift();
+    }
+
+    // Track memory usage
+    this.trackMemoryUsage();
+  }
+
+  trackMemoryUsage() {
+    // Cloudflare Workers memory tracking (simplified)
+    const memoryInfo = {
+      timestamp: Date.now(),
+      used: 0, // Would be populated by actual memory tracking
+      total: 0
+    };
+
+    this.metrics.memoryUsage.push(memoryInfo);
+    if (this.metrics.memoryUsage.length > 100) {
+      this.metrics.memoryUsage.shift();
+    }
+  }
+
+  getPerformanceReport() {
+    const totalRequests = this.metrics.requests;
+    const errorRate = totalRequests > 0 ? this.metrics.errors / totalRequests : 0;
+    const avgResponseTime = this.calculateAverageResponseTime();
+    const memoryUsage = this.getCurrentMemoryUsage();
+    const uptime = Date.now() - this.metrics.startTime;
+
+    return {
+      totalRequests,
+      errorRate,
+      avgResponseTime,
+      memoryUsage,
+      uptime,
+      cacheEfficiency: this.getCacheEfficiency(),
+      healthScore: this.calculateHealthScore()
+    };
+  }
+
+  calculateAverageResponseTime() {
+    if (this.metrics.responseTime.length === 0) return 0;
+
+    const sum = this.metrics.responseTime.reduce((acc, item) => acc + item.duration, 0);
+    return sum / this.metrics.responseTime.length;
+  }
+
+  getCurrentMemoryUsage() {
+    // Simplified memory tracking for Cloudflare Workers
+    if (this.metrics.memoryUsage.length === 0) return 0;
+    return this.metrics.memoryUsage[this.metrics.memoryUsage.length - 1];
+  }
+
+  getCacheEfficiency() {
+    const total = this.metrics.cacheHits + this.metrics.cacheMisses;
+    return total > 0 ? this.metrics.cacheHits / total : 0;
+  }
+
+  calculateHealthScore() {
+    // Simple health score based on error rate and performance
+    const errorPenalty = (this.metrics.errors / Math.max(this.metrics.requests, 1)) * 100;
+    const performanceBonus = Math.max(0, 100 - (this.calculateAverageResponseTime() / 10)); // Bonus for fast responses
+
+    return Math.max(0, Math.min(100, 100 - errorPenalty + performanceBonus));
+  }
+
   async trackAIUsage(data) {
     const event = {
       type: 'ai_usage',
@@ -23,6 +114,8 @@ export class Analytics {
   }
   
   async trackCacheHit(provider, promptLength, cachedData) {
+    this.metrics.cacheHits++;
+
     const event = {
       type: 'cache_hit',
       timestamp: Date.now(),
@@ -35,7 +128,20 @@ export class Analytics {
         cost: cachedData.cost || 0
       }
     };
-    
+
+    await this.addEvent(event);
+  }
+
+  async trackCacheMiss(provider, promptLength) {
+    this.metrics.cacheMisses++;
+
+    const event = {
+      type: 'cache_miss',
+      timestamp: Date.now(),
+      provider,
+      promptLength
+    };
+
     await this.addEvent(event);
   }
   
@@ -220,4 +326,4 @@ export class Analytics {
   }
 }
 
-export default Analytics;
+export default WorkerAnalytics;

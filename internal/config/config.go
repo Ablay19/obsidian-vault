@@ -2,10 +2,12 @@ package config
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/vault/api"
 	"github.com/joho/godotenv"
@@ -27,9 +29,44 @@ func LoadConfig() {
 		slog.Warn("Unable to decode into struct: %v\n", err)
 		os.Exit(1)
 	}
+	}
+
+func loadSecretsFromFile() error {
+	secretsFile := "./secrets.json"
+	
+	// Try to read secrets from file
+	secretsData, err := os.ReadFile(secretsFile)
+	if err != nil {
+		slog.Warn("Could not read secrets file: %v, falling back to Vault\n", err)
+		return loadSecretsFromVault()
+	}
+	
+	var secrets map[string]interface{}
+	if err := json.Unmarshal(secretsData, &secrets); err != nil {
+		slog.Warn("Could not parse secrets file: %v, falling back to Vault\n", err)
+		return loadSecretsFromVault()
+	}
+	
+	// Map secrets to viper
+	for key, value := range secrets {
+		viper.Set(key, value.(string))
+	}
+	
+	slog.Info("Successfully loaded secrets from file.")
+	return nil
 }
 
-func loadSecretsFromVault() error {
+func LoadConfig() {
+	// 1. Load secrets from file (preferred method)
+	if err := loadSecretsFromFile(); err != nil {
+		// Fallback to environment variables if file loading fails
+		slog.Warn("Failed to load secrets from file: %v\n", err)
+		// Continue with environment variables instead of exiting
+	} else {
+		slog.Info("Secrets loaded from secrets.json file.")
+	}
+	
+	// 2. Unmarshal into AppConfig struct
 	vaultAddr := os.Getenv("VAULT_ADDR")
 	vaultToken := os.Getenv("VAULT_TOKEN")
 
@@ -77,8 +114,22 @@ func init() {
 	}
 
 	// 2. Set Defaults
-	viper.SetDefault("providers.gemini.model", "gemini-pro")
-	viper.SetDefault("dashboard.port", 8080)
+	viper.SetDefault("telegram_api_url", "https://api.telegram.org")
+	viper.SetDefault("database_url", "sqlite:///app/data/bot.db")
+	viper.SetDefault("database_path", "./data/bot.db")
+	viper.SetDefault("redis_url", "redis://localhost:6379")
+	viper.SetDefault("redis_db", 0)
+	viper.SetDefault("ai_provider", "local")
+	viper.SetDefault("local_model_path", "./models")
+	viper.SetDefault("rate_limit_per_hour", 100)
+	viper.SetDefault("rate_limit_per_day", 1000)
+	viper.SetDefault("log_level", "info")
+	viper.SetDefault("log_file", "./logs/bot.log")
+	viper.SetDefault("server_port", "8080")
+	viper.SetDefault("server_host", "localhost")
+	viper.SetDefault("max_concurrency", 10)
+	viper.SetDefault("request_timeout", "30s")
+	viper.SetDefault("context_max_length", 50)
 
 	// 3. Setup environment variable support
 	viper.AutomaticEnv()
@@ -134,58 +185,53 @@ type SwitchingRules struct {
 	OnError           string  `mapstructure:"on_error"`
 }
 
+type AuthConfig struct {
+	GoogleClientID     string `mapstructure:"google_client_id"`
+	GoogleClientSecret string `mapstructure:"google_client_secret"`
+	GoogleRedirectURL  string `mapstructure:"google_redirect_url"`
+	SessionSecret      string `mapstructure:"session_secret"`
+}
+
 type Config struct {
-	Providers struct {
-		Gemini struct {
-			Model string `mapstructure:"model"`
-		} `mapstructure:"gemini"`
-		Groq struct {
-			Model string `mapstructure:"model"`
-		} `mapstructure:"groq"`
-		HuggingFace struct {
-			APIKey string `mapstructure:"api_key"`
-			Model  string `mapstructure:"model"`
-		} `mapstructure:"huggingface"`
-		OpenRouter struct {
-			APIKey string `mapstructure:"api_key"`
-			Model  string `mapstructure:"model"`
-		} `mapstructure:"openrouter"`
-	} `mapstructure:"providers"`
+	// Telegram Bot Configuration
+	TelegramBotToken string `mapstructure:"telegram_bot_token"`
+	TelegramAPIURL   string `mapstructure:"telegram_api_url"`
+
+	// Database Configuration
+	DatabaseURL  string `mapstructure:"database_url"`
+	DatabasePath string `mapstructure:"database_path"`
+
+	// Redis Configuration
+	RedisURL      string `mapstructure:"redis_url"`
+	RedisPassword string `mapstructure:"redis_password"`
+	RedisDB       int    `mapstructure:"redis_db"`
+
+	// AI Configuration
+	AIProvider       string                    `mapstructure:"ai_provider"`
+	LocalModelPath   string                    `mapstructure:"local_model_path"`
+	HuggingFaceAPI   string                    `mapstructure:"huggingface_api"`
+	ReplicateAPI     string                    `mapstructure:"replicate_api"`
+	OpenRouterAPI    string                    `mapstructure:"openrouter_api"`
 	ProviderProfiles map[string]ProviderConfig `mapstructure:"provider_profiles"`
 	SwitchingRules   SwitchingRules            `mapstructure:"switching_rules"`
-	WhatsApp         struct {
-		AccessToken string `mapstructure:"access_token"`
-		VerifyToken string `mapstructure:"verify_token"`
-		AppSecret   string `mapstructure:"app_secret"`
-	} `mapstructure:"whatsapp"`
-	Classification struct {
-		Patterns map[string][]string `mapstructure:"patterns"`
-	} `mapstructure:"classification"`
-	LanguageDetection struct {
-		FrenchWords []string `mapstructure:"french_words"`
-	} `mapstructure:"language_detection"`
-	Dashboard struct {
-		Port int `mapstructure:"port"`
-	} `mapstructure:"dashboard"`
-	Auth struct {
-		GoogleClientID     string `mapstructure:"google_client_id"`
-		GoogleClientSecret string `mapstructure:"google_client_secret"`
-		GoogleRedirectURL  string `mapstructure:"google_redirect_url"`
-		SessionSecret      string `mapstructure:"session_secret"`
-	} `mapstructure:"auth"`
-	Vision struct {
-		Enabled          bool     `mapstructure:"enabled"`
-		EncoderModel     string   `mapstructure:"encoder_model"`
-		FusionMethod     string   `mapstructure:"fusion_method"`
-		MinConfidence    float64  `mapstructure:"min_confidence"`
-		MaxImageSize     int      `mapstructure:"max_image_size"`
-		SupportedFormats []string `mapstructure:"supported_formats"`
-		QualityThreshold float64  `mapstructure:"quality_threshold"`
-	} `mapstructure:"vision"`
-	Git struct {
-		UserName  string `mapstructure:"user_name"`
-		UserEmail string `mapstructure:"user_email"`
-		VaultPath string `mapstructure:"vault_path"`
-		RemoteURL string `mapstructure:"remote_url"`
-	} `mapstructure:"git"`
+
+	// Rate Limiting
+	RateLimitPerHour int `mapstructure:"rate_limit_per_hour"`
+	RateLimitPerDay  int `mapstructure:"rate_limit_per_day"`
+
+	// Logging Configuration
+	LogLevel string `mapstructure:"log_level"`
+	LogFile  string `mapstructure:"log_file"`
+
+	// Server Configuration
+	ServerPort string `mapstructure:"server_port"`
+	ServerHost string `mapstructure:"server_host"`
+
+	// Performance Configuration
+	MaxConcurrency   int           `mapstructure:"max_concurrency"`
+	RequestTimeout   time.Duration `mapstructure:"request_timeout"`
+	ContextMaxLength int           `mapstructure:"context_max_length"`
+
+	// Auth Configuration
+	Auth AuthConfig `mapstructure:"auth"`
 }

@@ -6,7 +6,8 @@
   "scripts": {
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
-    "test": "jest"
+    "test": "node ai-proxy/src/test-enhanced.js",
+    "test:enhanced": "node ai-proxy/src/test-enhanced.js"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20231218.0",
@@ -18,5 +19,5 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs"
+  "type": "module"
 }

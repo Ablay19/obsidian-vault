@@ -1,0 +1,138 @@
+# Multi-Instance Coordination Configuration
+
+## Instance Registry
+instances:
+  main:
+    id: "instance-main"
+    name: "Primary Development Instance"
+    owner: "primary-developer"
+    capabilities:
+      - "backend"
+      - "ai-integration"
+      - "database"
+      - "api-development"
+    current_focus:
+      - "workers-functionality-enhancement"
+      - "opencode-structure-creation"
+    completed_tasks:
+      - "T001-T025"  # Telegram bot core
+    active_tasks:
+      - "workers-core-implementation"
+      - "ai-agent-system"
+
+  secondary:
+    id: "instance-secondary"
+    name: "Secondary Instance - Telegram Bot"
+    owner: "bot-developer"
+    capabilities:
+      - "telegram-integration"
+      - "message-handling"
+      - "conversation-management"
+      - "ai-models"
+    current_focus:
+      - "telegram-bot-completion"
+      - "ai-model-integration"
+    completed_tasks:
+      - "T013-T020"  # Models and AI integration
+      - "T023-T025"  # Bot entry point and formatting
+    active_tasks:
+      - "T021"  # Message handler
+      - "T022"  # Basic commands
+
+## Coordination Rules
+coordination:
+  sync_frequency: "5m"
+  conflict_resolution: "priority_based"
+  task_distribution:
+    strategy: "capability_based"
+    auto_assign: true
+  communication:
+    method: "file_based"
+    shared_directory: "./.opencode/shared"
+    backup_method: "git_commit"
+
+## Current Sync Status
+sync_state:
+  last_sync: "2026-01-13T10:30:00Z"
+  pending_changes:
+    main_instance:
+      - "Created .opencode/ directory structure"
+      - "Designed workers functionality enhancement"
+      - "Multi-instance coordination framework"
+    secondary_instance:
+      - "Completed T024-T025 tasks"
+      - "Working on T021 message handler"
+      - "Need to update task completion status"
+
+## Shared Projects
+projects:
+  workers_functionality:
+    name: "Workers Directory Enhancement"
+    status: "planning"
+    owner_instance: "main"
+    assigned_tasks:
+      - "design-bot-core-architecture"
+      - "implement-ai-agent-system"
+      - "create-user-experience-features"
+    
+  telegram_bot_completion:
+    name: "Telegram AI Bot Core"
+    status: "implementation"
+    owner_instance: "secondary"
+    assigned_tasks:
+      - "T021: Implement message handler"
+      - "T022: Implement basic commands"
+      - "Testing and validation"
+
+## Dependencies
+cross_instance_dependencies:
+  telegram_bot_completion -> workers_functionality:
+    description: "Bot completion informs workers AI integration"
+    status: "pending"
+    
+  workers_functionality -> telegram_bot_completion:
+    description: "Workers AI capabilities enhance bot intelligence"
+    status: "pending"
+
+## Conflict Resolution
+active_conflicts:
+  - type: "task_overlap"
+    description: "Both instances working on AI integration"
+    resolution: "coordinate via shared AI service"
+    status: "resolved"
+
+pending_conflicts:
+  - type: "resource_contention"
+    description: "Both accessing AI models"
+    proposed_resolution: "implement resource locking"
+    status: "pending_resolution"
+
+## Communication Protocol
+messages:
+  pending:
+    - from: "secondary"
+      to: "main"
+      subject: "Task completion update"
+      content: "T024 and T025 completed, working on T021"
+      timestamp: "2026-01-13T10:25:00Z"
+      status: "unread"
+      
+    - from: "main"
+      to: "secondary"
+      subject: "Workers functionality plan"
+      content: "Comprehensive plan for workers directory enhancement created"
+      timestamp: "2026-01-13T10:30:00Z"
+      status: "unread"
+
+## Next Actions
+immediate_actions:
+  - "Sync task completion status between instances"
+  - "Coordinate T021 and T022 dependencies"
+  - "Share workers functionality plan with secondary instance"
+  - "Establish resource coordination for AI models"
+
+upcoming_coordination:
+  - "Merge opencode directory structures"
+  - "Coordinate agent system between workers and bot"
+  - "Plan integration testing"
+  - "Finalize deployment strategy"

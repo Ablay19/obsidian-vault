@@ -1,0 +1,116 @@
+# Opencode Configuration
+
+## Core Settings
+version: "1.0.0"
+environment: "development"
+debug: true
+log_level: "info"
+
+## Agent Configuration
+agents:
+  default_timeout: 120000  # 2 minutes in milliseconds
+  max_concurrent_tasks: 5
+  session_persistence: true
+  context_window_size: 10000  # tokens
+
+## Tool Configuration
+tools:
+  enabled:
+    - "bash"
+    - "read" 
+    - "write"
+    - "edit"
+    - "glob"
+    - "grep"
+    - "search"
+    - "websearch"
+    - "codesearch"
+    - "task"
+    - "question"
+    - "todowrite"
+    - "todoread"
+  
+  tool_settings:
+    bash:
+      default_timeout: 30000
+      workdir: "/home/abdoullahelvogani/obsidian-vault"
+      safe_mode: true
+      
+    read:
+      max_file_size: "10MB"
+      encoding: "utf-8"
+      
+    write:
+      backup_enabled: true
+      max_file_size: "10MB"
+
+## Session Management
+sessions:
+  persistence:
+    enabled: true
+    backend: "file"
+    directory: "./.opencode/sessions"
+    retention_days: 30
+    
+  security:
+    encrypt_session_data: false
+    session_timeout: 3600000  # 1 hour in milliseconds
+
+## Plugin System
+plugins:
+  enabled: true
+  directory: "./.opencode/plugins"
+  auto_load:
+    - "@opencode-ai/plugin"
+
+## API Configuration
+api:
+  enabled: false
+  port: 8080
+  host: "localhost"
+  cors_enabled: true
+
+## Integration Settings
+integrations:
+  git:
+    enabled: true
+    auto_commit: false
+    branch_protection: true
+    
+  speckit:
+    enabled: true
+    config_path: "./.speckit"
+    
+  cloudflare:
+    workers_path: "./workers"
+
+## Performance Settings
+performance:
+  cache_enabled: true
+  cache_directory: "./.opencode/cache"
+  cache_ttl: 3600  # 1 hour
+  
+  parallel_execution: true
+  max_parallel_operations: 3
+
+## Logging Configuration
+logging:
+  level: "info"
+  format: "json"
+  directory: "./.opencode/logs"
+  rotation: "daily"
+  retention_days: 7
+
+## Security Settings
+security:
+  sanitize_input: true
+  max_file_access_depth: 10
+  blocked_patterns:
+    - "*.pem"
+    - "*.key"
+    - ".env"
+    - "id_rsa"
+  
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 100

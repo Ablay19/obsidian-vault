@@ -1,0 +1,70 @@
+name: "task"
+description: "Launch specialized AI agents for complex, multistep tasks with autonomous execution"
+parameters:
+  - name: "description"
+    type: "string"
+    required: true
+    description: "Short (3-5 words) description of the task"
+  - name: "prompt"
+    type: "string"
+    required: true
+    description: "The task for the agent to perform"
+  - name: "subagent_type"
+    type: "string"
+    required: true
+    enum: ["general", "explore"]
+    description: "Type of specialized agent to use"
+
+agent_types:
+  general:
+    description: "General-purpose agent for researching complex questions and executing multi-step tasks"
+    capabilities:
+      - "Multi-unit parallel execution"
+      - "Complex task breakdown"
+      - "Research and analysis"
+      - "Problem solving"
+    max_tokens: 10000
+    default_timeout: 300000  # 5 minutes
+    
+  explore:
+    description: "Fast agent specialized for exploring codebases and finding patterns"
+    capabilities:
+      - "Rapid file pattern matching"
+      - "Code search and analysis"
+      - "Architecture understanding"
+      - "Function location"
+    thoroughness_levels:
+      quick: "Basic searches for obvious patterns"
+      medium: "Moderate exploration with multiple search strategies"
+      very_thorough: "Comprehensive analysis across multiple locations"
+    default_tokens: 5000
+    default_thoroughness: "medium"
+
+settings:
+  default_timeout: 300000  # 5 minutes
+  session_persistence: true
+  context_sharing: true
+  parallel_execution: true
+
+usage_examples:
+  - description: "Analyze codebase structure"
+    prompt: "Analyze the codebase structure and identify main components"
+    subagent_type: "explore"
+    thoroughness: "medium"
+  - description: "Implement authentication system"
+    prompt: "Research and implement JWT authentication with refresh tokens"
+    subagent_type: "general"
+  - description: "Find all API endpoints"
+    prompt: "Find all REST API endpoints in the codebase and document them"
+    subagent_type: "explore"
+    thoroughness: "very thorough"
+
+integration:
+  speckit:
+    auto_task_creation: true
+    status_tracking: true
+    collaboration_mode: "independent"
+  
+  git:
+    auto_commit_after_completion: false
+    branch_creation: true
