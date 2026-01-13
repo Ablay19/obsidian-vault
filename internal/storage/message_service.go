@@ -1,9 +1,7 @@
 package storage
 
 import (
-	"database/sql"
 	"fmt"
-	"time"
 
 	"obsidian-automation/internal/models"
 	"obsidian-automation/pkg/utils"

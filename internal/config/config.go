@@ -17,63 +17,63 @@ import (
 // ... (struct definitions remain the same)
 
 // LoadConfig loads the configuration from a file, environment variables, and Vault.
-func LoadConfig() {
-	// Load secrets from Vault (optional)
-	if err := loadSecretsFromVault(); err != nil {
-		slog.Warn("Could not load secrets from Vault. Falling back to environment variables: %v\n", err)
-		// Continue with environment variables instead of exiting
-	}
-
-	// Unmarshal into AppConfig struct
-	if err := viper.Unmarshal(&AppConfig); err != nil {
-		slog.Warn("Unable to decode into struct: %v\n", err)
-		os.Exit(1)
-	}
-	}
-
-func loadSecretsFromFile() error {
-	secretsFile := "./secrets.json"
-	
-	// Try to read secrets from file
-	secretsData, err := os.ReadFile(secretsFile)
-	if err != nil {
-		slog.Warn("Could not read secrets file: %v, falling back to Vault\n", err)
-		return loadSecretsFromVault()
-	}
-	
-	var secrets map[string]interface{}
-	if err := json.Unmarshal(secretsData, &secrets); err != nil {
-		slog.Warn("Could not parse secrets file: %v, falling back to Vault\n", err)
-		return loadSecretsFromVault()
-	}
-	
-	// Map secrets to viper
-	for key, value := range secrets {
-		viper.Set(key, value.(string))
-	}
-	
-	slog.Info("Successfully loaded secrets from file.")
-	return nil
-}
-
-func LoadConfig() {
+func LoadConfig() error {
 	// 1. Load secrets from file (preferred method)
 	if err := loadSecretsFromFile(); err != nil {
 		// Fallback to environment variables if file loading fails
-		slog.Warn("Failed to load secrets from file: %v\n", err)
+		slog.Warn("Failed to load secrets from file", "error", err)
 		// Continue with environment variables instead of exiting
 	} else {
 		slog.Info("Secrets loaded from secrets.json file.")
 	}
-	
-	// 2. Unmarshal into AppConfig struct
+
+	// 2. Try to load from Vault if credentials are available
+	if err := loadSecretsFromVault(); err != nil {
+		slog.Warn("Could not load secrets from Vault. Using environment variables only", "error", err)
+		// Continue with environment variables instead of exiting
+	}
+
+	// 3. Unmarshal into AppConfig struct
+	if err := viper.Unmarshal(&AppConfig); err != nil {
+		slog.Error("Unable to decode into struct", "error", err)
+		return fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+
+	return nil
+}
+
+func loadSecretsFromFile() error {
+	secretsFile := "./secrets.json"
+
+	// Try to read secrets from file
+	secretsData, err := os.ReadFile(secretsFile)
+	if err != nil {
+		return fmt.Errorf("could not read secrets file: %w", err)
+	}
+
+	var secrets map[string]interface{}
+	if err := json.Unmarshal(secretsData, &secrets); err != nil {
+		return fmt.Errorf("could not parse secrets file: %w", err)
+	}
+
+	// Map secrets to viper
+	for key, value := range secrets {
+		if strValue, ok := value.(string); ok {
+			viper.Set(key, strValue)
+		}
+	}
+
+	slog.Info("Successfully loaded secrets from file.")
+	return nil
+}
+
+func loadSecretsFromVault() error {
 	vaultAddr := os.Getenv("VAULT_ADDR")
 	vaultToken := os.Getenv("VAULT_TOKEN")
 
-	// If Vault credentials not set, that's okay for development
+	// If Vault credentials not set, skip Vault loading
 	if vaultAddr == "" || vaultToken == "" {
-		slog.Warn("Vault credentials not found, using environment variables only\n")
-		return nil // Don't return error, just skip Vault loading
+		return fmt.Errorf("vault credentials not found")
 	}
 
 	config := &api.Config{
@@ -95,10 +95,10 @@ func LoadConfig() {
 
 	for key, value := range secret.Data {
 		viper.Set(key, value)
-		slog.Info("Loaded secret from Vault: %s\n", key)
+		slog.Info("Loaded secret from Vault", "key", key)
 	}
 
-	slog.Info("Successfully loaded secrets from Vault.")
+	slog.Info("Successfully loaded secrets from Vault", "count", len(secret.Data))
 	return nil
 }
 
@@ -108,7 +108,7 @@ var AppConfig Config
 func init() {
 	// 1. Load .env file using godotenv (actually sets OS environment variables)
 	if err := godotenv.Load(); err != nil {
-		slog.Warn("No .env file found or error loading it: %v\n", err)
+		slog.Warn("No .env file found or error loading it", "error", err)
 	} else {
 		slog.Info(".env file loaded into environment successfully")
 	}
@@ -143,13 +143,13 @@ func init() {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			slog.Warn("config.yaml not found, using defaults")
 		} else {
-			slog.Error("Error reading config.yaml: %v\n", err)
+			slog.Error("Error reading config.yaml", "error", err)
 		}
 	}
 
 	// 6. Unmarshal into AppConfig struct
 	if err := viper.Unmarshal(&AppConfig); err != nil {
-		slog.Error("Unable to decode into struct: %v\n", err)
+		slog.Error("Unable to decode into struct", "error", err)
 		os.Exit(1)
 	}
 }
@@ -190,6 +190,19 @@ type AuthConfig struct {
 	GoogleClientSecret string `mapstructure:"google_client_secret"`
 	GoogleRedirectURL  string `mapstructure:"google_redirect_url"`
 	SessionSecret      string `mapstructure:"session_secret"`
+}
+
+type WhatsAppConfig struct {
+	AccessToken string `mapstructure:"access_token"`
+	AppSecret   string `mapstructure:"app_secret"`
+	VerifyToken string `mapstructure:"verify_token"`
+}
+
+type VisionConfig struct {
+	Enabled       bool    `mapstructure:"enabled"`
+	EncoderModel  string  `mapstructure:"encoder_model"`
+	FusionMethod  string  `mapstructure:"fusion_method"`
+	MinConfidence float64 `mapstructure:"min_confidence"`
 }
 
 type Config struct {
@@ -234,4 +247,10 @@ type Config struct {
 
 	// Auth Configuration
 	Auth AuthConfig `mapstructure:"auth"`
+
+	// WhatsApp Configuration
+	WhatsApp WhatsAppConfig `mapstructure:"whatsapp"`
+
+	// Vision Configuration
+	Vision VisionConfig `mapstructure:"vision"`
 }

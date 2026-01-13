@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"strconv"
 	"sync"
 	"time"
 )
@@ -39,7 +40,7 @@ func (rl *RateLimiter) Allow(userID int64) bool {
 	rl.mutex.Lock()
 	defer rl.mutex.Unlock()
 
-	userKey := string(userID)
+	userKey := strconv.FormatInt(userID, 10)
 	limit, exists := rl.limits[userKey]
 	if !exists {
 		limit = &UserLimit{
@@ -91,7 +92,7 @@ func (rl *RateLimiter) GetResetTime(userID int64, limitType string) int64 {
 	rl.mutex.RLock()
 	defer rl.mutex.RUnlock()
 
-	userKey := string(userID)
+	userKey := strconv.FormatInt(userID, 10)
 	limit, exists := rl.limits[userKey]
 	if !exists {
 		return time.Now().Unix()
@@ -115,7 +116,7 @@ func (rl *RateLimiter) Reset(userID int64) {
 	rl.mutex.Lock()
 	defer rl.mutex.Unlock()
 
-	userKey := string(userID)
+	userKey := strconv.FormatInt(userID, 10)
 	if limit, exists := rl.limits[userKey]; exists {
 		limit.mutex.Lock()
 		limit.hourlyCount = 0
