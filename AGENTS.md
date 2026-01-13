@@ -1,286 +1,317 @@
-# AI Agents Configuration
+# Enhanced Workers Configuration Guide
 
-## 🎯 FREE AI FEATURES ONLY
+This guide covers the configuration options for the Enhanced Cloudflare Workers AI Proxy, including environment variables, caching settings, analytics configuration, rate limiting options, and performance tuning parameters.
 
-**This project is committed to providing exceptional AI capabilities using only FREE, OPEN-SOURCE, and ACCESSIBLE technologies. No paid APIs, no subscription tiers, no premium features.**
+## 🎯 Configuration Overview
 
----
-
-## 🤖 AVAILABLE AI AGENTS
-
-### 1. **Conversation Agent** (Primary)
-```
-Capabilities: General chat, personality modes, context awareness
-Models: GPT-2, GPT-Neo, DialoGPT (local inference)
-Features: Multi-language support, conversation history, personality adaptation
-Free Alternative: 100% local processing, no API costs
-```
-
-### 2. **Code Assistant Agent**
-```
-Capabilities: Code completion, debugging, explanation, refactoring
-Models: CodeGen, StarCoder, CodeT5 (open-source models)
-Features: Multiple programming languages, code review, best practices
-Free Alternative: Local model inference, privacy-focused
-```
-
-### 3. **Creative Writing Agent**
-```
-Capabilities: Story generation, poetry, content creation, brainstorming
-Models: GPT-Neo, BLOOM, custom fine-tuned models
-Features: Multiple genres, styles, creative prompts, idea generation
-Free Alternative: Community-trained models, open-source datasets
-```
-
-### 4. **Educational Agent**
-```
-Capabilities: Homework help, concept explanation, tutoring, quiz generation
-Models: Specialized educational models, math reasoning models
-Features: Step-by-step solutions, interactive learning, progress tracking
-Free Alternative: Open educational resources, community contributions
-```
-
-### 5. **Math & Science Agent**
-```
-Capabilities: Problem solving, equation solving, scientific explanation
-Models: Math-specific models, formula recognition, symbolic computation
-Features: LaTeX rendering, step-by-step proofs, concept visualization
-Free Alternative: Open-source math libraries, educational datasets
-```
-
-### 6. **Translation & Language Agent**
-```
-Capabilities: Multi-language translation, language learning, cultural adaptation
-Models: Multilingual models (BLOOM, M2M100), language-specific fine-tunes
-Features: 50+ languages, pronunciation guides, cultural context
-Free Alternative: Open-source translation models, community validation
-```
+The workers support comprehensive configuration through environment variables and `wrangler.toml` settings. Configurations are divided into core functionality, performance tuning, and monitoring categories.
 
 ---
 
-## 🏗️ AGENT ARCHITECTURE
+## 🔧 Core Configuration
 
-### **Agent Orchestrator**
-```go
-type AgentOrchestrator struct {
-    agents      map[string]Agent
-    router      *SmartRouter
-    contextMgr  *ContextManager
-    metrics     *AgentMetrics
-}
+### Environment Variables
 
-func (ao *AgentOrchestrator) routeQuery(query string, context *UserContext) Agent {
-    // Intelligent routing based on query type and user preferences
-    // Prioritize local models, fallback to free APIs only when necessary
-}
-```
-
-### **Smart Routing Logic**
-```
-1. Query Analysis → Determine intent and complexity
-2. Capability Matching → Find best agent for the task
-3. Resource Assessment → Check local vs API availability
-4. Cost Optimization → Always prefer free local processing
-5. Fallback Planning → Free API alternatives when local can't handle
-```
-
----
-
-## 🎯 AGENT CAPABILITIES MATRIX
-
-| Feature | Local Models | Free APIs | Hybrid Approach |
-|---------|-------------|-----------|-----------------|
-| **Text Chat** | ✅ GPT-2/Neo | ⚠️ Limited | ✅ Smart routing |
-| **Code Help** | ✅ StarCoder | ⚠️ Basic | ✅ Local primary |
-| **Math Solving** | ✅ Math Models | ❌ None | ✅ Local only |
-| **Translation** | ✅ M2M100 | ⚠️ Limited | ✅ Local primary |
-| **Image Gen** | ❌ None | ❌ None | ❌ Not supported |
-| **Voice/Speech** | ⚠️ Basic TTS | ❌ None | ⚠️ Limited |
-
-**Legend:**
-- ✅ **Full Support**: High-quality, reliable capability
-- ⚠️ **Limited Support**: Basic functionality available
-- ❌ **Not Supported**: Not available in free tier
-
----
-
-## 🔧 AGENT CONFIGURATION
-
-### **Default Agent Settings**
-```yaml
-agents:
-  default_personality: "helpful"
-  max_context_length: 2048
-  response_timeout: 30
-  fallback_enabled: true
-  local_first: true  # Always try local models first
-
-  capabilities:
-    - conversation
-    - code_assistance
-    - creative_writing
-    - educational_support
-    - math_science
-    - translation
-
-  models:
-    primary: "gpt2-medium"      # Free, local
-    code: "starcoder-3b"        # Free, local
-    creative: "gpt-neo-1.3b"    # Free, local
-    math: "math-codegen-6b"     # Free, local
-```
-
-### **Agent Switching Rules**
-```yaml
-switching_rules:
-  # Always prefer local models for cost and privacy
-  priority_order:
-    - local_models
-    - huggingface_free
-    - replicate_free
-    - together_free
-
-  # Switch based on query complexity
-  complexity_thresholds:
-    simple: local_only
-    medium: local_preferred
-    complex: hybrid_allowed
-```
-
----
-
-## 📊 PERFORMANCE METRICS
-
-### **Response Quality Targets**
-- **Accuracy**: >90% for supported query types
-- **Relevance**: >85% contextually appropriate responses
-- **Helpfulness**: >80% user satisfaction rating
-- **Speed**: <3 seconds average response time
-
-### **Resource Usage**
-- **Memory**: <2GB per active agent
-- **CPU**: <50% utilization on standard hardware
-- **Storage**: <10GB for model cache
-- **Network**: Minimal API calls (free tier limits)
-
----
-
-## 🔄 AGENT DEVELOPMENT WORKFLOW
-
-### **1. Agent Creation Process**
+#### Cloudflare Workers
 ```bash
-# Create new agent
-./scripts/create-agent.sh --name "math-tutor" --type "educational"
+# Required for deployment and API access
+CLOUDFLARE_API_TOKEN=your_cloudflare_api_token
+CLOUDFLARE_ACCOUNT_ID=your_account_id
+WORKER_NAME=your-worker-name
 
-# Add capabilities
-./scripts/add-capability.sh --agent "math-tutor" --capability "algebra"
-./scripts/add-capability.sh --agent "math-tutor" --capability "calculus"
-
-# Train/test locally
-go test ./internal/agents/math-tutor/... -v
-
-# Deploy to production
-./scripts/deploy-agent.sh --agent "math-tutor"
+# Optional: Custom domain configuration
+CUSTOM_DOMAIN=your.custom.domain
+WORKER_URL=https://your-worker.yourname.workers.dev
 ```
 
-### **2. Model Integration**
-```go
-// Add new model to agent
-func (a *MathTutorAgent) addModel(model AIModel) {
-    a.models = append(a.models, model)
-
-    // Validate model compatibility
-    if err := a.validateModel(model); err != nil {
-        log.Error("Model validation failed", "error", err)
-        return
-    }
-
-    // Update routing rules
-    a.updateRoutingRules()
-}
-```
-
-### **3. Testing & Validation**
+#### AI Provider Configuration
 ```bash
-# Run agent-specific tests
-go test ./internal/agents/... -v -run TestMathTutor
+# Primary AI providers (at least one required)
+GEMINI_API_KEY=your_gemini_api_key
+DEEPSEEK_API_KEY=your_deepseek_api_key
+GROQ_API_KEY=your_groq_api_key
 
-# Performance benchmarking
-./scripts/benchmark-agent.sh --agent "math-tutor" --queries 1000
+# Secondary providers (optional)
+OPENAI_API_KEY=your_openai_api_key
+HUGGINGFACE_API_KEY=your_huggingface_api_key
+OPENROUTER_API_KEY=your_openrouter_api_key
 
-# Quality assessment
-./scripts/evaluate-agent.sh --agent "math-tutor" --dataset "math_problems"
+# Provider preferences
+DEFAULT_PROVIDER=gemini
+FALLBACK_PROVIDERS=deepseek,groq,openai
+```
+
+#### Application Settings
+```bash
+# Environment and logging
+ENVIRONMENT=production
+LOG_LEVEL=info
+ENABLE_DEBUG_MODE=false
+
+# CORS and security
+ALLOWED_ORIGINS=https://yourdomain.com,https://anotherdomain.com
+ENABLE_CORS=true
+API_KEY_AUTH_ENABLED=false
 ```
 
 ---
 
-## 🚫 PAID FEATURES EXCLUSION POLICY
+## ⚡ Performance Configuration
 
-### **Strict No-Paid Policy**
-This project explicitly **DOES NOT** include any paid AI features:
+### Caching Settings
+```toml
+# wrangler.toml
+[vars]
+CACHE_ENABLED = "true"
+CACHE_SIZE = "100"              # Maximum cached responses
+CACHE_TTL_SECONDS = "3600"      # 1 hour default TTL
+CACHE_CLEANUP_INTERVAL = "300"  # Cleanup every 5 minutes
 
-- ❌ **No OpenAI GPT-4/GPT-3.5** (paid API)
-- ❌ **No Anthropic Claude** (paid API)
-- ❌ **No Google Gemini Pro** (paid tier)
-- ❌ **No Midjourney/DALL-E** (paid image generation)
-- ❌ **No premium model access** (paid subscriptions)
-- ❌ **No enterprise features** (paid add-ons)
-
-### **Free-Only Commitment**
-- ✅ **100% Open Source** models and code
-- ✅ **Local Inference** wherever possible
-- ✅ **Free API Tiers** only (when local not feasible)
-- ✅ **Community Contributions** encouraged
-- ✅ **Transparent Pricing** (always free)
-- ✅ **No Lock-in** to paid services
-
----
-
-## 🎯 FUTURE AGENT EXPANSION
-
-### **Planned Agent Additions**
-- **Research Assistant**: Academic paper analysis, citation help
-- **Career Counselor**: Resume review, interview preparation
-- **Health Advisor**: General wellness information (no medical advice)
-- **Environmental Guide**: Sustainability tips, eco-friendly suggestions
-- **Cultural Companion**: Cultural facts, language practice, traditions
-
-### **Advanced Capabilities**
-- **Multi-turn Conversations**: Extended context awareness
-- **Personalization**: User preference learning and adaptation
-- **Collaboration**: Multi-user AI sessions
-- **Integration**: API connections to free educational resources
-- **Offline Mode**: Full functionality without internet
-
----
-
-## 📈 MONITORING & OPTIMIZATION
-
-### **Agent Performance Tracking**
-```go
-type AgentMetrics struct {
-    responseTime    time.Duration
-    accuracyScore   float64
-    userSatisfaction float64
-    resourceUsage   ResourceStats
-    errorRate       float64
-}
-
-func (am *AgentMetrics) trackPerformance(agent string, query string, response string, duration time.Duration) {
-    // Track response quality
-    // Monitor resource usage
-    // Collect user feedback
-    // Optimize model selection
-}
+# Advanced caching options
+CACHE_COMPRESSION = "true"
+CACHE_ENCRYPTION = "false"
+CACHE_METRICS_ENABLED = "true"
 ```
 
-### **Continuous Improvement**
-- **User Feedback Integration**: Learn from user ratings and comments
-- **A/B Testing**: Compare different agent approaches
-- **Model Updates**: Regularly update to newer open-source models
-- **Performance Tuning**: Optimize for speed and accuracy
-- **Feature Requests**: Community-driven feature development
+### Rate Limiting Configuration
+```toml
+[vars]
+RATE_LIMIT_ENABLED = "true"
+RATE_LIMIT_PER_MINUTE = "60"    # Requests per minute per IP
+RATE_LIMIT_PER_HOUR = "1000"    # Requests per hour per IP
+RATE_LIMIT_BURST = "10"         # Burst allowance
+
+# Rate limiting algorithms
+RATE_LIMIT_ALGORITHM = "token_bucket"  # token_bucket, sliding_window, fixed_window
+RATE_LIMIT_WINDOW_SIZE = "60"   # Window size in seconds
+```
+
+### Load Balancing & Routing
+```toml
+[vars]
+LOAD_BALANCING_ENABLED = "true"
+PROVIDER_TIMEOUT_MS = "30000"   # 30 second timeout
+RETRY_ATTEMPTS = "3"
+RETRY_BACKOFF_MS = "1000"
+
+# Cost optimization
+COST_OPTIMIZATION_ENABLED = "true"
+MAX_COST_PER_REQUEST = "0.01"   # Maximum cost in USD
+PREFERRED_PROVIDERS = "gemini,deepseek,groq"
+```
 
 ---
 
-**This AI agent system is designed to provide powerful, ethical, and accessible AI assistance using only free and open-source technologies, ensuring everyone can benefit from advanced AI capabilities without financial barriers.**
+## 📊 Analytics & Monitoring
+
+### Analytics Configuration
+```toml
+[vars]
+ANALYTICS_ENABLED = "true"
+ANALYTICS_RETENTION_DAYS = "30"
+ANALYTICS_SAMPLING_RATE = "1.0"  # 100% sampling
+
+# Metrics collection
+COLLECT_RESPONSE_TIME = "true"
+COLLECT_ERROR_RATES = "true"
+COLLECT_CACHE_STATS = "true"
+COLLECT_PROVIDER_STATS = "true"
+```
+
+### Monitoring Settings
+```toml
+[vars]
+HEALTH_CHECK_ENABLED = "true"
+METRICS_ENDPOINT_ENABLED = "true"
+PERFORMANCE_PROFILING = "true"
+
+# Alert thresholds
+ALERT_ERROR_RATE_THRESHOLD = "0.05"    # 5% error rate
+ALERT_RESPONSE_TIME_THRESHOLD = "5000" # 5 seconds
+ALERT_CACHE_MISS_THRESHOLD = "0.8"     # 80% miss rate
+```
+
+### Logging Configuration
+```toml
+[vars]
+LOG_REQUESTS = "true"
+LOG_RESPONSES = "false"        # Don't log full responses for privacy
+LOG_ERRORS = "true"
+LOG_PERFORMANCE = "true"
+
+# Log levels per component
+LOG_LEVEL_CACHE = "info"
+LOG_LEVEL_ANALYTICS = "debug"
+LOG_LEVEL_ROUTING = "info"
+```
+
+---
+
+## 🔄 Provider-Specific Configuration
+
+### Gemini Configuration
+```toml
+[vars]
+GEMINI_MODEL = "gemini-pro"
+GEMINI_MAX_TOKENS = "4096"
+GEMINI_TEMPERATURE = "0.7"
+GEMINI_TIMEOUT_MS = "25000"
+```
+
+### DeepSeek Configuration
+```toml
+[vars]
+DEEPSEEK_MODEL = "deepseek-chat"
+DEEPSEEK_MAX_TOKENS = "4096"
+DEEPSEEK_TEMPERATURE = "0.7"
+DEEPSEEK_TIMEOUT_MS = "20000"
+```
+
+### Groq Configuration
+```toml
+[vars]
+GROQ_MODEL = "mixtral-8x7b-32768"
+GROQ_MAX_TOKENS = "4096"
+GROQ_TEMPERATURE = "0.7"
+GROQ_TIMEOUT_MS = "15000"
+```
+
+---
+
+## 🚀 Performance Tuning
+
+### Memory & Resource Management
+```toml
+[vars]
+MAX_MEMORY_MB = "128"
+CPU_TIME_LIMIT_MS = "5000"
+SUBREQUEST_LIMIT = "50"
+
+# Optimization flags
+ENABLE_STREAMING = "true"
+ENABLE_COMPRESSION = "true"
+ENABLE_CONNECTION_POOLING = "true"
+```
+
+### Advanced Tuning
+```toml
+[vars]
+# Request processing
+MAX_REQUEST_SIZE_KB = "1024"
+REQUEST_TIMEOUT_MS = "30000"
+CONNECTION_TIMEOUT_MS = "10000"
+
+# Cache optimization
+CACHE_WARMUP_ENABLED = "true"
+CACHE_PREFETCH_ENABLED = "false"
+CACHE_INVALIDATION_STRATEGY = "ttl"  # ttl, lru, manual
+
+# Performance monitoring
+PROFILING_ENABLED = "true"
+PROFILING_SAMPLE_RATE = "0.1"  # 10% sampling
+MEMORY_PROFILING = "true"
+```
+
+---
+
+## 🔒 Security Configuration
+
+### Authentication & Authorization
+```toml
+[vars]
+API_KEY_REQUIRED = "false"
+API_KEY_HEADER = "X-API-Key"
+JWT_ENABLED = "false"
+
+# Rate limiting per API key
+API_KEY_RATE_LIMIT_ENABLED = "true"
+API_KEY_RATE_LIMIT_PER_HOUR = "10000"
+```
+
+### Data Protection
+```toml
+[vars]
+ENCRYPT_CACHED_DATA = "false"
+LOG_SENSITIVE_DATA = "false"
+REDACT_REQUESTS_IN_LOGS = "true"
+
+# Compliance settings
+GDPR_COMPLIANT = "true"
+DATA_RETENTION_DAYS = "30"
+AUDIT_LOGGING = "true"
+```
+
+---
+
+## 📋 Configuration Validation
+
+The workers automatically validate configuration on startup. Invalid configurations will prevent deployment and log detailed error messages.
+
+### Required Configurations
+- At least one AI provider API key
+- Cloudflare API token for deployment
+- Basic rate limiting settings
+
+### Recommended Configurations
+- Analytics and monitoring enabled
+- Caching configured for performance
+- Multiple fallback providers
+- Reasonable rate limits
+
+---
+
+## 🔄 Runtime Configuration Updates
+
+Some configurations can be updated at runtime without redeployment:
+
+### Hot-Reloadable Settings
+- Rate limiting thresholds
+- Cache TTL settings
+- Provider preferences
+- Log levels
+
+### Settings Requiring Redeployment
+- Core provider API keys
+- Cloudflare account settings
+- Worker routing rules
+- Security policies
+
+---
+
+## 📊 Configuration Examples
+
+### Development Configuration
+```toml
+[vars]
+ENVIRONMENT = "development"
+LOG_LEVEL = "debug"
+CACHE_ENABLED = "false"
+ANALYTICS_ENABLED = "false"
+RATE_LIMIT_PER_MINUTE = "1000"
+```
+
+### Production Configuration
+```toml
+[vars]
+ENVIRONMENT = "production"
+LOG_LEVEL = "info"
+CACHE_ENABLED = "true"
+ANALYTICS_ENABLED = "true"
+RATE_LIMIT_PER_MINUTE = "60"
+RATE_LIMIT_PER_HOUR = "1000"
+```
+
+### High-Traffic Configuration
+```toml
+[vars]
+CACHE_SIZE = "500"
+RATE_LIMIT_PER_MINUTE = "120"
+RATE_LIMIT_BURST = "20"
+LOAD_BALANCING_ENABLED = "true"
+COST_OPTIMIZATION_ENABLED = "true"
+ANALYTICS_SAMPLING_RATE = "0.5"
+```
+
+---
+
+**For detailed API documentation and advanced configuration options, see the [Developer Documentation](./workers/docs/developer-docs/).**
