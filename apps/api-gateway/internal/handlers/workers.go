@@ -50,14 +50,10 @@ func ListWorkers(w http.ResponseWriter, r *http.Request) {
 	}
 	paginatedWorkers := workers[offsetInt:end]
 
-	response := map[string]interface{}{
-		"workers": paginatedWorkers,
-		"pagination": types.Pagination{
-			Limit:   limitInt,
-			Offset:  offsetInt,
-			Total:   total,
-			HasNext: end < total,
-		},
+	response := types.APIResponse{
+		Status:  "ok",
+		Data:    paginatedWorkers,
+		Message: "Workers retrieved successfully",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
