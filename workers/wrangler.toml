@@ -1,37 +1,19 @@
 name = "obsidian-bot-workers"
 main = "obsidian-bot-worker-simple.js"
-compatibility_date = "2024-01-01"
+compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
 [env.production]
-name = "obsidian-bot-workers-prod"
-routes = [
-  { pattern = "api.obsidian-bot.com/ai/*", zone_name = "obsidian-bot.com" },
-  { pattern = "api.obsidian-bot.com/webhook/*", zone_name = "obsidian-bot.com" },
-  { pattern = "api.obsidian-bot.com/health", zone_name = "obsidian-bot.com" },
-  { pattern = "api.obsidian-bot.com/metrics", zone_name = "obsidian-bot.com" }
-]
+name = "obsidian-bot-workers"
 
 [env.production.ai]
 binding = "AI"
 
 [env.staging]
 name = "obsidian-bot-workers-staging"
-routes = [
-  { pattern = "staging-api.obsidian-bot.com/ai/*", zone_name = "obsidian-bot.com" },
-  { pattern = "staging-api.obsidian-bot.com/webhook/*", zone_name = "obsidian-bot.com" },
-  { pattern = "staging-api.obsidian-bot.com/health", zone_name = "obsidian-bot.com" },
-  { pattern = "staging-api.obsidian-bot.com/metrics", zone_name = "obsidian-bot.com" }
-]
 
 [env.development]
 name = "obsidian-bot-workers-dev"
-routes = [
-  { pattern = "dev-api.obsidian-bot.com/ai/*", zone_name = "obsidian-bot.com" },
-  { pattern = "dev-api.obsidian-bot.com/webhook/*", zone_name = "obsidian-bot.com" },
-  { pattern = "dev-api.obsidian-bot.com/health", zone_name = "obsidian-bot.com" },
-  { pattern = "dev-api.obsidian-bot.com/metrics", zone_name = "obsidian-bot.com" }
-]
 
 [env.development.ai]
 binding = "AI"
@@ -40,46 +22,21 @@ binding = "AI"
 [ai]
 binding = "AI"
 
-# KV Namespaces for state management
-[[env.production.kv_namespaces]]
-binding = "BOT_STATE"
-id = "BOT_STATE_KV_ID"  # Set this in Cloudflare dashboard
-preview_id = "BOT_STATE_PREVIEW_ID"  # Set this in Cloudflare dashboard
-
-[[env.production.kv_namespaces]]
-binding = "AI_CACHE"
-id = "2e2bcb7bcb99485caa26f879ceee877e"
-preview_id = "4358c9cbbac94600817f0c23e3061eb8"
-
-# R2 Storage for file handling
-[[env.production.r2_buckets]]
-binding = "MEDIA_STORAGE"
-bucket_name = "obsidian-bot-media"
-
-# D1 Databases (optional)
-[[env.production.d1_databases]]
-binding = "BOT_DATABASE"
-database_name = "obsidian-bot"
-database_id = "BOT_DATABASE_ID"  # Set this in Cloudflare dashboard
-
 # Environment Variables
 [env.production.vars]
 ENVIRONMENT = "production"
 LOG_LEVEL = "info"
-# WEBHOOK_SECRET should be set as a secret in Cloudflare dashboard
 FALLBACK_AI_ENABLED = "true"
 AI_ENABLED = "true"
-# Add your Telegram bot token as a secret in Cloudflare dashboard
-# TELEGRAM_BOT_TOKEN = "your-telegram-bot-token"
 
 [env.staging.vars]
 ENVIRONMENT = "staging"
 LOG_LEVEL = "debug"
-# WEBHOOK_SECRET should be set as a secret in Cloudflare dashboard
 FALLBACK_AI_ENABLED = "true"
 
 [env.development.vars]
 ENVIRONMENT = "development"
 LOG_LEVEL = "debug"
-# WEBHOOK_SECRET should be set as a secret in Cloudflare dashboard
 FALLBACK_AI_ENABLED = "true"
+AI_ENABLED = "true"
+

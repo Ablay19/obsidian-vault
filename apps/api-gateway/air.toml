@@ -1,0 +1,13 @@
+root = "."
+testdata_dir = "testdata"
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./bin/api-gateway ./cmd/main.go"
+  bin = "./bin/api-gateway"
+
+[log]
+  time = true
+
+[misc]
+  clean_on_exit = true

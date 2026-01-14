@@ -12,6 +12,14 @@ import (
 	"obsidian-automation/internal/telemetry"
 )
 
+func TriggerProviderEvent(userID int64, oldProvider, newProvider string) {
+	telemetry.Info("Provider changed", "user_id", userID, "old_provider", oldProvider, "new_provider", newProvider)
+}
+
+func TriggerMessageEvent(message *tgbotapi.Message, response string) {
+	telemetry.Info("Message response generated", "user_id", message.From.ID, "chat_id", message.Chat.ID)
+}
+
 func SetupCommands(registry *CommandRegistry) {
 	// Register command handlers
 	registry.Register("setprovider", &setProviderCommandHandler{}, "Set AI provider")
@@ -384,6 +392,22 @@ func (h *resumeBotCommandHandler) Handle(ctx context.Context, message *tgbotapi.
 	msg += "Bot will respond to messages.\n"
 	msg += "Use /pause_bot to pause."
 
+	_, err := cmdCtx.Bot.Send(tgbotapi.NewMessage(message.Chat.ID, msg))
+	return err
+}
+
+type webhookCommandHandler struct{}
+
+func (h *webhookCommandHandler) Handle(ctx context.Context, message *tgbotapi.Message, state *UserState, cmdCtx *CommandContext) error {
+	msg := "Webhook Management\n\nWebhooks are configured via external integrations."
+	_, err := cmdCtx.Bot.Send(tgbotapi.NewMessage(message.Chat.ID, msg))
+	return err
+}
+
+type securityCommandHandler struct{}
+
+func (h *securityCommandHandler) Handle(ctx context.Context, message *tgbotapi.Message, state *UserState, cmdCtx *CommandContext) error {
+	msg := "Security Settings\n\nConfigure bot security options here."
 	_, err := cmdCtx.Bot.Send(tgbotapi.NewMessage(message.Chat.ID, msg))
 	return err
 }

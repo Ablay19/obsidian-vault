@@ -1,0 +1,115 @@
+name: Deploy API Gateway
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'apps/api-gateway/**'
+      - '.github/workflows/api-gateway-deploy.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/api-gateway/**'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/api-gateway
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+          cache-dependency-path: apps/api-gateway/go.sum
+
+      - name: Build
+        working-directory: ./apps/api-gateway
+        run: go build -o bin/api-gateway ./cmd/main.go
+
+      - name: Run tests
+        working-directory: ./apps/api-gateway
+        run: go test -v ./internal/... ./tests/...
+
+      - name: Build Docker image
+        working-directory: ./apps/api-gateway
+        run: docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+
+      - name: Push Docker image
+        if: github.ref == 'refs/heads/main'
+        working-directory: ./apps/api-gateway
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+  deploy-staging:
+    name: Deploy to Staging
+    if: github.ref == 'refs/heads develop'
+    needs: build
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - name: Deploy to Kubernetes (Staging)
+        run: |
+          echo "Deploying to staging environment..."
+          kubectl set image deployment/api-gateway api-gateway=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} -n staging
+          kubectl rollout status deployment/api-gateway -n staging
+
+  deploy-production:
+    name: Deploy to Production
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Deploy to Kubernetes (Production)
+        run: |
+          echo "Deploying to production environment..."
+          kubectl set image deployment/api-gateway api-gateway=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} -n production
+          kubectl rollout status deployment/api-gateway -n production
+
+  rollback:
+    name: Rollback Deployment
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get previous version
+        id: prev-version
+        run: |
+          PREVIOUS_SHA=$(git rev-parse HEAD~1)
+          echo "previous_sha=$PREVIOUS_SHA" >> $GITHUB_OUTPUT
+
+      - name: Build previous version
+        working-directory: ./apps/api-gateway
+        run: |
+          git checkout ${{ steps.prev-version.outputs.previous_sha }}
+          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Deploy previous version
+        run: |
+          kubectl set image deployment/api-gateway api-gateway=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} -n production
+          kubectl rollout status deployment/api-gateway -n production
+
+      - name: Restore main branch
+        run: git checkout main

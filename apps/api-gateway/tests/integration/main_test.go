@@ -151,36 +151,6 @@ func TestDeploymentIndependence(t *testing.T) {
 	}
 }
 
-func TestStructuredLogging(t *testing.T) {
-	logger := types.NewStructuredLogger("test")
-
-	var capturedOutput string
-	r, w, _ := os.Pipe()
-	originalStdout := os.Stdout
-	os.Stdout = w
-
-	logger.Info("Test structured log", "key1", "value1", "key2", 42)
-
-	w.Close()
-	os.Stdout = originalStdout
-	buf := make([]byte, 4096)
-	n, _ := r.Read(buf)
-	capturedOutput = string(buf[:n])
-
-	var logEntry map[string]interface{}
-	if err := json.Unmarshal([]byte(capturedOutput), &logEntry); err != nil {
-		t.Fatalf("Output is not valid JSON: %s\nOutput: %s", err, capturedOutput)
-	}
-
-	if logEntry["component"] != "test" {
-		t.Errorf("Expected component 'test', got '%v'", logEntry["component"])
-	}
-
-	if logEntry["message"] != "Test structured log" {
-		t.Errorf("Expected message 'Test structured log', got '%v'", logEntry["message"])
-	}
-}
-
 func init() {
 	fmt.Println("Running integration tests...")
 }

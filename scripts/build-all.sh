@@ -35,10 +35,10 @@ for app in apps/*/; do
 
         if cd "$app" && go build -o "${BUILD_DIR}/${app_name}" ./cmd/main.go 2>/dev/null; then
             echo -e "${GREEN}✓${NC} $app_name built successfully"
-            ((BUILT++))
+            BUILT=$((BUILT + 1))
         else
             echo -e "${RED}✗${NC} $app_name build failed"
-            ((FAILED++))
+            FAILED=$((FAILED + 1))
         fi
     fi
 done
@@ -55,10 +55,10 @@ for worker in workers/*/; do
 
         if cd "$worker" && npm run build 2>/dev/null; then
             echo -e "${GREEN}✓${NC} $worker_name built successfully"
-            ((BUILT++))
+            BUILT=$((BUILT + 1))
         else
             echo -e "${YELLOW}!${NC} $worker_name has no build step (Cloudflare Workers don't require build)"
-            ((BUILT++))
+            BUILT=$((BUILT + 1))
         fi
     fi
 done

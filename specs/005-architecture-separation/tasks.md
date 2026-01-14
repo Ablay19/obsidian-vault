@@ -116,16 +116,16 @@ This document contains actionable tasks for implementing architectural separatio
 
 ### Deployment Pipeline Configuration
 
-- [ ] T071 [US1] Create GitHub Actions workflow for independent worker deployment
-- [ ] T072 [US1] Create GitHub Actions workflow for independent Go app deployment
-- [ ] T073 [US1] Configure deployment staging environments
-- [ ] T074 [US1] Configure deployment production environments
-- [ ] T075 [US1] Add rollback capability to deployment workflows
+- [X] T071 [US1] Create GitHub Actions workflow for independent worker deployment
+- [X] T072 [US1] Create GitHub Actions workflow for independent Go app deployment
+- [X] T073 [US1] Configure deployment staging environments
+- [X] T074 [US1] Configure deployment production environments
+- [X] T075 [US1] Add rollback capability to deployment workflows
 
 ### Integration Testing
 
-- [ ] T076 [US1] Create tests/integration/deployment_test.go for deployment verification
-- [ ] T077 [US1] Create tests/contract/api-contract_test.ts for API contract validation
+- [X] T076 [US1] Create tests/integration/deployment_test.go for deployment verification
+- [X] T077 [US1] Create tests/contract/api-contract_test.ts for API contract validation
 - [ ] T078 [US1] Create Docker Compose configuration for local testing
 - [ ] T079 [US1] Create tests/e2e/deployment-flow_test.go for full deployment flow
 
@@ -157,8 +157,8 @@ This document contains actionable tasks for implementing architectural separatio
 
 - [X] T091 [US2] Create .docker-compose.dev.yml for local development
 - [X] T092 [US2] Create scripts/dev.sh to start development environment
-- [ ] T093 [US2] Create hot reload configuration for Go applications
-- [ ] T094 [US2] Create hot reload configuration for workers
+- [X] T093 [US2] Create hot reload configuration for Go applications
+- [X] T094 [US2] Create hot reload configuration for workers
 - [X] T095 [US2] Create VS Code workspace configuration
 
 ---

@@ -26,6 +26,14 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
+func InitializeWebhookManager() error {
+	return nil
+}
+
+func InitializeSecurityManager() error {
+	return nil
+}
+
 // Package-level variables for dependencies
 var (
 	aiService         ai.AIServiceInterface
@@ -120,7 +128,7 @@ func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.Runt
 
 	// Initialize Pipeline
 	processor := NewBotProcessor(aiService)
-	sink := NewBotSink(database.Client.DB, botAPI, gitManager)        // Use database.Client.DB
+	sink := NewBotSink(database.Client.DB, bot.api, gitManager)       // Use database.Client.DB
 	ingestionPipeline = pipeline.NewPipeline(3, 100, processor, sink) // 3 workers, buffer 100
 	ingestionPipeline.Start(context.Background())
 	defer ingestionPipeline.Stop()
@@ -159,7 +167,7 @@ func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.Runt
 		telemetry.Warn("No bot commands registered - check command setup")
 	}
 
-	telemetry.Info("Authorized on account: " + bot.Self.UserName)
+	telemetry.Info("Authorized on account: " + bot.api.Self.UserName)
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 	updates := bot.GetUpdatesChan(u)

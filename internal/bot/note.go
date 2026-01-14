@@ -261,7 +261,7 @@ func processFileWithVisionAndProgress(ctx context.Context, bot Bot, chatID int64
 
 // Helper functions for AI processing
 func generateAISummary(ctx context.Context, aiService ai.AIServiceInterface, text, language string) (string, error) {
-	prompt := fmt.Sprintf("Summarize the following text in %s. Keep it concise but comprehensive:", language, text[:min(2000, len(text))])
+	prompt := fmt.Sprintf("Summarize the following text in %s. Keep it concise but comprehensive:\n\n%s", language, text[:min(2000, len(text))])
 
 	req := &ai.RequestModel{
 		UserPrompt:  prompt,

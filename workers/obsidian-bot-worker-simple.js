@@ -10,6 +10,12 @@ function validateEnvironment(env) {
     
     if (missing.length > 0) {
         throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+    }
+
+    return {
+        BOT_TOKEN: env.TELEGRAM_BOT_TOKEN,
+        WEBHOOK_SECRET: env.WEBHOOK_SECRET || 'default-secret'
+    };
 }
 
 // Configuration from wrangler.toml with validation
@@ -28,20 +34,6 @@ function cleanOldUserState() {
         }
     }
 }
-    
-    return {
-        BOT_TOKEN: env.TELEGRAM_BOT_TOKEN,
-        WEBHOOK_SECRET: env.WEBHOOK_SECRET || 'default-secret'
-    };
-}
-
-// Configuration from wrangler.toml with validation
-let BOT_TOKEN, WEBHOOK_SECRET;
-
-// Simple in-memory state (production would use KV)
-const userState = new Map();
-
-// Utility functions
 
 // Main worker handler
 export default {

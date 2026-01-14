@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/tmc/langchaingo/llms"
 	"obsidian-automation/internal/ai"
 	"obsidian-automation/pkg/utils"
 )

@@ -257,7 +257,7 @@ func initDashboard(router *gin.Engine, aiService *ai.AIService, rcm *state.Runti
 
 func startServer(server *http.Server, logger *AppLogger) {
 	go func() {
-		logger.Info(fmt.Sprintf("Server starting on port %d", config.AppConfig.Dashboard.Port))
+		logger.Info(fmt.Sprintf("Server starting on port %s", config.AppConfig.Dashboard.Port))
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Error("Server failed to start", zap.Error(err))
 			os.Exit(1)
@@ -306,13 +306,13 @@ func main() {
 	initDashboard(router, aiService, rcm, db, authService, wsManager, videoStorage, logger)
 
 	port := config.AppConfig.Dashboard.Port
-	if port == 0 {
-		port = 8080
+	if port == "" {
+		port = "8080"
 	}
-	logger.Info(fmt.Sprintf("Using port: %d", port))
+	logger.Info(fmt.Sprintf("Using port: %s", port))
 
 	server := &http.Server{
-		Addr:         fmt.Sprintf(":%d", port),
+		Addr:         fmt.Sprintf(":%s", port),
 		Handler:      router,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,

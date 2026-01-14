@@ -205,6 +205,38 @@ type VisionConfig struct {
 	MinConfidence float64 `mapstructure:"min_confidence"`
 }
 
+type GitConfig struct {
+	VaultPath  string `mapstructure:"vault_path"`
+	UserName   string `mapstructure:"user_name"`
+	UserEmail  string `mapstructure:"user_email"`
+	RemoteURL  string `mapstructure:"remote_url"`
+	AutoCommit bool   `mapstructure:"auto_commit"`
+	AutoPush   bool   `mapstructure:"auto_push"`
+}
+
+type ClassificationConfig struct {
+	Enabled  bool                `mapstructure:"enabled"`
+	Patterns map[string][]string `mapstructure:"patterns"`
+}
+
+type LanguageDetectionConfig struct {
+	Enabled      bool     `mapstructure:"enabled"`
+	FrenchWords  []string `mapstructure:"french_words"`
+	SpanishWords []string `mapstructure:"spanish_words"`
+}
+
+type DashboardConfig struct {
+	Port       string `mapstructure:"port"`
+	Host       string `mapstructure:"host"`
+	EnableAuth bool   `mapstructure:"enable_auth"`
+	Username   string `mapstructure:"username"`
+	Password   string `mapstructure:"password"`
+}
+
+type IsDevelopmentConfig struct {
+	Enabled bool `mapstructure:"enabled"`
+}
+
 type Config struct {
 	// Telegram Bot Configuration
 	TelegramBotToken string `mapstructure:"telegram_bot_token"`
@@ -253,4 +285,19 @@ type Config struct {
 
 	// Vision Configuration
 	Vision VisionConfig `mapstructure:"vision"`
+
+	// Git Configuration
+	Git GitConfig `mapstructure:"git"`
+
+	// Classification Configuration
+	Classification ClassificationConfig `mapstructure:"classification"`
+
+	// Language Detection Configuration
+	LanguageDetection LanguageDetectionConfig `mapstructure:"language_detection"`
+
+	// Dashboard Configuration
+	Dashboard DashboardConfig `mapstructure:"dashboard"`
+
+	// IsDevelopment Configuration
+	IsDevelopment IsDevelopmentConfig `mapstructure:"is_development"`
 }

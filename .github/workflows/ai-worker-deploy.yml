@@ -1,0 +1,105 @@
+name: Deploy AI Worker
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'workers/ai-worker/**'
+      - '.github/workflows/ai-worker-deploy.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'workers/ai-worker/**'
+
+jobs:
+  deploy-staging:
+    name: Deploy to Staging
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'workers/ai-worker/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: ./workers/ai-worker
+        run: npm ci
+
+      - name: Run tests
+        working-directory: ./workers/ai-worker
+        run: npm test
+
+      - name: Deploy to Cloudflare Workers (Staging)
+        working-directory: ./workers/ai-worker
+        run: npm run deploy -- --env staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+  deploy-production:
+    name: Deploy to Production
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'workers/ai-worker/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: ./workers/ai-worker
+        run: npm ci
+
+      - name: Run tests
+        working-directory: ./workers/ai-worker
+        run: npm test
+
+      - name: Deploy to Cloudflare Workers (Production)
+        working-directory: ./workers/ai-worker
+        run: npm run deploy -- --env production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+  rollback:
+    name: Rollback Deployment
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Deploy previous version
+        working-directory: ./workers/ai-worker
+        run: |
+          # Get the previous deployment version
+          PREVIOUS_VERSION=$(git rev-parse HEAD~1)
+          echo "Rolling back to: $PREVIOUS_VERSION"
+          
+          # Deploy the previous version
+          npm run deploy -- --env production --var COMMIT_SHA:$PREVIOUS_VERSION
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Notify on rollback
+        run: echo "::notice title=Rollback::Successfully rolled back to previous version"
