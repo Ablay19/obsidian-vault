@@ -1,0 +1,378 @@
+openapi: 3.0.3
+info:
+  title: AI Manim Video Generator API
+  description: |
+    API for generating mathematical video animations via Telegram.
+    
+    ## Flow
+    1. User submits problem via Telegram
+    2. AI generates Manim animation code
+    3. Video is rendered and uploaded to R2
+    4. User receives web link for video access
+    
+    ## Security
+    - Telegram webhooks require secret token validation
+    - Video URLs are presigned and single-use
+    - All video data is deleted immediately after access
+  version: 1.0.0
+  contact:
+    name: AI Manim Video Generator
+    url: https://github.com/Ablay19/obsidian-vault
+
+servers:
+  - url: https://ai-manim-worker.abdoullahelvogani.workers.dev
+    description: Production server
+  - url: http://localhost:8787
+    description: Local development (wrangler dev)
+
+paths:
+  /webhook/telegram:
+    post:
+      summary: Telegram webhook endpoint
+      description: Receives messages and commands from Telegram users
+      security:
+        - TelegramSecretToken: []
+      tags:
+        - Telegram
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TelegramUpdate'
+      responses:
+        '200':
+          description: Update processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '401':
+          description: Unauthorized - invalid secret token
+        '400':
+          description: Bad request - invalid update format
+
+  /api/v1/jobs:
+    post:
+      summary: Submit a new video generation job
+      description: Creates a new video generation request
+      tags:
+        - Jobs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateJobRequest'
+      responses:
+        '202':
+          description: Job queued successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '400':
+          description: Invalid request
+        '429':
+          description: Rate limit exceeded
+
+    get:
+      summary: List jobs for a session
+      description: Returns all jobs for the given session
+      tags:
+        - Jobs
+      parameters:
+        - name: session_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of jobs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobListResponse'
+        '400':
+          description: Invalid session ID
+
+  /api/v1/jobs/{job_id}:
+    get:
+      summary: Get job status
+      description: Returns the current status and details of a job
+      tags:
+        - Jobs
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Job details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobDetailResponse'
+        '404':
+          description: Job not found
+
+  /api/v1/video/{job_id}/access:
+    get:
+      summary: Access video (presigned URL redirect)
+      description: |
+        Redirects to the presigned video URL.
+        Video is deleted immediately after access.
+      tags:
+        - Video
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '302':
+          description: Redirect to video URL
+        '404':
+          description: Video not found or expired
+        '410':
+          description: Video already accessed
+
+  /health:
+    get:
+      summary: Health check
+      description: Returns service health status
+      tags:
+        - System
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+components:
+  securitySchemes:
+    TelegramSecretToken:
+      type: apiKey
+      in: header
+      name: X-Telegram-Bot-Api-Secret-Token
+
+  schemas:
+    # Telegram Types
+    TelegramUpdate:
+      type: object
+      required:
+        - update_id
+        - message
+      properties:
+        update_id:
+          type: integer
+          description: Unique identifier for this update
+        message:
+          type: object
+          required:
+            - message_id
+            - chat
+            - date
+          properties:
+            message_id:
+              type: integer
+            from:
+              type: object
+              properties:
+                id:
+                  type: integer
+                is_bot:
+                  type: boolean
+                language_code:
+                  type: string
+            chat:
+              type: object
+              properties:
+                id:
+                  type: integer
+                type:
+                  type: string
+            text:
+              type: string
+            date:
+              type: integer
+
+    # Job Types
+    CreateJobRequest:
+      type: object
+      required:
+        - problem_text
+        - session_id
+      properties:
+        problem_text:
+          type: string
+          minLength: 10
+          maxLength: 5000
+          description: The mathematical problem to visualize
+        session_id:
+          type: string
+          format: uuid
+          description: Anonymous session ID
+
+    JobResponse:
+      type: object
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - queued
+            - processing
+            - ready
+            - failed
+        message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    JobListResponse:
+      type: object
+      properties:
+        jobs:
+          type: array
+          items:
+            type: object
+            properties:
+              job_id:
+                type: string
+                format: uuid
+              status:
+                type: string
+              problem_preview:
+                type: string
+              created_at:
+                type: string
+                format: date-time
+
+    JobDetailResponse:
+      type: object
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        session_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - queued
+            - ai_generating
+            - code_validating
+            - rendering
+            - uploading
+            - ready
+            - delivered
+            - failed
+            - expired
+        problem_text:
+          type: string
+        status_message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        video_url:
+          type: string
+          description: Present only when status=ready
+        expires_at:
+          type: string
+          format: date-time
+        error:
+          type: string
+          description: Present only when status=failed
+
+    # Video Types
+    VideoAccessResponse:
+      type: object
+      properties:
+        video_url:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+
+    # Response Types
+    WebhookResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        job_id:
+          type: string
+          format: uuid
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - healthy
+            - degraded
+            - unhealthy
+        version:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        providers:
+          type: object
+          properties:
+            cloudflare:
+              type: string
+              enum:
+                - available
+                - unavailable
+            groq:
+              type: string
+              enum:
+                - available
+                - unavailable
+            huggingface:
+              type: string
+              enum:
+                - available
+                - unavailable
+
+  responses:
+    Unauthorized:
+      description: Invalid or missing authentication
+    NotFound:
+      description: Resource not found
+    RateLimited:
+      description: Too many requests
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              retry_after:
+                type: integer

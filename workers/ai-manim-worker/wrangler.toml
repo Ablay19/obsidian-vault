@@ -1,0 +1,19 @@
+name = "ai-manim-worker"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = []
+
+[vars]
+LOG_LEVEL = "info"
+
+[env.development]
+name = "ai-manim-worker-dev"
+vars = { LOG_LEVEL = "debug" }
+
+[env.staging]
+name = "ai-manim-worker-staging"
+vars = { LOG_LEVEL = "info" }
+
+[env.production]
+name = "ai-manim-worker"
+vars = { LOG_LEVEL = "info" }

@@ -1,0 +1,30 @@
+{
+  "name": "@obsidian-vault/ai-manim-worker",
+  "version": "1.0.0",
+  "description": "AI Manim Video Generator - Cloudflare Worker",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run --project integration",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write src/**/*.ts"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0",
+    "@types/node": "^20.10.0",
+    "@vitest/coverage-v8": "^1.2.0",
+    "eslint": "^8.56.0",
+    "prettier": "^3.1.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0",
+    "vitest-environment-miniflare": "^2.14.4",
+    "wrangler": "^3.57.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

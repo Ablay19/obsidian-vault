@@ -318,6 +318,8 @@ ANALYTICS_SAMPLING_RATE = "0.5"
 
 ## Active Technologies
 - Go 1.21+ (backend), JavaScript/Node.js (workers) + Go modules, npm/yarn packages, REST APIs (005-architecture-separation)
+- TypeScript/JavaScript (Cloudflare Workers) | Python 3.11 (Manim execution) + Cloudflare Workers, Cloudflare Workers AI, Telegram Bot API, Manim library (006-ai-manim-video)
+- Cloudflare KV for session metadata | R2 for temporary video storage (immediate delete) (006-ai-manim-video)
 
 ## Recent Changes
 - 005-architecture-separation: Added Go 1.21+ (backend), JavaScript/Node.js (workers) + Go modules, npm/yarn packages, REST APIs
