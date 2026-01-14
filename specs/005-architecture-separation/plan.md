@@ -18,7 +18,7 @@ Separate workers (JavaScript) from Go backend applications with independent depl
 **Target Platform**: Cloudflare Workers (JavaScript), Linux containers (Go)
 **Project Type**: microservices - distributed system with shared packages
 **Performance Goals**: <3 minute deployments, <0.3 coupling ratio, 40% faster development, <500ms p99 inter-component response time
-**Constraints**: Independent deployment pipelines, zero-downtime updates, parallel development, API key authentication with rate limiting
+**Constraints**: Independent deployment pipelines, zero-downtime updates, parallel development, internal network only communication with network isolation
 **Scale/Scope**: Multiple worker modules, Go backend services, shared packages
 
 ## Constitution Check
