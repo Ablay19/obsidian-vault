@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  # API Gateway - Main entry point
+  api-gateway:
+    build:
+      context: ./apps/api-gateway
+      dockerfile: ../../deploy/docker/api-gateway.Dockerfile
+    container_name: obsidian-api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - LOG_LEVEL=debug
+      - ENVIRONMENT=development
+    volumes:
+      - ./apps/api-gateway:/app
+      - api-gateway-cache:/app/.cache
+    networks:
+      - obsidian-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Auth Service - Authentication
+  auth-service:
+    build:
+      context: ./apps/auth-service
+      dockerfile: ../../deploy/docker/auth-service.Dockerfile
+    container_name: obsidian-auth-service
+    ports:
+      - "8081:8081"
+    environment:
+      - LOG_LEVEL=debug
+      - ENVIRONMENT=development
+    volumes:
+      - ./apps/auth-service:/app
+      - auth-service-cache:/app/.cache
+    networks:
+      - obsidian-network
+    depends_on:
+      - api-gateway
+
+  # User Service - User management
+  user-service:
+    build:
+      context: ./apps/user-service
+      dockerfile: ../../deploy/docker/user-service.Dockerfile
+    container_name: obsidian-user-service
+    ports:
+      - "8082:8082"
+    environment:
+      - LOG_LEVEL=debug
+      - ENVIRONMENT=development
+    volumes:
+      - ./apps/user-service:/app
+      - user-service-cache:/app/.cache
+    networks:
+      - obsidian-network
+    depends_on:
+      - api-gateway
+
+networks:
+  obsidian-network:
+    driver: bridge
+
+volumes:
+  api-gateway-cache:
+  auth-service-cache:
+  user-service-cache:

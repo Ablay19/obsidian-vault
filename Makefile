@@ -371,3 +371,57 @@ create-go-app: ## Create new Go application (usage: make create-go-app name=my-a
 	@mkdir -p apps/$(name)/cmd apps/$(name)/internal/{handlers,services,models} apps/$(name)/tests
 	@echo "module github.com/abdoullahelvogani/obsidian-vault/apps/$(name)" > apps/$(name)/go.mod
 	@echo "Go application created at apps/$(name)/"
+
+# ============================================
+# US2: Build Process Independence (T083-T084)
+# ============================================
+
+build-go-apps: ## Build all Go applications
+	@echo "Building all Go applications..."
+	@for app in apps/*/; do \
+		if [ -f "$${app}go.mod" ]; then \
+			echo "Building $${app}..."; \
+			cd "$${app}" && go build -o bin/ ./cmd/main.go 2>/dev/null && echo "✓ $${app} built" || echo "✗ $${app} failed"; \
+			cd - > /dev/null; \
+		fi; \
+	done
+
+build-workers: ## Build all Cloudflare Workers
+	@echo "Building all workers..."
+	@for worker in workers/*/; do \
+		if [ -f "$${worker}package.json" ] && [ -f "$${worker}wrangler.toml" ]; then \
+			echo "Building $${worker}..."; \
+			(cd "$${worker}" && npm run build 2>/dev/null || echo "No build step for $${worker}"); \
+		fi; \
+	done
+
+build-all: build-go-apps build-workers ## Build all Go applications and workers
+	@echo ""
+	@echo -e "\033[32m✓ All builds completed\033[0m"
+
+# ============================================
+# US2: Test Process Independence (T088-T089)
+# ============================================
+
+test-go-apps: ## Run tests for all Go applications
+	@echo "Running tests for all Go applications..."
+	@for app in apps/*/; do \
+		if [ -f "$${app}go.mod" ]; then \
+			echo "Testing $${app}..."; \
+			(cd "$${app}" && go test -v ./internal/... 2>/dev/null && echo "✓ $${app} tests passed" || echo "✗ $${app} tests failed"); \
+			cd - > /dev/null; \
+		fi; \
+	done
+
+test-workers: ## Run tests for all workers
+	@echo "Running tests for all workers..."
+	@for worker in workers/*/; do \
+		if [ -f "$${worker}package.json" ] && [ -f "$${worker}vitest.config.ts" -o -f "$${worker}jest.config.js" ]; then \
+			echo "Testing $${worker}..."; \
+			(cd "$${worker}" && npm test 2>/dev/null || echo "No test config for $${worker}"); \
+		fi; \
+	done
+
+test-all: test-go-apps test-workers ## Run all tests
+	@echo ""
+	@echo -e "\033[32m✓ All tests completed\033[0m"

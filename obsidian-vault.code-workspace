@@ -1,0 +1,186 @@
+{
+  "folders": [
+    {
+      "name": "Obsidian Vault - Root",
+      "path": "."
+    },
+    {
+      "name": "API Gateway",
+      "path": "apps/api-gateway"
+    },
+    {
+      "name": "Auth Service",
+      "path": "apps/auth-service"
+    },
+    {
+      "name": "User Service",
+      "path": "apps/user-service"
+    },
+    {
+      "name": "AI Worker",
+      "path": "workers/ai-worker"
+    },
+    {
+      "name": "Image Worker",
+      "path": "workers/image-worker"
+    },
+    {
+      "name": "Shared Types (Go)",
+      "path": "packages/shared-types/go"
+    },
+    {
+      "name": "Shared Types (TS)",
+      "path": "packages/shared-types/typescript"
+    },
+    {
+      "name": "Communication Package",
+      "path": "packages/communication"
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/node_modules": true,
+      "**/bin": true,
+      "**/dist": true,
+      "**/.wrangler": true,
+      "**/*.log": true,
+      "**/.env*": true,
+      "archive/": true,
+      "debug/": true,
+      "pdfs/": true,
+      "tests/": true
+    },
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/bin": true,
+      "**/dist": true,
+      "**/*.log": true,
+      "archive/": true,
+      "debug/": true,
+      "pdfs/": true
+    },
+    "go.testEnvFile": "${workspaceFolder}/.env",
+    "go.lintTool": "golint",
+    "go.useLanguageServer": true,
+    "typescript.preferences.importModuleSpecifier": "relative",
+    "json.schemas": []
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-vscode.go",
+      "esbenp.prettier-vscode",
+      "dbaeumer.vscode-eslint",
+      "mikestead.dotenv",
+      "streetsidesoftware.code-spell-checker"
+    ]
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Build All",
+        "type": "shell",
+        "command": "./scripts/build-all.sh",
+        "group": "build",
+        "presentation": {
+          "reveal": "always",
+          "panel": "shared"
+        }
+      },
+      {
+        "label": "Test All",
+        "type": "shell",
+        "command": "./scripts/test-all.sh",
+        "group": "test",
+        "presentation": {
+          "reveal": "always",
+          "panel": "shared"
+        }
+      },
+      {
+        "label": "Run Dev Environment",
+        "type": "shell",
+        "command": "./scripts/dev.sh",
+        "group": "none",
+        "presentation": {
+          "reveal": "always",
+          "panel": "shared"
+        }
+      },
+      {
+        "label": "Run API Gateway",
+        "type": "shell",
+        "command": "cd apps/api-gateway && go run cmd/main.go",
+        "group": "none",
+        "presentation": {
+          "reveal": "always",
+          "panel": "new"
+        }
+      },
+      {
+        "label": "Run Auth Service",
+        "type": "shell",
+        "command": "cd apps/auth-service && go run cmd/main.go",
+        "group": "none",
+        "presentation": {
+          "reveal": "always",
+          "panel": "new"
+        }
+      },
+      {
+        "label": "Run User Service",
+        "type": "shell",
+        "command": "cd apps/user-service && go run cmd/main.go",
+        "group": "none",
+        "presentation": {
+          "reveal": "always",
+          "panel": "new"
+        }
+      },
+      {
+        "label": "Dev Workers",
+        "type": "shell",
+        "command": "cd workers/ai-worker && npm run dev",
+        "group": "none",
+        "presentation": {
+          "reveal": "always",
+          "panel": "new"
+        }
+      }
+    ]
+  },
+  "launch": {
+    "configurations": [
+      {
+        "name": "API Gateway",
+        "type": "go",
+        "request": "launch",
+        "mode": "debug",
+        "program": "${workspaceFolder}/apps/api-gateway/cmd/main.go",
+        "env": {
+          "LOG_LEVEL": "debug"
+        }
+      },
+      {
+        "name": "Auth Service",
+        "type": "go",
+        "request": "launch",
+        "mode": "debug",
+        "program": "${workspaceFolder}/apps/auth-service/cmd/main.go",
+        "env": {
+          "LOG_LEVEL": "debug"
+        }
+      },
+      {
+        "name": "User Service",
+        "type": "go",
+        "request": "launch",
+        "mode": "debug",
+        "program": "${workspaceFolder}/apps/user-service/cmd/main.go",
+        "env": {
+          "LOG_LEVEL": "debug"
+        }
+      }
+    ]
+  }
+}

@@ -139,27 +139,27 @@ This document contains actionable tasks for implementing architectural separatio
 
 ### Build Process Independence
 
-- [ ] T081 [US2] Create apps/api-gateway/Makefile with build targets
-- [ ] T082 [P] [US2] Create workers/ai-worker/Makefile with build targets
-- [ ] T083 [P] [US2] Add build target to root Makefile for Go applications
-- [ ] T084 [P] [US2] Add build target to root Makefile for workers
-- [ ] T085 [US2] Create scripts/build-all.sh to build all components
+- [X] T081 [US2] Create apps/api-gateway/Makefile with build targets
+- [X] T082 [P] [US2] Create workers/ai-worker/Makefile with build targets
+- [X] T083 [P] [US2] Add build target to root Makefile for Go applications
+- [X] T084 [P] [US2] Add build target to root Makefile for workers
+- [X] T085 [US2] Create scripts/build-all.sh to build all components
 
 ### Test Process Independence
 
-- [ ] T086 [US2] Add test target to apps/api-gateway/Makefile
-- [ ] T087 [P] [US2] Add test target to workers/ai-worker/Makefile
-- [ ] T088 [P] [US2] Add test target to root Makefile for Go applications
-- [ ] T089 [P] [US2] Add test target to root Makefile for workers
-- [ ] T090 [US2] Create scripts/test-all.sh to test all components
+- [X] T086 [US2] Add test target to apps/api-gateway/Makefile
+- [X] T087 [P] [US2] Add test target to workers/ai-worker/Makefile
+- [X] T088 [P] [US2] Add test target to root Makefile for Go applications
+- [X] T089 [P] [US2] Add test target to root Makefile for workers
+- [X] T090 [US2] Create scripts/test-all.sh to test all components
 
 ### Development Environment
 
-- [ ] T091 [US2] Create .docker-compose.dev.yml for local development
-- [ ] T092 [US2] Create scripts/dev.sh to start development environment
+- [X] T091 [US2] Create .docker-compose.dev.yml for local development
+- [X] T092 [US2] Create scripts/dev.sh to start development environment
 - [ ] T093 [US2] Create hot reload configuration for Go applications
 - [ ] T094 [US2] Create hot reload configuration for workers
-- [ ] T095 [US2] Create VS Code workspace configuration
+- [X] T095 [US2] Create VS Code workspace configuration
 
 ---
 
