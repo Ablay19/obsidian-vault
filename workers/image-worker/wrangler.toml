@@ -1,0 +1,20 @@
+name = "image-worker"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["workers_stdapi_js"]
+
+[env.development]
+name = "image-worker-dev"
+vars = { LOG_LEVEL = "debug" }
+
+[env.staging]
+name = "image-worker-staging"
+vars = { LOG_LEVEL = "info" }
+
+[env.production]
+name = "image-worker"
+vars = { LOG_LEVEL = "info" }
+
+[[routes]]
+pattern = "/*"
+zone_name = "example.com"

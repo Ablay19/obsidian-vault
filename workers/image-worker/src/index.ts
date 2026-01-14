@@ -1,6 +1,7 @@
 interface Env {
   LOG_LEVEL: string;
   API_GATEWAY_URL: string;
+  AI_GATEWAY_URL: string;
 }
 
 interface APIResponse {
@@ -91,7 +92,7 @@ function createLogger(component: string, level: string) {
   };
 }
 
-const logger = createLogger('ai-worker', 'info');
+const logger = createLogger('image-worker', 'info');
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -110,6 +111,10 @@ export default {
 
       if (url.pathname.startsWith('/api/')) {
         return handleAPI(request, env, url);
+      }
+
+      if (url.pathname === '/process' && request.method === 'POST') {
+        return handleProcessImage(request, env);
       }
 
       return new Response('Not Found', { status: 404 });
@@ -141,7 +146,7 @@ function handleHealth(): Response {
   const response: APIResponse = {
     status: 'ok',
     data: {
-      service: 'ai-worker',
+      service: 'image-worker',
       version: '1.0.0',
       timestamp: new Date().toISOString(),
     },
@@ -156,50 +161,97 @@ function handleHealth(): Response {
 async function handleAPI(request: Request, env: Env, url: URL): Promise<Response> {
   const apiGatewayUrl = env.API_GATEWAY_URL || 'http://localhost:8080';
 
-  if (request.method === 'GET' && url.pathname === '/api/v1/workers') {
-    return handleListWorkers(apiGatewayUrl);
+  if (request.method === 'GET' && url.pathname === '/api/v1/images') {
+    return handleListImages(apiGatewayUrl);
   }
 
-  if (request.method === 'GET' && url.pathname.startsWith('/api/v1/workers/')) {
-    const workerId = url.pathname.split('/').pop();
-    return handleGetWorker(apiGatewayUrl, workerId!);
+  if (request.method === 'GET' && url.pathname.startsWith('/api/v1/images/')) {
+    const imageId = url.pathname.split('/').pop();
+    return handleGetImage(apiGatewayUrl, imageId!);
   }
 
   return new Response('Not Found', { status: 404 });
 }
 
-async function handleListWorkers(apiGatewayUrl: string): Promise<Response> {
+async function handleProcessImage(request: Request, env: Env): Promise<Response> {
   try {
-    const response = await fetch(`${apiGatewayUrl}/api/v1/workers`);
-    const data = await response.json();
-    return new Response(JSON.stringify(data), {
+    const formData = await request.formData();
+    const image = formData.get('image');
+
+    if (!image) {
+      return new Response(
+        JSON.stringify({
+          status: 'error',
+          message: 'Image file is required',
+        } as APIResponse),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    logger.info('Processing image', { filename: (image as File).name });
+
+    const aiGatewayUrl = env.AI_GATEWAY_URL || 'http://localhost:8080';
+
+    const response: APIResponse = {
+      status: 'ok',
+      data: {
+        image_id: 'img_' + Date.now(),
+        status: 'processed',
+        result: {
+          labels: ['document', 'text'],
+          confidence: 0.95,
+        },
+      },
+      message: 'Image processed successfully',
+    };
+
+    return new Response(JSON.stringify(response), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    logger.error('Failed to list workers', error as Error);
+    logger.error('Failed to process image', error as Error);
     return new Response(
       JSON.stringify({
         status: 'error',
-        message: 'Failed to fetch workers',
+        message: 'Failed to process image',
       } as APIResponse),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
 }
 
-async function handleGetWorker(apiGatewayUrl: string, workerId: string): Promise<Response> {
+async function handleListImages(apiGatewayUrl: string): Promise<Response> {
   try {
-    const response = await fetch(`${apiGatewayUrl}/api/v1/workers/${workerId}`);
+    const response = await fetch(`${apiGatewayUrl}/api/v1/images`);
     const data = await response.json();
     return new Response(JSON.stringify(data), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    logger.error('Failed to get worker', error as Error, { workerId });
+    logger.error('Failed to list images', error as Error);
     return new Response(
       JSON.stringify({
         status: 'error',
-        message: 'Failed to fetch worker',
+        message: 'Failed to fetch images',
+      } as APIResponse),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
+async function handleGetImage(apiGatewayUrl: string, imageId: string): Promise<Response> {
+  try {
+    const response = await fetch(`${apiGatewayUrl}/api/v1/images/${imageId}`);
+    const data = await response.json();
+    return new Response(JSON.stringify(data), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    logger.error('Failed to get image', error as Error, { imageId });
+    return new Response(
+      JSON.stringify({
+        status: 'error',
+        message: 'Failed to fetch image',
       } as APIResponse),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );

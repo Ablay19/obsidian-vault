@@ -9,17 +9,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/abdoullahelvogani/obsidian-vault/apps/api-gateway/internal/handlers"
+	"github.com/abdoullahelvogani/obsidian-vault/apps/auth-service/internal/handlers"
 	"github.com/abdoullahelvogani/obsidian-vault/packages/shared-types/go"
 )
 
 var (
 	logger *slog.Logger
-	port   = ":8080"
+	port   = ":8081"
 )
 
 func init() {
-	logger = types.NewColoredLogger("api-gateway")
+	logger = types.NewColoredLogger("auth-service")
 
 	logLevel := os.Getenv("LOG_LEVEL")
 	if logLevel == "" {
@@ -31,7 +31,7 @@ func init() {
 	}
 
 	handler := types.NewColoredJSONHandler(os.Stdout, opts)
-	logger = slog.New(handler).With("service", "api-gateway", "version", "1.0.0")
+	logger = slog.New(handler).With("service", "auth-service", "version", "1.0.0")
 }
 
 func parseLogLevel(level string) slog.Level {
@@ -50,18 +50,15 @@ func parseLogLevel(level string) slog.Level {
 }
 
 func main() {
-	types.LogInfo(logger, "Starting API Gateway", "port", port)
+	types.LogInfo(logger, "Starting Auth Service", "port", port)
 
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/health", handlers.Health)
-	mux.HandleFunc("/api/v1/workers", handlers.ListWorkers)
-	mux.HandleFunc("/api/v1/workers/", handlers.WorkerDetail)
-	mux.HandleFunc("/api/v1/go-applications", handlers.ListGoApps)
-	mux.HandleFunc("/api/v1/go-applications/", handlers.GoAppDetail)
-	mux.HandleFunc("/api/v1/deployment-pipelines", handlers.ListPipelines)
-	mux.HandleFunc("/api/v1/deployment-pipelines/", handlers.PipelineDetail)
-	mux.HandleFunc("/api/v1/shared-packages", handlers.ListSharedPackages)
+	mux.HandleFunc("/api/v1/auth/register", handlers.Register)
+	mux.HandleFunc("/api/v1/auth/login", handlers.Login)
+	mux.HandleFunc("/api/v1/auth/refresh", handlers.RefreshToken)
+	mux.HandleFunc("/api/v1/auth/validate", handlers.ValidateToken)
 
 	server := &http.Server{
 		Addr:           port,
