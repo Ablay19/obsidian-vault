@@ -57,10 +57,24 @@
 
 ### Edge Cases
 
-- What happens during migration from monolithic to modular structure?
-- How to handle shared data between workers and Go applications during the transition?
-- What if a feature spans both workers and Go components after separation?
-- How to maintain data consistency across independently deployed components?
+- Migration from monolithic to modular structure: Use gradual migration with feature flags to minimize risk and enable rollback
+- Handle shared data between workers and Go applications during transition: API-based synchronization with dual-write pattern
+- Feature spans both workers and Go components after separation: Implement feature flags to route traffic appropriately
+- Data consistency across independently deployed components: Eventual consistency with API-based synchronization
+- Inter-component API failures: Implement fail-fast error handling with proper logging
+
+## Clarifications
+
+### Session 2025-01-15
+
+- Q: What data consistency strategy should be used across independently deployed components? → A: Eventual consistency with API-based synchronization
+- Q: What performance targets should be set for inter-component communication? → A: Response time <500ms for 99th percentile
+- Q: What API versioning strategy should be implemented for independent deployments? → A: Semantic versioning with backward compatibility for minor versions
+- Q: What reliability and availability targets should be set for the system? → A: 99% uptime with basic redundancy
+- Q: What observability and monitoring approach should be implemented? → A: Basic logging only
+- Q: What migration strategy should be used for transitioning to modular architecture? → A: Gradual migration with feature flags
+- Q: What security and authentication model should be used for inter-component communication? → A: No authentication (internal network only)
+- Q: What API failure handling strategy should be implemented? → A: No retries (fail fast)
 
 ## Requirements *(mandatory)*
 
@@ -68,11 +82,14 @@
 
 - **FR-001**: System MUST separate workers and Go applications into independent deployable units with separate build processes
 - **FR-002**: System MUST create shared packages for common functionality used by both workers and Go applications
-- **FR-003**: System MUST establish clear API contracts between workers and Go components for data exchange
+- **FR-003**: System MUST establish clear API contracts between workers and Go components for data exchange using eventual consistency with API-based synchronization and semantic versioning with backward compatibility for minor versions
 - **FR-004**: System MUST enable independent testing of workers and Go components without cross-dependencies
 - **FR-005**: System MUST support parallel development workflows for workers and Go teams
 - **FR-006**: System MUST provide clear documentation for the new modular architecture
 - **FR-007**: System MUST maintain backward compatibility during the transition period
+- **FR-008**: System MUST implement basic logging for all components
+- **FR-009**: System MUST use internal network-only communication with proper network isolation
+- **FR-010**: System MUST implement fail-fast error handling for inter-component API calls
 
 ### Key Entities *(include if feature involves data)*
 
@@ -92,5 +109,6 @@
 - **SC-004**: Build times improved by 50% through modular compilation and caching
 - **SC-005**: Module coupling reduced to under 0.3 as measured by dependency analysis tools
 - **SC-006**: Zero-downtime deployments achieved for 100% of component updates
-- **SC-007**: Developer satisfaction with modular architecture above 85% in surveys</content>
-<parameter name="filePath">specs/005-architecture-separation/spec.md
+- **SC-007**: Developer satisfaction with modular architecture above 85% in surveys
+- **SC-008**: Inter-component response time <500ms for 99th percentile
+- **SC-009**: System uptime target 99% with basic redundancy

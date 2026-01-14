@@ -315,3 +315,9 @@ ANALYTICS_SAMPLING_RATE = "0.5"
 ---
 
 **For detailed API documentation and advanced configuration options, see the [Developer Documentation](./workers/docs/developer-docs/).**
+
+## Active Technologies
+- Go 1.21+ (backend), JavaScript/Node.js (workers) + Go modules, npm/yarn packages, REST APIs (005-architecture-separation)
+
+## Recent Changes
+- 005-architecture-separation: Added Go 1.21+ (backend), JavaScript/Node.js (workers) + Go modules, npm/yarn packages, REST APIs

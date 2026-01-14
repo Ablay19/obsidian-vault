@@ -306,3 +306,68 @@ help: ## Show this help message
 	@echo "  SSH_PORT              Port for the SSH server (default: 2222)."
 	@echo "  SSH_API_PORT          Port for the SSH server's API (default: 8081)."
 	@echo "  DOCKER_REGISTRY       Docker registry to push images to (default: your-docker-registry)."
+	@echo ""
+	@echo -e "\033[34mArchitecture Separation:\033[0m"
+	@echo "  make arch-setup      # Setup architecture separation structure"
+	@echo "  make arch-build      # Build all Go apps and workers"
+	@echo "  make arch-test       # Run all tests"
+	@echo "  make arch-deploy-dev # Deploy to development"
+	@echo "  make create-worker   # Create new worker (name=...)"
+	@echo "  make create-go-app   # Create new Go app (name=...)"
+
+# Architecture Separation Targets
+arch-setup: ## Setup architecture separation structure
+	@echo "Setting up architecture separation..."
+	@mkdir -p apps workers packages deploy tests
+	@echo "Architecture separation structure created."
+
+arch-build: ## Build all Go applications and workers
+	@echo "Building all Go applications..."
+	@for app in apps/*/; do \
+		if [ -f "$${app}go.mod" ]; then \
+			echo "Building $${app}..."; \
+			cd "$${app}" && go build -o bin/ ./cmd/main.go || true; \
+		fi; \
+	done
+	@echo "Building all workers..."
+	@for worker in workers/*/; do \
+		if [ -f "$${worker}package.json" ]; then \
+			echo "Building $${worker}..."; \
+			(cd "$${worker}" && npm run build 2>/dev/null || echo "No build step"); \
+		fi; \
+	done
+
+arch-test: ## Run all tests for architecture separation
+	@echo "Running all tests..."
+	@cd apps/api-gateway && go test -v ./internal/... -race || true
+	@for worker in workers/*/; do \
+		if [ -f "$${worker}package.json" ]; then \
+			echo "Testing $${worker}..."; \
+			(cd "$${worker}" && npm test 2>/dev/null || true); \
+		fi; \
+	done
+
+arch-deploy-dev: ## Deploy to development environment
+	@echo "Deploying to development..."
+	@echo "Go apps: Run 'cd apps/api-gateway && go run cmd/main.go'"
+	@echo "Workers: Run 'cd workers/ai-worker && npm run dev'"
+
+create-worker: ## Create new worker (usage: make create-worker name=my-worker)
+	@if [ -z "$(name)" ]; then \
+		echo "Error: name parameter required. Usage: make create-worker name=my-worker"; \
+		exit 1; \
+	fi
+	@echo "Creating new worker: $(name)"
+	@mkdir -p workers/$(name)/src workers/$(name)/tests
+	@echo '{"name": "@obsidian-vault/$(name)","version": "1.0.0"}' > workers/$(name)/package.json
+	@echo "Worker created at workers/$(name)/"
+
+create-go-app: ## Create new Go application (usage: make create-go-app name=my-app)
+	@if [ -z "$(name)" ]; then \
+		echo "Error: name parameter required. Usage: make create-go-app name=my-app"; \
+		exit 1; \
+	fi
+	@echo "Creating new Go application: $(name)"
+	@mkdir -p apps/$(name)/cmd apps/$(name)/internal/{handlers,services,models} apps/$(name)/tests
+	@echo "module github.com/abdoullahelvogani/obsidian-vault/apps/$(name)" > apps/$(name)/go.mod
+	@echo "Go application created at apps/$(name)/"

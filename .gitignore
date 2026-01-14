@@ -36,3 +36,30 @@ whatsapp_session.db*
 /termux-bot
 /termux-cli
 
+# Architecture Separation
+apps/*/bin/
+apps/*/build/
+workers/*/dist/
+workers/*/node_modules/
+packages/*/node_modules/
+bin/
+dist/
+build/
+
+# Go workspace
+go.work
+
+# Node packages
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
+
+# Docker
+.dockerignore
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+

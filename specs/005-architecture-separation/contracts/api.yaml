@@ -1,0 +1,941 @@
+openapi: 3.0.3
+info:
+  title: Architectural Separation API
+  description: API contracts for communication between workers and Go applications
+  version: 1.0.0
+  contact:
+    name: Architecture Team
+    email: architecture@example.com
+
+servers:
+  - url: https://api.example.com/v1
+    description: Production server
+  - url: https://staging-api.example.com/v1
+    description: Staging server
+
+paths:
+  /workers:
+    get:
+      summary: List all worker modules
+      operationId: listWorkers
+      tags:
+        - WorkerModule
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [development, testing, staging, production, archived]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of worker modules
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WorkerModule'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Create a new worker module
+      operationId: createWorker
+      tags:
+        - WorkerModule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkerRequest'
+      responses:
+        '201':
+          description: Worker module created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerModule'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Worker module already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /workers/{workerId}:
+    get:
+      summary: Get worker module by ID
+      operationId: getWorker
+      tags:
+        - WorkerModule
+      parameters:
+        - name: workerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Worker module details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerModule'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      summary: Update worker module
+      operationId: updateWorker
+      tags:
+        - WorkerModule
+      parameters:
+        - name: workerId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWorkerRequest'
+      responses:
+        '200':
+          description: Worker module updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerModule'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      summary: Delete worker module
+      operationId: deleteWorker
+      tags:
+        - WorkerModule
+      parameters:
+        - name: workerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Worker module deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /go-applications:
+    get:
+      summary: List all Go applications
+      operationId: listGoApplications
+      tags:
+        - GoApplication
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [development, testing, staging, production, maintenance, decommissioned]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of Go applications
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  applications:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GoApplication'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Create a new Go application
+      operationId: createGoApplication
+      tags:
+        - GoApplication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGoApplicationRequest'
+      responses:
+        '201':
+          description: Go application created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoApplication'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Go application already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /go-applications/{appId}:
+    get:
+      summary: Get Go application by ID
+      operationId: getGoApplication
+      tags:
+        - GoApplication
+      parameters:
+        - name: appId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Go application details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoApplication'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /shared-packages:
+    get:
+      summary: List all shared packages
+      operationId: listSharedPackages
+      tags:
+        - SharedPackage
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [types, contracts, communication, utilities]
+        - name: language
+          in: query
+          schema:
+            type: string
+            enum: [go, typescript]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of shared packages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  packages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SharedPackage'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /deployment-pipelines:
+    get:
+      summary: List all deployment pipelines
+      operationId: listDeploymentPipelines
+      tags:
+        - DeploymentPipeline
+      parameters:
+        - name: componentType
+          in: query
+          schema:
+            type: string
+            enum: [worker, go-app]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, running, success, failed, cancelled]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of deployment pipelines
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pipelines:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DeploymentPipeline'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /deployment-pipelines/{pipelineId}/deploy:
+    post:
+      summary: Trigger deployment pipeline
+      operationId: triggerDeployment
+      tags:
+        - DeploymentPipeline
+      parameters:
+        - name: pipelineId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                version:
+                  type: string
+                  description: Version to deploy
+                environment:
+                  type: string
+                  description: Target environment
+      responses:
+        '202':
+          description: Deployment triggered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deploymentId:
+                    type: string
+                  status:
+                    type: string
+                    enum: [pending, running]
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  schemas:
+    WorkerModule:
+      type: object
+      required:
+        - id
+        - name
+        - version
+        - entryPoint
+        - routes
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the worker module
+        name:
+          type: string
+          description: Human-readable name
+        version:
+          type: string
+          description: Semantic version
+        description:
+          type: string
+          description: Purpose and functionality
+        entryPoint:
+          type: string
+          description: Main file path
+        dependencies:
+          type: array
+          items:
+            type: string
+          description: npm package dependencies
+        environment:
+          type: object
+          additionalProperties:
+            type: string
+          description: Environment variables
+        routes:
+          type: array
+          items:
+            $ref: '#/components/schemas/RouteMapping'
+        permissions:
+          type: array
+          items:
+            type: string
+          description: Cloudflare Workers permissions
+        resources:
+          $ref: '#/components/schemas/ResourceLimits'
+        status:
+          type: string
+          enum: [development, testing, staging, production, archived]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    GoApplication:
+      type: object
+      required:
+        - id
+        - name
+        - version
+        - modulePath
+        - port
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the Go application
+        name:
+          type: string
+          description: Human-readable name
+        version:
+          type: string
+          description: Semantic version
+        description:
+          type: string
+          description: Purpose and functionality
+        modulePath:
+          type: string
+          description: Go module path
+        entryPoint:
+          type: string
+          description: Main file path
+        port:
+          type: integer
+          description: Service port
+        database:
+          $ref: '#/components/schemas/DatabaseConfig'
+        apis:
+          type: array
+          items:
+            $ref: '#/components/schemas/APIEndpoint'
+        dependencies:
+          type: array
+          items:
+            $ref: '#/components/schemas/GoDependency'
+        resources:
+          $ref: '#/components/schemas/ResourceLimits'
+        status:
+          type: string
+          enum: [development, testing, staging, production, maintenance, decommissioned]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    SharedPackage:
+      type: object
+      required:
+        - id
+        - name
+        - version
+        - type
+        - languages
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the shared package
+        name:
+          type: string
+          description: Package name
+        version:
+          type: string
+          description: Semantic version
+        type:
+          type: string
+          enum: [types, contracts, communication, utilities]
+        languages:
+          type: array
+          items:
+            type: string
+            enum: [go, typescript]
+        goModule:
+          $ref: '#/components/schemas/GoPackageConfig'
+        npmPackage:
+          $ref: '#/components/schemas/NpmPackageConfig'
+        dependencies:
+          type: array
+          items:
+            type: string
+        exports:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [draft, published, deprecated, archived]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    DeploymentPipeline:
+      type: object
+      required:
+        - id
+        - name
+        - componentId
+        - componentType
+        - stages
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the deployment pipeline
+        name:
+          type: string
+          description: Pipeline name
+        componentId:
+          type: string
+          description: ID of the component this pipeline deploys
+        componentType:
+          type: string
+          enum: [worker, go-app]
+        triggers:
+          type: array
+          items:
+            $ref: '#/components/schemas/TriggerConfig'
+        stages:
+          type: array
+          items:
+            $ref: '#/components/schemas/PipelineStage'
+        environment:
+          $ref: '#/components/schemas/EnvironmentConfig'
+        notifications:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationConfig'
+        lastDeployment:
+          $ref: '#/components/schemas/DeploymentStatus'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    RouteMapping:
+      type: object
+      required:
+        - path
+        - method
+      properties:
+        path:
+          type: string
+        method:
+          type: string
+          enum: [GET, POST, PUT, DELETE, PATCH]
+        target:
+          type: string
+        timeout:
+          type: integer
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+
+    APIEndpoint:
+      type: object
+      required:
+        - path
+        - method
+      properties:
+        path:
+          type: string
+        method:
+          type: string
+          enum: [GET, POST, PUT, DELETE, PATCH]
+        description:
+          type: string
+        authentication:
+          type: boolean
+        rateLimit:
+          $ref: '#/components/schemas/RateLimitConfig'
+
+    DatabaseConfig:
+      type: object
+      required:
+        - type
+        - host
+        - port
+        - name
+      properties:
+        type:
+          type: string
+          enum: [postgres, mysql, sqlite, mongodb]
+        host:
+          type: string
+        port:
+          type: integer
+        name:
+          type: string
+        migrations:
+          type: string
+
+    ResourceLimits:
+      type: object
+      properties:
+        cpu:
+          type: string
+        memory:
+          type: string
+        storage:
+          type: string
+
+    Pagination:
+      type: object
+      properties:
+        limit:
+          type: integer
+        offset:
+          type: integer
+        total:
+          type: integer
+        hasNext:
+          type: boolean
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+
+    # Request schemas
+    CreateWorkerRequest:
+      type: object
+      required:
+        - name
+        - version
+        - entryPoint
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        description:
+          type: string
+        entryPoint:
+          type: string
+        dependencies:
+          type: array
+          items:
+            type: string
+        environment:
+          type: object
+          additionalProperties:
+            type: string
+        routes:
+          type: array
+          items:
+            $ref: '#/components/schemas/RouteMapping'
+        permissions:
+          type: array
+          items:
+            type: string
+        resources:
+          $ref: '#/components/schemas/ResourceLimits'
+
+    UpdateWorkerRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        dependencies:
+          type: array
+          items:
+            type: string
+        environment:
+          type: object
+          additionalProperties:
+            type: string
+        routes:
+          type: array
+          items:
+            $ref: '#/components/schemas/RouteMapping'
+        permissions:
+          type: array
+          items:
+            type: string
+        resources:
+          $ref: '#/components/schemas/ResourceLimits'
+
+    CreateGoApplicationRequest:
+      type: object
+      required:
+        - name
+        - version
+        - modulePath
+        - port
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        description:
+          type: string
+        modulePath:
+          type: string
+        entryPoint:
+          type: string
+        port:
+          type: integer
+        database:
+          $ref: '#/components/schemas/DatabaseConfig'
+        dependencies:
+          type: array
+          items:
+            $ref: '#/components/schemas/GoDependency'
+        resources:
+          $ref: '#/components/schemas/ResourceLimits'
+
+    GoDependency:
+      type: object
+      required:
+        - name
+        - version
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+
+    GoPackageConfig:
+      type: object
+      required:
+        - modulePath
+        - goVersion
+      properties:
+        modulePath:
+          type: string
+        goVersion:
+          type: string
+        imports:
+          type: array
+          items:
+            type: string
+
+    NpmPackageConfig:
+      type: object
+      required:
+        - packageName
+        - main
+      properties:
+        packageName:
+          type: string
+        main:
+          type: string
+        types:
+          type: string
+        scripts:
+          type: object
+          additionalProperties:
+            type: string
+
+    TriggerConfig:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [webhook, schedule, manual]
+        config:
+          type: object
+          additionalProperties:
+            type: string
+
+    PipelineStage:
+      type: object
+      required:
+        - name
+        - type
+        - commands
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [build, test, deploy, verify]
+        commands:
+          type: array
+          items:
+            type: string
+        timeout:
+          type: integer
+        onFailure:
+          type: string
+          enum: [continue, stop, rollback]
+
+    EnvironmentConfig:
+      type: object
+      required:
+        - name
+        - type
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [development, staging, production]
+        variables:
+          type: object
+          additionalProperties:
+            type: string
+
+    NotificationConfig:
+      type: object
+      required:
+        - type
+        - target
+      properties:
+        type:
+          type: string
+          enum: [email, slack, webhook]
+        target:
+          type: string
+        events:
+          type: array
+          items:
+            type: string
+            enum: [started, success, failed, cancelled]
+
+    DeploymentStatus:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, success, failed, cancelled]
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        version:
+          type: string
+        environment:
+          type: string
+
+    RateLimitConfig:
+      type: object
+      properties:
+        requests:
+          type: integer
+        window:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+tags:
+  - name: WorkerModule
+    description: Worker module management
+  - name: GoApplication
+    description: Go application management
+  - name: SharedPackage
+    description: Shared package management
+  - name: DeploymentPipeline
+    description: Deployment pipeline management

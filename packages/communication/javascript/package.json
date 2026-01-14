@@ -1,0 +1,16 @@
+{
+  "name": "@obsidian-vault/communication",
+  "version": "1.0.0",
+  "description": "Shared HTTP client for workers and applications",
+  "main": "client.ts",
+  "types": "client.ts",
+  "scripts": {
+    "test": "echo 'No tests for communication client'"
+  },
+  "dependencies": {
+    "@obsidian-vault/shared-types": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  }
+}

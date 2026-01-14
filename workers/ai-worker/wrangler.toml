@@ -1,0 +1,20 @@
+name = "ai-worker"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["workers_stdapi_js"]
+
+[env.development]
+name = "ai-worker-dev"
+vars = { LOG_LEVEL = "debug" }
+
+[env.staging]
+name = "ai-worker-staging"
+vars = { LOG_LEVEL = "info" }
+
+[env.production]
+name = "ai-worker"
+vars = { LOG_LEVEL = "info" }
+
+[[routes]]
+pattern = "/*"
+zone_name = "example.com"

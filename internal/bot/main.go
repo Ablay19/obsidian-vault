@@ -49,18 +49,6 @@ var (
 	responseTimes           []time.Duration
 )
 
-type TelegramBot struct {
-	*tgbotapi.BotAPI
-}
-
-func (t *TelegramBot) Send(c tgbotapi.Chattable) (tgbotapi.Message, error) { return t.BotAPI.Send(c) }
-func (t *TelegramBot) Request(c tgbotapi.Chattable) (*tgbotapi.APIResponse, error) {
-	return t.BotAPI.Request(c)
-}
-func (t *TelegramBot) GetFile(config tgbotapi.FileConfig) (tgbotapi.File, error) {
-	return t.BotAPI.GetFile(config)
-}
-
 // Run initializes and starts the bot.
 func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.RuntimeConfigManager, wsm *ws.Manager, vectorStore vectorstore.VectorStore) error {
 	// Set global vector store for RAG functionality
@@ -113,11 +101,10 @@ func Run(db *sql.DB, ais ai.AIServiceInterface, runtimeConfigManager *state.Runt
 		return fmt.Errorf("TELEGRAM_BOT_TOKEN not set")
 	}
 
-	botAPI, err := tgbotapi.NewBotAPI(token)
+	bot, err := NewBot(token, nil) // TODO: pass logger
 	if err != nil {
 		return err
 	}
-	bot := &TelegramBot{botAPI}
 
 	// Initialize Git Manager
 	gitCfg := config.AppConfig.Git
