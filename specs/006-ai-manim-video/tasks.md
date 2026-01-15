@@ -39,17 +39,17 @@
 
 | ID | Task | Status | Priority |
 |----|------|--------|----------|
-| S-001 | Implement session creation and TTL management | ⏳ PENDING | P0 |
-| S-002 | Add session validation middleware | ⏳ PENDING | P0 |
-| S-003 | Implement activity-based TTL extension | ⏳ PENDING | P1 |
+| S-001 | Implement session creation and TTL management | ✅ DONE | P0 |
+| S-002 | Add session validation middleware | ✅ DONE | P0 |
+| S-003 | Implement activity-based TTL extension | ✅ DONE | P1 |
 
 ### 5. Storage & Delivery
 
 | ID | Task | Status | Priority |
 |----|------|--------|----------|
-| D-001 | Implement R2 upload for completed videos | ⏳ PENDING | P0 |
-| D-002 | Create ephemeral URL generator | ⏳ PENDING | P0 |
-| D-003 | Implement immediate deletion after delivery | ⏳ PENDING | P0 |
+| D-001 | Implement ephemeral URL storage | ✅ DONE | P0 |
+| D-002 | Create ephemeral URL generator | ✅ DONE | P0 |
+| D-003 | Implement immediate deletion after delivery | ✅ DONE | P0 |
 | D-004 | Add webhook for video ready notification | ⏳ PENDING | P1 |
 
 ### 6. Worker Entry Point

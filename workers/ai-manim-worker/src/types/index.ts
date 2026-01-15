@@ -104,3 +104,31 @@ export interface HealthResponse {
     huggingface: "available" | "unavailable";
   };
 }
+
+export interface VideoStorageConfig {
+  type: 'ephemeral' | 'external' | 'r2';
+  baseUrl: string;
+  expirySeconds: number;
+}
+
+export interface VideoUploadResult {
+  success: boolean;
+  url?: string;
+  key?: string;
+  error?: string;
+}
+
+export interface VideoStorageService {
+  upload(videoPath: string, jobId: string): Promise<VideoUploadResult>;
+  getUrl(key: string): string;
+  delete(key: string): Promise<boolean>;
+}
+
+export interface RenderedVideo {
+  jobId: string;
+  rendererUrl: string;
+  localPath?: string;
+  uploadedUrl?: string;
+  expiresAt?: Date;
+}
+

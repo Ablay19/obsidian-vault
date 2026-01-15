@@ -1,0 +1,33 @@
+{
+  "name": "manim-renderer",
+  "description": "AI Manim Video Renderer - Flask-based Manim rendering service",
+  "repository": "https://github.com/Ablay19/obsidian-vault",
+  "buildCommand": "pip install -r requirements.txt",
+  "startCommand": "gunicorn src.app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 300",
+  "envVars": [
+    {
+      "key": "PORT",
+      "value": "8080"
+    },
+    {
+      "key": "MANIM_QUALITY",
+      "value": "medium"
+    },
+    {
+      "key": "MANIM_COLOR",
+      "value": "BLUE"
+    },
+    {
+      "key": "MANIM_PREVIEW",
+      "value": "false"
+    },
+    {
+      "key": "MANIM_USE_OPENSEARCH",
+      "value": "false"
+    }
+  ],
+  "regions": ["us-east"],
+  "plan": "free",
+  "healthCheckPath": "/health",
+  "dockerCommand": null
+}
