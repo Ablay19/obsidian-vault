@@ -1,11 +1,9 @@
-import type { LogLevel } from "../types";
+export type LogLevel = "debug" | "info" | "warn" | "error";
 
 export interface LoggerConfig {
   level: LogLevel;
   component: string;
 }
-
-export type LogLevel = "debug" | "info" | "warn" | "error";
 
 interface LogEntry {
   level: string;

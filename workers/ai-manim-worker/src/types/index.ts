@@ -1,10 +1,18 @@
+import type { KVNamespace } from '@cloudflare/workers-types';
+
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
 export interface Env {
   LOG_LEVEL: string;
   TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_SECRET: string;
-  SESSION_TTL_DAYS: number;
+  KV: KVNamespace;
+  SESSIONS: KVNamespace;
+  CLOUDFLARE_API_TOKEN: string;
+  CLOUDFLARE_ACCOUNT_ID: string;
+  GROQ_API_KEY: string;
+  HUGGINGFACE_API_KEY: string;
+  HF_TOKEN: string;
   AI_PROVIDER: string;
 }
 

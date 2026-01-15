@@ -1,157 +1,94 @@
-import type { Env, TelegramUpdate, ProcessingJob, ProcessingStatus } from "./types";
-import { createLogger } from "./utils/logger";
+import type { ExecutionContext } from '@cloudflare/workers-types';
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import type { Env } from './types';
+import { createLogger } from './utils/logger';
+import { SessionService } from './services/session';
+import { AIFallbackService } from './services/fallback';
+import { TelegramHandler } from './handlers/telegram';
+
+export interface ProcessingJob {
+  id: string;
+  userId: string;
+  chatId: number;
+  problem: string;
+  status: 'queued' | 'ai_generating' | 'code_validating' | 'rendering' | 'uploading' | 'ready' | 'delivered' | 'failed';
+  createdAt: number;
+  updatedAt: number;
+  error?: string;
+  videoUrl?: string;
+}
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
-    const logger = createLogger({ level: (env.LOG_LEVEL as "debug" | "info" | "warn" | "error") || "info", component: "ai-manim-worker" });
+    const logger = createLogger({
+      level: (env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
+      component: 'ai-manim-worker'
+    });
 
-    logger.info("Incoming request", {
+    logger.info('Incoming request', {
       method: request.method,
       url: url.pathname,
     });
 
     try {
-      if (url.pathname === "/health") {
-        return handleHealth();
-      }
-
-      if (url.pathname === "/webhook/telegram" && request.method === "POST") {
-        return handleTelegramWebhook(request, env, logger);
-      }
-
-      if (url.pathname.startsWith("/api/v1/")) {
-        return handleAPI(request, env, url, logger);
-      }
-
-      return new Response("Not Found", { status: 404 });
+      const app = createApp(env, logger);
+      return app.fetch(request, env, ctx);
     } catch (error) {
-      logger.error("Request failed", error as Error, {
+      logger.error('Request failed', error as Error, {
         method: request.method,
         url: url.pathname,
       });
 
       return new Response(
         JSON.stringify({
-          status: "error",
+          status: 'error',
           message: (error as Error).message,
         }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
       );
     }
   },
 };
 
-function handleHealth(): Response {
-  return new Response(
-    JSON.stringify({
-      status: "healthy",
-      version: "1.0.0",
+function createApp(env: Env, logger: ReturnType<typeof createLogger>): Hono {
+  const app = new Hono();
+
+  app.use('/*', cors({
+    origin: (origin) => origin,
+    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Telegram-Bot-Api-Secret-Token'],
+  }));
+
+  const sessionService = new SessionService(env);
+  const aiService = new AIFallbackService(env);
+
+  const telegramHandler = new TelegramHandler(sessionService, aiService);
+
+  app.route('/telegram', telegramHandler.getApp());
+
+  app.get('/health', async (c) => {
+    return c.json({
+      status: 'healthy',
+      version: '1.0.0',
       timestamp: new Date().toISOString(),
       providers: {
-        cloudflare: "available",
-        groq: "available",
-        huggingface: "available",
+        cloudflare: 'configured',
+        groq: 'configured',
+        huggingface: 'configured',
       },
-    }),
-    { headers: { "Content-Type": "application/json" } }
-  );
-}
-
-async function handleTelegramWebhook(request: Request, env: Env, logger: ReturnType<typeof createLogger>): Promise<Response> {
-  const secretToken = request.headers.get("X-Telegram-Bot-Api-Secret-Token");
-  
-  if (secretToken !== env.TELEGRAM_SECRET) {
-    logger.warn("Unauthorized webhook attempt", { ip: request.headers.get("CF-Connecting-IP") });
-    return new Response("Unauthorized", { status: 401 });
-  }
-
-  const update: TelegramUpdate = await request.json();
-
-  if (!update.message?.text) {
-    return new Response("OK", { status: 200 });
-  }
-
-  const chatId = update.message.chat.id;
-  const text = update.message.text;
-
-  logger.info("Received Telegram message", {
-    chat_id: chatId,
-    text_length: text.length,
+    });
   });
 
-  if (text.startsWith("/start")) {
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: "Welcome! Send me a mathematical problem and I'll create an animated video explanation.",
-      }),
-      { headers: { "Content-Type": "application/json" } }
-    );
-  }
-
-  if (text.startsWith("/help")) {
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: "Just describe any mathematical problem and I'll visualize it as an animated video!",
-      }),
-      { headers: { "Content-Type": "application/json" } }
-    );
-  }
-
-  const jobId = crypto.randomUUID();
-  logger.info("Creating job", { job_id: jobId, chat_id: chatId });
-
-  return new Response(
-    JSON.stringify({
-      success: true,
-      message: "Your video is being generated! This usually takes 1-5 minutes.",
-      job_id: jobId,
-    }),
-    { headers: { "Content-Type": "application/json" } }
-  );
-}
-
-async function handleAPI(request: Request, env: Env, url: URL, logger: ReturnType<typeof createLogger>): Promise<Response> {
-  const method = request.method;
-
-  if (method === "POST" && url.pathname === "/api/v1/jobs") {
-    const body = await request.json();
-    
-    logger.info("Creating job via API", {
-      session_id: body.session_id,
-      problem_length: body.problem_text?.length,
+  app.get('/ready', async (c) => {
+    return c.json({
+      ready: true,
+      timestamp: new Date().toISOString(),
     });
+  });
 
-    const jobId = crypto.randomUUID();
-
-    return new Response(
-      JSON.stringify({
-        job_id: jobId,
-        status: "queued",
-        message: "Job queued for processing",
-        created_at: new Date().toISOString(),
-      }),
-      { headers: { "Content-Type": "application/json" } }
-    );
-  }
-
-  if (method === "GET" && url.pathname.startsWith("/api/v1/jobs/")) {
-    const jobId = url.pathname.split("/").pop();
-    
-    logger.debug("Getting job status", { job_id: jobId });
-
-    return new Response(
-      JSON.stringify({
-        job_id: jobId,
-        status: "queued",
-        status_message: "Waiting to be processed",
-        created_at: new Date().toISOString(),
-      }),
-      { headers: { "Content-Type": "application/json" } }
-    );
-  }
-
-  return new Response("Not Found", { status: 404 });
+  return app;
 }
+
+export { createApp };
