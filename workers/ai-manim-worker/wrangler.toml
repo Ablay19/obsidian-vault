@@ -14,12 +14,7 @@ vars = { LOG_LEVEL = "debug", USE_MOCK_RENDERER = "true" }
 name = "ai-manim-worker-staging"
 vars = { LOG_LEVEL = "info", USE_MOCK_RENDERER = "false" }
 
-[env.production]
-name = "ai-manim-worker"
-vars = { LOG_LEVEL = "info", USE_MOCK_RENDERER = "false" }
-
-[[kv_namespaces]]
+[[env.staging.kv_namespaces]]
 binding = "SESSIONS"
-id = "YOUR_KV_NAMESPACE_ID"
-preview_id = "YOUR_KV_PREVIEW_ID"
+id = "9d779979cd4f45d8ae3ff05eb71a15f7"
 
