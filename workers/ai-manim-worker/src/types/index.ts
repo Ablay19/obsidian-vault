@@ -14,6 +14,8 @@ export interface Env {
   HUGGINGFACE_API_KEY: string;
   HF_TOKEN: string;
   AI_PROVIDER: string;
+  MANIM_RENDERER_URL: string;
+  USE_MOCK_RENDERER: string;
 }
 
 export interface TelegramUpdate {

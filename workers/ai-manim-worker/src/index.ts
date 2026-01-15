@@ -5,6 +5,7 @@ import type { Env } from './types';
 import { createLogger } from './utils/logger';
 import { SessionService } from './services/session';
 import { AIFallbackService } from './services/fallback';
+import { ManimRendererService, MockRendererService, RendererService } from './services/manim';
 import { TelegramHandler } from './handlers/telegram';
 import { VideoHandler } from './handlers/video';
 import { DebugHandler } from './handlers/debug';
@@ -66,7 +67,23 @@ function createApp(env: Env, logger: ReturnType<typeof createLogger>): Hono {
   const sessionService = new SessionService(env);
   const aiService = new AIFallbackService(env);
 
-  const telegramHandler = new TelegramHandler(sessionService, aiService, env.TELEGRAM_SECRET);
+  const useMockRenderer = env.USE_MOCK_RENDERER === 'true';
+  let manimService: RendererService;
+
+  if (useMockRenderer) {
+    logger.info('Using mock renderer service');
+    manimService = new MockRendererService();
+  } else {
+    const rendererUrl = env.MANIM_RENDERER_URL || 'http://localhost:8080';
+    logger.info('Using real renderer service', { url: rendererUrl });
+    manimService = new ManimRendererService({
+      endpoint: rendererUrl,
+      timeout: 300000,
+      maxRetries: 3,
+    });
+  }
+
+  const telegramHandler = new TelegramHandler(sessionService, aiService, manimService, env.TELEGRAM_SECRET);
   const videoHandler = new VideoHandler();
   const debugHandler = new DebugHandler();
 

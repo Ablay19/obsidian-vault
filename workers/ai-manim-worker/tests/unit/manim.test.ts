@@ -61,15 +61,17 @@ def main():
       expect(result.error).toBe('Code must define a Scene class');
     });
 
-    it('should reject code with insufficient indentation', () => {
-      const code = `from manim import *
+    it('should reject code without manim import', () => {
+      const code = `
 class Scene(Scene):
-pass`;
+    def construct(self):
+        pass
+      `;
 
       const result = service.validateCode(code);
 
       expect(result.valid).toBe(false);
-      expect(result.error).toBe('Code must have proper indentation');
+      expect(result.error).toBe('Code must import manim');
     });
   });
 

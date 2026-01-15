@@ -24,13 +24,20 @@ export interface RendererConfig {
   maxRetries: number;
 }
 
-export class ManimRendererService {
+export interface RendererService {
+  submitRender(request: ManimRenderRequest): Promise<ManimRenderResponse>;
+  getStatus(jobId: string): Promise<ManimRenderResponse>;
+  cancelRender(jobId: string): Promise<boolean>;
+  validateCode(code: string): { valid: boolean; error?: string };
+}
+
+export class ManimRendererService implements RendererService {
   private config: RendererConfig;
   private activeJobs: Map<string, ManimRenderRequest>;
 
   constructor(config: Partial<RendererConfig> = {}) {
     this.config = {
-      endpoint: config.endpoint || process.env.MANIM_RENDERER_URL || 'http://localhost:8080',
+      endpoint: config.endpoint || 'http://localhost:8080',
       timeout: config.timeout || 300000,
       maxRetries: config.maxRetries || 3,
     };
@@ -64,7 +71,7 @@ export class ManimRendererService {
         throw new Error(`Renderer error: ${error}`);
       }
 
-      const result = await response.json();
+      const result = await response.json() as Record<string, unknown>;
 
       logger.info('Render job submitted', {
         jobId: request.jobId,
@@ -109,7 +116,7 @@ export class ManimRendererService {
         throw new Error(`Status check failed: ${response.status}`);
       }
 
-      const result = await response.json();
+      const result = await response.json() as Record<string, unknown>;
 
       if (result.status === 'complete') {
         this.activeJobs.delete(jobId);
@@ -117,9 +124,9 @@ export class ManimRendererService {
 
       return {
         jobId,
-        status: result.status,
-        videoUrl: result.video_url,
-        duration: result.duration,
+        status: result.status as 'queued' | 'rendering' | 'complete' | 'failed',
+        videoUrl: result.video_url as string | undefined,
+        duration: result.duration as number | undefined,
       };
     } catch (error) {
       logger.error('Failed to get job status', error as Error, { jobId });
@@ -155,7 +162,7 @@ export class ManimRendererService {
       return { valid: false, error: 'Code is empty' };
     }
 
-    if (!code.includes('from manim import')) {
+    if (!code.includes('from manim import') && !code.includes('import manim')) {
       return { valid: false, error: 'Code must import manim' };
     }
 
@@ -163,11 +170,65 @@ export class ManimRendererService {
       return { valid: false, error: 'Code must define a Scene class' };
     }
 
-    const lines = code.split('\n');
-    const indentedCode = lines.filter(line => line.startsWith(' ')).length;
+    return { valid: true };
+  }
+}
 
-    if (indentedCode < 2) {
-      return { valid: false, error: 'Code must have proper indentation' };
+export class MockRendererService implements RendererService {
+  private jobs: Map<string, ManimRenderRequest>;
+
+  constructor() {
+    this.jobs = new Map();
+  }
+
+  async submitRender(request: ManimRenderRequest): Promise<ManimRenderResponse> {
+    logger.info('Mock: Submitting render job', {
+      jobId: request.jobId,
+      codeLength: request.code.length,
+    });
+
+    this.jobs.set(request.jobId, request);
+
+    return {
+      jobId: request.jobId,
+      status: 'queued',
+    };
+  }
+
+  async getStatus(jobId: string): Promise<ManimRenderResponse> {
+    const request = this.jobs.get(jobId);
+    
+    if (!request) {
+      return {
+        jobId,
+        status: 'failed',
+        error: 'Job not found',
+      };
+    }
+
+    return {
+      jobId,
+      status: 'complete',
+      videoUrl: `https://example.com/videos/${jobId}.mp4`,
+      duration: 15,
+    };
+  }
+
+  async cancelRender(jobId: string): Promise<boolean> {
+    return this.jobs.delete(jobId);
+  }
+
+  validateCode(code: string): { valid: boolean; error?: string } {
+    if (!code || code.trim().length === 0) {
+      return { valid: false, error: 'Code is empty' };
+    }
+
+    if (!code.includes('from manim import') && !code.includes('import manim')) {
+      return { valid: false, error: 'Code must import manim' };
+    }
+
+    if (!code.includes('class') || !code.includes('Scene')) {
+      return { valid: false, error: 'Code must define a Scene class' };
     }
 
     return { valid: true };
@@ -176,4 +237,8 @@ export class ManimRendererService {
 
 export const createRenderer = (config?: Partial<RendererConfig>): ManimRendererService => {
   return new ManimRendererService(config);
+};
+
+export const createMockRenderer = (): MockRendererService => {
+  return new MockRendererService();
 };

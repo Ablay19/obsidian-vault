@@ -8,12 +8,12 @@ LOG_LEVEL = "info"
 
 [env.development]
 name = "ai-manim-worker-dev"
-vars = { LOG_LEVEL = "debug" }
+vars = { LOG_LEVEL = "debug", USE_MOCK_RENDERER = "true" }
 
 [env.staging]
 name = "ai-manim-worker-staging"
-vars = { LOG_LEVEL = "info" }
+vars = { LOG_LEVEL = "info", USE_MOCK_RENDERER = "false" }
 
 [env.production]
 name = "ai-manim-worker"
-vars = { LOG_LEVEL = "info" }
+vars = { LOG_LEVEL = "info", USE_MOCK_RENDERER = "false" }

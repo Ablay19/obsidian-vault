@@ -1,6 +1,7 @@
 import { Context, Hono } from 'hono';
 import { SessionService } from '../services/session';
 import { AIFallbackService } from '../services/fallback';
+import { ManimRendererService, RendererService } from '../services/manim';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger({ level: 'info', component: 'telegram-handler' });
@@ -55,12 +56,19 @@ export interface ProcessingJob {
 export class TelegramHandler {
   private sessionService: SessionService;
   private aiService: AIFallbackService;
+  private manimService: RendererService;
   private app: Hono;
   private telegramSecret: string;
 
-  constructor(sessionService: SessionService, aiService: AIFallbackService, telegramSecret?: string) {
+  constructor(
+    sessionService: SessionService, 
+    aiService: AIFallbackService, 
+    manimService: RendererService,
+    telegramSecret?: string
+  ) {
     this.sessionService = sessionService;
     this.aiService = aiService;
+    this.manimService = manimService;
     this.telegramSecret = telegramSecret || '';
     this.app = new Hono();
     this.setupRoutes();
@@ -108,8 +116,8 @@ export class TelegramHandler {
     return c.json({ ok: true });
   }
 
-  private async handleMessage(c: Context, message: TelegramUpdate['message']): Promise<Response> {
-    if (!message?.text) {
+  private async handleMessage(c: Context, message: NonNullable<TelegramUpdate['message']>): Promise<Response> {
+    if (!message.text) {
       return c.json({ ok: true });
     }
 
@@ -180,22 +188,87 @@ Send me a problem to get started!`;
 
   private async handleProblemSubmission(c: Context, chatId: number, userId: string, problem: string): Promise<Response> {
     const session = await this.sessionService.getOrCreateSession(chatId.toString());
+    const jobId = crypto.randomUUID();
 
     logger.info('Processing problem submission', {
+      jobId,
       problemLength: problem.length,
     });
 
-    const confirmationText = `🎬 *Processing Your Request*
+    await this.sendMessage(c, chatId, `🎬 *Generating your video...*
 
-Your problem has been queued for processing.
+_This takes 1-5 minutes. I'll notify you when it's ready!_`, { parseMode: 'Markdown' });
 
-_Duration: 1-5 minutes_
+    c.executionCtx.waitUntil(
+      this.processProblemAsync(c, chatId, jobId, userId, problem)
+    );
 
-I'll send you a link when the video is ready!`;
+    return c.json({ ok: true, jobId });
+  }
 
-    await this.sendMessage(c, chatId, confirmationText, { parseMode: 'Markdown' });
+  private async processProblemAsync(c: Context, chatId: number, jobId: string, userId: string, problem: string): Promise<void> {
+    try {
+      logger.info('Starting AI code generation', { jobId });
 
-    return c.json({ ok: true });
+      const manimCode = await this.aiService.generateManimCode(problem);
+      
+      logger.info('AI generated Manim code', {
+        jobId,
+        codeLength: manimCode.length,
+      });
+
+      const validation = this.manimService.validateCode(manimCode);
+      if (!validation.valid) {
+        throw new Error(`Code validation failed: ${validation.error}`);
+      }
+
+      logger.info('Submitting render job', { jobId });
+
+      const renderResult = await this.manimService.submitRender({
+        jobId,
+        code: manimCode,
+        problem,
+        outputFormat: 'mp4',
+        quality: 'medium',
+      });
+
+      if (renderResult.status === 'failed') {
+        throw new Error(renderResult.error || 'Render submission failed');
+      }
+
+      logger.info('Render job queued', { jobId, rendererStatus: renderResult.status });
+
+      await this.sendVideoReadyMessage(c, chatId, jobId, problem);
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Failed to process problem', error as Error, { jobId });
+      await this.sendErrorMessage(c, chatId, jobId, errorMessage);
+    }
+  }
+
+  private async sendVideoReadyMessage(c: Context, chatId: number, jobId: string, problem: string): Promise<void> {
+    const text = `✅ *Video Ready!*
+
+_Problem: "${problem.substring(0, 50)}${problem.length > 50 ? '...' : ''}"_
+
+📹 Your video is being processed. Check back in a minute for your download link!
+
+_Job ID: \`${jobId}\`_`;
+
+    await this.sendMessage(c, chatId, text, { parseMode: 'Markdown' });
+  }
+
+  private async sendErrorMessage(c: Context, chatId: number, jobId: string, error: string): Promise<void> {
+    const text = `❌ *Video Generation Failed*
+
+_Job ID: \`${jobId}\`_
+
+Error: ${error}
+
+Please try again or try a different problem description.`;
+
+    await this.sendMessage(c, chatId, text, { parseMode: 'Markdown' });
   }
 
   private async sendMessage(c: Context, chatId: number, text: string, options: Record<string, string> = {}): Promise<Response> {
@@ -205,7 +278,7 @@ I'll send you a link when the video is ready!`;
       ...options,
     };
 
-    const token = c.env.TELEGRAM_BOT_TOKEN;
+    const token = (c.env as { TELEGRAM_BOT_TOKEN?: string }).TELEGRAM_BOT_TOKEN || c.env.TELEGRAM_BOT_TOKEN;
     const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
