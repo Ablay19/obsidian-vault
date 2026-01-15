@@ -7,6 +7,7 @@ import { SessionService } from './services/session';
 import { AIFallbackService } from './services/fallback';
 import { TelegramHandler } from './handlers/telegram';
 import { VideoHandler } from './handlers/video';
+import { DebugHandler } from './handlers/debug';
 
 export interface ProcessingJob {
   id: string;
@@ -65,11 +66,13 @@ function createApp(env: Env, logger: ReturnType<typeof createLogger>): Hono {
   const sessionService = new SessionService(env);
   const aiService = new AIFallbackService(env);
 
-  const telegramHandler = new TelegramHandler(sessionService, aiService);
+  const telegramHandler = new TelegramHandler(sessionService, aiService, env.TELEGRAM_SECRET);
   const videoHandler = new VideoHandler();
+  const debugHandler = new DebugHandler();
 
   app.route('/telegram', telegramHandler.getApp());
   app.route('/video', videoHandler.getApp());
+  app.route('/debug', debugHandler.getApp());
 
   app.get('/health', async (c) => {
     return c.json({

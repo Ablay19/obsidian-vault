@@ -56,16 +56,30 @@ export class TelegramHandler {
   private sessionService: SessionService;
   private aiService: AIFallbackService;
   private app: Hono;
+  private telegramSecret: string;
 
-  constructor(sessionService: SessionService, aiService: AIFallbackService) {
+  constructor(sessionService: SessionService, aiService: AIFallbackService, telegramSecret?: string) {
     this.sessionService = sessionService;
     this.aiService = aiService;
+    this.telegramSecret = telegramSecret || '';
     this.app = new Hono();
     this.setupRoutes();
   }
 
   private setupRoutes() {
     this.app.post('/webhook', async (c: Context) => {
+      const secretToken = c.req.header('X-Telegram-Bot-Api-Secret-Token');
+      const envSecret = this.telegramSecret || (c.env as { TELEGRAM_SECRET?: string }).TELEGRAM_SECRET;
+
+      if (envSecret && envSecret.length > 0 && secretToken !== envSecret) {
+        logger.warn('Unauthorized webhook attempt', { 
+          ip: c.req.header('CF-Connecting-IP'),
+          hasSecretToken: !!secretToken,
+          hasEnvSecret: !!envSecret,
+        });
+        return new Response('Unauthorized', { status: 401 });
+      }
+
       try {
         const update = await c.req.json<TelegramUpdate>();
         return this.handleUpdate(c, update);
