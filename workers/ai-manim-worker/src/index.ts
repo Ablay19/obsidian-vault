@@ -6,6 +6,7 @@ import { createLogger } from './utils/logger';
 import { SessionService } from './services/session';
 import { AIFallbackService } from './services/fallback';
 import { TelegramHandler } from './handlers/telegram';
+import { VideoHandler } from './handlers/video';
 
 export interface ProcessingJob {
   id: string;
@@ -65,8 +66,10 @@ function createApp(env: Env, logger: ReturnType<typeof createLogger>): Hono {
   const aiService = new AIFallbackService(env);
 
   const telegramHandler = new TelegramHandler(sessionService, aiService);
+  const videoHandler = new VideoHandler();
 
   app.route('/telegram', telegramHandler.getApp());
+  app.route('/video', videoHandler.getApp());
 
   app.get('/health', async (c) => {
     return c.json({
