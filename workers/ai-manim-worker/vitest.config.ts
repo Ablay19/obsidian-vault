@@ -5,7 +5,7 @@ import path from "path";
 export default defineConfig({
   test: {
     globals: true,
-    environment: "miniflare",
+    environment: "node",
     include: ["tests/**/*.test.ts"],
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -13,6 +13,11 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
+    },
+  },
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
     },
   },
 });
