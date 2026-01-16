@@ -2,7 +2,8 @@ package main
 
 import (
 	"encoding/gob"
-	"github.com/Rhymen/go-whatsapp"
+	whatsapp "github.com/Rhymen/go-whatsapp"
+	"log"
 	"os"
 )
 

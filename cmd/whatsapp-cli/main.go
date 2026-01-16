@@ -5,8 +5,6 @@ import (
 	"log"
 	"os"
 	"strings"
-
-	whatsapp "github.com/Rhymen/go-whatsapp"
 )
 
 var wac *whatsapp.Conn
@@ -125,5 +123,3 @@ func (messageHandler) HandleError(err error) {
 func (messageHandler) HandleTextMessage(message whatsapp.TextMessage) {
 	fmt.Printf("Received from %s: %s\n", message.Info.RemoteJid, message.Text)
 }
-
-// saveSession and loadSession are implemented in session.go
