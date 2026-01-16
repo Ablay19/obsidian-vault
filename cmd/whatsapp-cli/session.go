@@ -2,9 +2,10 @@ package main
 
 import (
 	"encoding/gob"
-	whatsapp "github.com/Rhymen/go-whatsapp"
 	"log"
 	"os"
+
+	"github.com/Rhymen/go-whatsapp/whatsapp"
 )
 
 func saveSession(session whatsapp.Session) {

@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 	"strings"
+
+	whatsapp "github.com/Rhymen/go-whatsapp"
 )
 
 var wac *whatsapp.Conn
