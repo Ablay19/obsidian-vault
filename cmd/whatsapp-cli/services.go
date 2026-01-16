@@ -7,8 +7,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
 )
 
 type ServiceInfo struct {
@@ -129,7 +127,9 @@ func uploadMedia(filePath string) (string, error) {
 		return "", err
 	}
 
-	return fmt.Sprintf("Media uploaded: %s (%d bytes)", filePath, fileInfo.Size()), nil
+	result := fmt.Sprintf("Media uploaded: %s (%d bytes)", filePath, fileInfo.Size())
+	fmt.Println(result)
+	return result, nil
 }
 
 func getMediaStatus() (string, error) {
