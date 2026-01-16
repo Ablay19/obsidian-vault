@@ -11,7 +11,7 @@ import (
 // wac is declared in main.go
 
 func saveSession(session whatsapp.Session) {
-	file, err := os.Create("whatsapp_session.gob")
+	file, err := os.Create(config.WhatsApp.SessionFile)
 	if err != nil {
 		log.Printf("Failed to create session file: %v", err)
 		return
@@ -26,10 +26,32 @@ func saveSession(session whatsapp.Session) {
 }
 
 func loadSession() (*whatsapp.Conn, error) {
-	file, err := os.Open("whatsapp_session.gob")
+	file, err := os.Open(config.WhatsApp.SessionFile)
 	if err != nil {
 		return nil, err
 	}
+	defer file.Close()
+
+	var session whatsapp.Session
+	decoder := gob.NewDecoder(file)
+	err = decoder.Decode(&session)
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := whatsapp.NewConn(20)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = conn.RestoreWithSession(session)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+
+	return conn, nil
+}
 	defer file.Close()
 
 	var session whatsapp.Session

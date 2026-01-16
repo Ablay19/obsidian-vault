@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	whatsapp "github.com/Rhymen/go-whatsapp"
 	"log"
 	"strings"
 
-	whatsapp "github.com/Rhymen/go-whatsapp"
+	"github.com/testablay/obsidian-vault/apps/whatsapp-go/internal/services"
 )
 
 type messageHandler struct{}
