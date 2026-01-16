@@ -51,6 +51,14 @@ func main() {
 		handleQueue()
 	case "schedule":
 		handleSchedule()
+	case "telegram":
+		handleTelegram()
+	case "ai":
+		handleAI()
+	case "services":
+		handleServices()
+	case "media":
+		handleMedia()
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
 		printUsage()
@@ -67,11 +75,16 @@ func printUsage() {
 	fmt.Println("  whatsapp-cli receive         - Listen for messages")
 	fmt.Println("  whatsapp-cli status          - Check connection status")
 	fmt.Println("  whatsapp-cli schedule <jid> <msg> <delay> - Schedule delayed message")
+	fmt.Println("  whatsapp-cli telegram <cmd>  - Interact with Telegram bot")
+	fmt.Println("  whatsapp-cli ai <cmd>        - Direct AI interactions")
+	fmt.Println("  whatsapp-cli services <cmd>  - Manage project services")
+	fmt.Println("  whatsapp-cli media <cmd>     - Media processing operations")
 	fmt.Println("  whatsapp-cli logout          - Logout and clear session")
 	fmt.Println()
 	fmt.Println("JID format: 1234567890@s.whatsapp.net")
 	fmt.Println("Session is saved automatically after login.")
 	fmt.Println("RabbitMQ queues provide reliable message delivery.")
+	fmt.Println("Integrated with all project services for unified control.")
 }
 
 func handleLogin() {
@@ -228,6 +241,157 @@ func handleStatus() {
 		}
 		return "disconnected"
 	}())
+}
+
+func handleTelegram() {
+	if len(os.Args) < 3 {
+		fmt.Println("Telegram commands:")
+		fmt.Println("  whatsapp-cli telegram send <chat_id> <message>  - Send to Telegram")
+		fmt.Println("  whatsapp-cli telegram status                  - Check Telegram bot status")
+		return
+	}
+
+	subCmd := os.Args[2]
+	switch subCmd {
+	case "send":
+		if len(os.Args) < 5 {
+			fmt.Println("Usage: whatsapp-cli telegram send <chat_id> <message>")
+			return
+		}
+		chatID := os.Args[3]
+		message := strings.Join(os.Args[4:], " ")
+		err := sendToTelegram(chatID, message)
+		if err != nil {
+			fmt.Printf("Failed to send to Telegram: %v\n", err)
+		} else {
+			fmt.Println("Message sent to Telegram")
+		}
+	case "status":
+		status, err := getTelegramStatus()
+		if err != nil {
+			fmt.Printf("Failed to get Telegram status: %v\n", err)
+		} else {
+			fmt.Printf("Telegram Status: %s\n", status)
+		}
+	default:
+		fmt.Printf("Unknown telegram command: %s\n", subCmd)
+	}
+}
+
+func handleAI() {
+	if len(os.Args) < 3 {
+		fmt.Println("AI commands:")
+		fmt.Println("  whatsapp-cli ai ask <prompt>     - Get AI response")
+		fmt.Println("  whatsapp-cli ai models           - List available models")
+		return
+	}
+
+	subCmd := os.Args[2]
+	switch subCmd {
+	case "ask":
+		if len(os.Args) < 4 {
+			fmt.Println("Usage: whatsapp-cli ai ask <prompt>")
+			return
+		}
+		prompt := strings.Join(os.Args[3:], " ")
+		response, err := queryAI(prompt)
+		if err != nil {
+			fmt.Printf("AI Error: %v\n", err)
+		} else {
+			fmt.Printf("AI Response: %s\n", response)
+		}
+	case "models":
+		models, err := listAIModels()
+		if err != nil {
+			fmt.Printf("Failed to list models: %v\n", err)
+		} else {
+			fmt.Println("Available AI Models:")
+			for _, model := range models {
+				fmt.Printf("  - %s\n", model)
+			}
+		}
+	default:
+		fmt.Printf("Unknown AI command: %s\n", subCmd)
+	}
+}
+
+func handleServices() {
+	if len(os.Args) < 3 {
+		fmt.Println("Service commands:")
+		fmt.Println("  whatsapp-cli services list      - List all services")
+		fmt.Println("  whatsapp-cli services status    - Show service health")
+		fmt.Println("  whatsapp-cli services restart <name> - Restart a service")
+		return
+	}
+
+	subCmd := os.Args[2]
+	switch subCmd {
+	case "list":
+		services, err := listServices()
+		if err != nil {
+			fmt.Printf("Failed to list services: %v\n", err)
+		} else {
+			fmt.Println("Project Services:")
+			for _, svc := range services {
+				fmt.Printf("  - %s (%s)\n", svc.Name, svc.Status)
+			}
+		}
+	case "status":
+		status, err := getServicesStatus()
+		if err != nil {
+			fmt.Printf("Failed to get status: %v\n", err)
+		} else {
+			fmt.Printf("Services Status: %s\n", status)
+		}
+	case "restart":
+		if len(os.Args) < 4 {
+			fmt.Println("Usage: whatsapp-cli services restart <service_name>")
+			return
+		}
+		serviceName := os.Args[3]
+		err := restartService(serviceName)
+		if err != nil {
+			fmt.Printf("Failed to restart service: %v\n", err)
+		} else {
+			fmt.Printf("Service %s restarted\n", serviceName)
+		}
+	default:
+		fmt.Printf("Unknown services command: %s\n", subCmd)
+	}
+}
+
+func handleMedia() {
+	if len(os.Args) < 3 {
+		fmt.Println("Media commands:")
+		fmt.Println("  whatsapp-cli media upload <file>   - Upload and process media")
+		fmt.Println("  whatsapp-cli media status          - Check media processing status")
+		return
+	}
+
+	subCmd := os.Args[2]
+	switch subCmd {
+	case "upload":
+		if len(os.Args) < 4 {
+			fmt.Println("Usage: whatsapp-cli media upload <file_path>")
+			return
+		}
+		filePath := os.Args[3]
+		result, err := uploadMedia(filePath)
+		if err != nil {
+			fmt.Printf("Failed to upload media: %v\n", err)
+		} else {
+			fmt.Printf("Media uploaded: %s\n", result)
+		}
+	case "status":
+		status, err := getMediaStatus()
+		if err != nil {
+			fmt.Printf("Failed to get media status: %v\n", err)
+		} else {
+			fmt.Printf("Media Status: %s\n", status)
+		}
+	default:
+		fmt.Printf("Unknown media command: %s\n", subCmd)
+	}
 }
 
 func handleLogout() {

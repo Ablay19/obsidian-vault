@@ -20,6 +20,10 @@ type CLIConfig struct {
 		Queue   string   `mapstructure:"queue"`
 		Models  []string `mapstructure:"models"`
 	} `mapstructure:"ai"`
+	Services struct {
+		BaseURL string `mapstructure:"base_url"`
+		Timeout string `mapstructure:"timeout"`
+	} `mapstructure:"services"`
 }
 
 func loadConfig() (*CLIConfig, error) {
@@ -56,6 +60,9 @@ func loadConfig() (*CLIConfig, error) {
 	viper.SetDefault("ai.enabled", false)
 	viper.SetDefault("ai.queue", "whatsapp.ai")
 	viper.SetDefault("ai.models", []string{"gpt-3.5-turbo"})
+
+	viper.SetDefault("services.base_url", "http://localhost:8080")
+	viper.SetDefault("services.timeout", "30s")
 
 	// Read config
 	if err := viper.ReadInConfig(); err != nil {
