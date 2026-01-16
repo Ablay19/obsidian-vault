@@ -28,6 +28,8 @@ func main() {
 		handleReceive()
 	case "logout":
 		handleLogout()
+	case "status":
+		handleStatus()
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
 		printUsage()
@@ -110,15 +112,27 @@ func handleLogout() {
 		wac.Disconnect()
 		wac = nil
 	}
-	fmt.Println("Logged out successfully!")
+	// Remove session file
+	os.Remove("whatsapp_session.gob")
+	fmt.Println("Logged out and session cleared!")
 }
 
-type messageHandler struct{}
+func handleStatus() {
+	if _, err := os.Stat("whatsapp_session.gob"); os.IsNotExist(err) {
+		fmt.Println("Status: Not logged in (no session file)")
+		return
+	}
 
-func (messageHandler) HandleError(err error) {
-	log.Printf("Error: %v", err)
+	if wac == nil {
+		conn, err := loadSession()
+		if err != nil {
+			fmt.Printf("Status: Session exists but failed to load: %v\n", err)
+			return
+		}
+		wac = conn
+	}
+
+	fmt.Println("Status: Connected and ready")
 }
 
-func (messageHandler) HandleTextMessage(message whatsapp.TextMessage) {
-	fmt.Printf("Received from %s: %s\n", message.Info.RemoteJid, message.Text)
-}
+// Message handlers moved to handlers.go
