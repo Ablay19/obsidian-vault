@@ -40,6 +40,9 @@ func main() {
 		logger.Info("Continuing without queuing functionality")
 	}
 
+	// Initialize automation system
+	initAutomation()
+
 	if len(os.Args) < 2 {
 		printUsage()
 		os.Exit(1)
@@ -73,8 +76,8 @@ func main() {
 		handleTemplate()
 	case "bulk":
 		handleBulk()
-	case "bridge":
-		handleBridgeCommands(os.Args[1:])
+	case "automation":
+		handleAutomation(os.Args[1:])
 	default:
 		logger.Error("Unknown command", "command", command)
 		printUsage()
@@ -97,7 +100,7 @@ func printUsage() {
 	fmt.Println("  whatsapp-cli media <cmd>     - Media processing operations")
 	fmt.Println("  whatsapp-cli template <cmd>  - Message template management")
 	fmt.Println("  whatsapp-cli bulk <cmd>      - Bulk messaging operations")
-	fmt.Println("  whatsapp-cli bridge <cmd>    - Cross-platform messaging bridges")
+	fmt.Println("  whatsapp-cli automation <cmd> - Automation rule management")
 	fmt.Println("  whatsapp-cli logout          - Logout and clear session")
 	fmt.Println()
 	fmt.Println("JID format: 1234567890@s.whatsapp.net")
@@ -457,6 +460,76 @@ func handleLogout() {
 	fmt.Println("Logged out and session cleared!")
 }
 
+func handleAutomation(args []string) {
+	if len(args) < 2 {
+		fmt.Println("Automation commands:")
+		fmt.Println("  whatsapp-cli automation list     - List automation rules")
+		fmt.Println("  whatsapp-cli automation enable <id> - Enable rule")
+		fmt.Println("  whatsapp-cli automation disable <id> - Disable rule")
+		fmt.Println("  whatsapp-cli automation context <jid> - Show conversation context")
+		return
+	}
+
+	subCmd := args[1]
+	switch subCmd {
+	case "list":
+		fmt.Println("Automation Rules:")
+		for _, rule := range rules {
+			status := "disabled"
+			if rule.Enabled {
+				status = "enabled"
+			}
+			fmt.Printf("  - %s (%s): %s\n", rule.ID, status, rule.Description)
+		}
+	case "enable":
+		if len(args) < 3 {
+			fmt.Println("Usage: whatsapp-cli automation enable <rule_id>")
+			return
+		}
+		ruleID := args[2]
+		for i, rule := range rules {
+			if rule.ID == ruleID {
+				rules[i].Enabled = true
+				fmt.Printf("Rule '%s' enabled\n", ruleID)
+				saveAutomationRules(rules)
+				return
+			}
+		}
+		fmt.Printf("Rule '%s' not found\n", ruleID)
+	case "disable":
+		if len(args) < 3 {
+			fmt.Println("Usage: whatsapp-cli automation disable <rule_id>")
+			return
+		}
+		ruleID := args[2]
+		for i, rule := range rules {
+			if rule.ID == ruleID {
+				rules[i].Enabled = false
+				fmt.Printf("Rule '%s' disabled\n", ruleID)
+				saveAutomationRules(rules)
+				return
+			}
+		}
+		fmt.Printf("Rule '%s' not found\n", ruleID)
+	case "context":
+		if len(args) < 3 {
+			fmt.Println("Usage: whatsapp-cli automation context <jid>")
+			return
+		}
+		jid := args[2]
+		if ctx, exists := conversations[jid]; exists {
+			fmt.Printf("Conversation context for %s:\n", jid)
+			for _, msg := range ctx.Messages {
+				fmt.Printf("  [%s] %s: %s\n", msg.Time.Format("15:04"), msg.Role, msg.Content)
+			}
+		} else {
+			fmt.Printf("No conversation context found for %s\n", jid)
+		}
+	default:
+		fmt.Printf("Unknown automation command: %s\n", subCmd)
+	}
+}
+
 func handleTemplate() {
 	if len(os.Args) < 3 {
 		fmt.Println("Template commands:")
@@ -669,6 +742,9 @@ func (h WAHandler) HandleError(err error) {
 func (h WAHandler) HandleTextMessage(msg whatsapp.TextMessage) {
 	logger.Info("Received text message", "from", msg.Info.RemoteJid, "text", msg.Text)
 
+	// Process through automation system
+	processIncomingMessage(msg.Info.RemoteJid, msg.Text)
+
 	// Publish to incoming queue
 	if queueMgr != nil {
 		incomingData := map[string]interface{}{
@@ -679,59 +755,5 @@ func (h WAHandler) HandleTextMessage(msg whatsapp.TextMessage) {
 		data, _ := json.Marshal(incomingData)
 		routingKey := fmt.Sprintf("%s.%s", config.RabbitMQ.Queues.Incoming, msg.Info.RemoteJid)
 		queueMgr.PublishMessage(routingKey, string(data))
-	}
-
-	if strings.HasPrefix(msg.Text, "/ask") {
-		prompt := strings.TrimPrefix(msg.Text, "/ask ")
-		logger.Info("Processing AI ask command", "prompt", prompt)
-
-		if config.AI.Enabled && queueMgr != nil {
-			// Queue for AI processing
-			aiRequest := map[string]interface{}{
-				"jid":   msg.Info.RemoteJid,
-				"query": prompt,
-				"model": config.AI.Models[0],
-			}
-			data, _ := json.Marshal(aiRequest)
-			queueMgr.PublishMessage(config.AI.Queue, string(data))
-			logger.Info("Queued AI request", "jid", msg.Info.RemoteJid)
-		} else {
-			logger.Warn("AI not available or disabled")
-		}
-	} else if strings.ToLower(msg.Text) == "ping" {
-		logger.Info("Responding to ping", "jid", msg.Info.RemoteJid)
-	}
-}
-
-func (h WAHandler) HandleImageMessage(msg whatsapp.ImageMessage) {
-	sender := strings.TrimSuffix(msg.Info.RemoteJid, "@s.whatsapp.net")
-	logger.Info("Image received", "from", sender, "caption", msg.Caption)
-
-	// Queue for media processing
-	if queueMgr != nil {
-		mediaData := map[string]interface{}{
-			"type":     "image",
-			"sender":   msg.Info.RemoteJid,
-			"caption":  msg.Caption,
-			"filename": "image.jpg",
-		}
-		data, _ := json.Marshal(mediaData)
-		queueMgr.PublishMessage(config.RabbitMQ.Queues.Media, string(data))
-	}
-}
-
-func (h WAHandler) HandleDocumentMessage(msg whatsapp.DocumentMessage) {
-	sender := strings.TrimSuffix(msg.Info.RemoteJid, "@s.whatsapp.net")
-	logger.Info("Document received", "from", sender, "filename", msg.FileName)
-
-	// Queue for media processing
-	if queueMgr != nil {
-		mediaData := map[string]interface{}{
-			"type":     "document",
-			"sender":   msg.Info.RemoteJid,
-			"filename": msg.FileName,
-		}
-		data, _ := json.Marshal(mediaData)
-		queueMgr.PublishMessage(config.RabbitMQ.Queues.Media, string(data))
 	}
 }
