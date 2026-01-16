@@ -150,9 +150,9 @@ func (h WAHandler) HandleTextMessage(msg whatsapp.TextMessage) {
 		if config.AI.Enabled && queueMgr != nil {
 			// Queue for AI processing
 			aiRequest := map[string]interface{}{
-				"jid":    msg.Info.RemoteJid,
-				"query":  prompt,
-				"model":  config.AI.Models[0],
+				"jid":   msg.Info.RemoteJid,
+				"query": prompt,
+				"model": config.AI.Models[0],
 			}
 			data, _ := json.Marshal(aiRequest)
 			queueMgr.PublishMessage(config.AI.Queue, string(data))
@@ -186,22 +186,12 @@ func (h WAHandler) HandleImageMessage(msg whatsapp.ImageMessage) {
 }
 
 func handleReceive() {
-	var wac *whatsapp.Conn
-
 	// Load session if not connected
 	conn, err := loadSession()
 	if err != nil {
 		log.Fatal("No saved session. Please run 'login' first.")
 	}
 	wac = conn
-
-	// Add handler for incoming messages
-	wac.AddHandler(WAHandler{})
-
-	fmt.Println("Listening for messages... Press Ctrl+C to stop")
-	// Wait indefinitely
-	select {}
-}
 
 	// Add handler for incoming messages
 	wac.AddHandler(WAHandler{})
@@ -238,53 +228,6 @@ func handleStatus() {
 		}
 		return "disconnected"
 	}())
-}
-
-func handleQueue() {
-	if len(os.Args) < 4 {
-		fmt.Println("Usage: whatsapp-cli queue <jid> <message>")
-		os.Exit(1)
-	}
-
-	if queueMgr == nil {
-		fmt.Println("Error: Queue manager not available. Check RabbitMQ connection.")
-		os.Exit(1)
-	}
-
-	jid := os.Args[2]
-	message := strings.Join(os.Args[3:], " ")
-
-	err := queueMessage(jid, message, 1)
-	if err != nil {
-		log.Fatalf("Failed to queue message: %v", err)
-	}
-
-	fmt.Println("Message queued successfully for", jid)
-}
-
-func handleSchedule() {
-	if len(os.Args) < 5 {
-		fmt.Println("Usage: whatsapp-cli schedule <jid> <message> <delay>")
-		fmt.Println("Delay format: 30s, 5m, 1h, etc.")
-		os.Exit(1)
-	}
-
-	jid := os.Args[2]
-	message := os.Args[3]
-	delayStr := os.Args[4]
-
-	delay, err := time.ParseDuration(delayStr)
-	if err != nil {
-		log.Fatalf("Invalid delay format: %v", err)
-	}
-
-	// For now, simple implementation - could be enhanced with proper scheduling
-	go func() {
-		time.Sleep(delay)
-		queueMessage(jid, message, 1)
-	}()
-
-	fmt.Printf("Message scheduled for %s in %s\n", jid, delay)
 }
 
 func handleLogout() {
