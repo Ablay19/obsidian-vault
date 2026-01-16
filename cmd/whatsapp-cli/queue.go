@@ -1,11 +1,9 @@
 package main
 
 import (
-	"log"
 	"time"
 
 	"github.com/rabbitmq/amqp091-go"
-	"github.com/spf13/viper"
 )
 
 // QueueManager handles RabbitMQ operations
@@ -148,6 +146,3 @@ func (qm *QueueManager) Close() {
 		qm.conn.Close()
 	}
 }
-
-// Global queue manager
-var queueMgr *QueueManager
