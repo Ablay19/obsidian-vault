@@ -6,13 +6,15 @@ export interface Env {
   LOG_LEVEL: string;
   TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_SECRET: string;
-  KV: KVNamespace;
   SESSIONS: KVNamespace;
   CLOUDFLARE_API_TOKEN: string;
   CLOUDFLARE_ACCOUNT_ID: string;
   GROQ_API_KEY: string;
   HUGGINGFACE_API_KEY: string;
   HF_TOKEN: string;
+  OPENAI_API_KEY: string;
+  GEMINI_API_KEY: string;
+  DEEPSEEK_API_KEY: string;
   AI_PROVIDER: string;
   MANIM_RENDERER_URL: string;
   USE_MOCK_RENDERER: string;
@@ -130,5 +132,29 @@ export interface RenderedVideo {
   localPath?: string;
   uploadedUrl?: string;
   expiresAt?: Date;
+}
+
+export interface RenderRequest {
+  job_id: string;
+  problem_text: string;
+  manim_code: string;
+  callback_url?: string;
+}
+
+export interface RenderResponse {
+  job_id: string;
+  status: "success" | "error" | "timeout";
+  video_path?: string;
+  video_size_bytes?: number;
+  render_duration_seconds?: number;
+  error?: string;
+}
+
+export interface JobStateSync {
+  job_id: string;
+  status: ProcessingStatus;
+  timestamp: string;
+  component: string;
+  data?: Record<string, unknown>;
 }
 

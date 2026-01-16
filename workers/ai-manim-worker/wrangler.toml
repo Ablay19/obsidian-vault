@@ -6,15 +6,22 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 LOG_LEVEL = "info"
 
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "9d779979cd4f45d8ae3ff05eb71a15f7"
+
 [env.development]
 name = "ai-manim-worker-dev"
 vars = { LOG_LEVEL = "debug", USE_MOCK_RENDERER = "true" }
+
+[[env.development.kv_namespaces]]
+binding = "SESSIONS"
+id = "9d779979cd4f45d8ae3ff05eb71a15f7"
 
 [env.staging]
 name = "ai-manim-worker-staging"
 vars = { LOG_LEVEL = "info", USE_MOCK_RENDERER = "false" }
 
-[[env.staging.kv_namespaces]]
-binding = "SESSIONS"
-id = "9d779979cd4f45d8ae3ff05eb71a15f7"
-
+[env.production]
+name = "ai-manim-worker"
+vars = { LOG_LEVEL = "info", USE_MOCK_RENDERER = "false" }

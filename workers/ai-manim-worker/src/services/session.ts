@@ -1,7 +1,9 @@
-import type { Env, UserSession } from "../types";
+import type { Env, UserSession, ProcessingJob, VideoMetadata, ProcessingStatus } from "../types";
 import { createLogger } from "../utils/logger";
+import { JOB_TTL_SECONDS } from "../utils/constants";
 
 const SESSION_PREFIX = "session:";
+const JOB_PREFIX = "job:";
 const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 export class SessionService {
@@ -44,7 +46,7 @@ export class SessionService {
 
   async findSessionByChatId(chatId: string): Promise<UserSession | null> {
     const key = `sessions:by_chat:${chatId}`;
-    const sessionId = await this.env.KV.get(key) as string | null;
+    const sessionId = await this.env.SESSIONS.get(key) as string | null;
 
     if (!sessionId) {
       return null;
@@ -54,7 +56,7 @@ export class SessionService {
   }
 
   async getSession(sessionId: string): Promise<UserSession | null> {
-    const session = await this.env.KV.get<UserSession>(`${SESSION_PREFIX}${sessionId}`, "json");
+    const session = await this.env.SESSIONS.get<UserSession>(`${SESSION_PREFIX}${sessionId}`, "json");
     return session;
   }
 
@@ -63,8 +65,8 @@ export class SessionService {
     const chatIndexKey = `sessions:by_chat:${session.telegram_chat_id}`;
 
     await Promise.all([
-      this.env.KV.put(sessionKey, JSON.stringify(session), { expirationTtl: SESSION_TTL_SECONDS }),
-      this.env.KV.put(chatIndexKey, session.session_id, { expirationTtl: SESSION_TTL_SECONDS }),
+      this.env.SESSIONS.put(sessionKey, JSON.stringify(session), { expirationTtl: SESSION_TTL_SECONDS }),
+      this.env.SESSIONS.put(chatIndexKey, session.session_id, { expirationTtl: SESSION_TTL_SECONDS }),
     ]);
 
     this.logger.debug("Session saved", { session_id: session.session_id });
@@ -98,6 +100,101 @@ export class SessionService {
 
     session.successful_generations += 1;
     await this.saveSession(session);
+  }
+
+  async createJob(sessionId: string, problemText: string): Promise<ProcessingJob> {
+    const jobId = crypto.randomUUID();
+    const now = new Date().toISOString();
+
+    const job: ProcessingJob = {
+      job_id: jobId,
+      session_id: sessionId,
+      problem_text: problemText,
+      status: 'queued',
+      created_at: now,
+      started_at: undefined,
+      completed_at: undefined,
+    };
+
+    await this.saveJob(job);
+    await this.extendSession(sessionId);
+    await this.incrementSubmission(sessionId);
+
+    this.logger.info('Job created', { job_id: jobId, session_id: sessionId });
+
+    return job;
+  }
+
+  async updateJobStatus(jobId: string, status: ProcessingStatus, data?: Partial<ProcessingJob>): Promise<void> {
+    const job = await this.getJob(jobId);
+    if (!job) {
+      this.logger.warn('Job not found for update', { job_id: jobId });
+      return;
+    }
+
+    job.status = status;
+    if (status === 'ai_generating' && !job.started_at) {
+      job.started_at = new Date().toISOString();
+    }
+    if (status === 'ready' || status === 'delivered' || status === 'failed') {
+      job.completed_at = new Date().toISOString();
+    }
+
+    if (data) {
+      Object.assign(job, data);
+    }
+
+    const ttl = JOB_TTL_SECONDS[status] || 3600;
+    await this.env.SESSIONS.put(`${JOB_PREFIX}${jobId}`, JSON.stringify(job), {
+      expirationTtl: ttl,
+    });
+
+    this.logger.debug('Job status updated', { job_id: jobId, status, ttl });
+  }
+
+  async getJob(jobId: string): Promise<ProcessingJob | null> {
+    const job = await this.env.SESSIONS.get<ProcessingJob>(`${JOB_PREFIX}${jobId}`, 'json');
+    return job;
+  }
+
+  async saveJob(job: ProcessingJob): Promise<void> {
+    const ttl = JOB_TTL_SECONDS[job.status] || 3600;
+    await this.env.SESSIONS.put(`${JOB_PREFIX}${job.job_id}`, JSON.stringify(job), {
+      expirationTtl: ttl,
+    });
+  }
+
+  async updateJobWithVideo(jobId: string, videoUrl: string, videoKey: string, expiresAt: string): Promise<void> {
+    await this.updateJobStatus(jobId, 'ready', {
+      video_url: videoUrl,
+      video_key: videoKey,
+      video_expires_at: expiresAt,
+    });
+  }
+
+  async trackVideoAccess(jobId: string): Promise<void> {
+    const job = await this.getJob(jobId);
+    if (!job) {
+      return;
+    }
+
+    await this.updateJobStatus(jobId, 'delivered', {
+      completed_at: new Date().toISOString(),
+    });
+
+    const session = await this.getSession(job.session_id);
+    if (session) {
+      await this.addVideoToHistory(session.session_id, {
+        job_id: job.job_id,
+        problem_preview: job.problem_text.substring(0, 50),
+        status: 'delivered',
+        render_duration_seconds: job.render_duration_seconds,
+      });
+    }
+  }
+
+  async updateSessionHistory(sessionId: string, metadata: VideoMetadata): Promise<void> {
+    await this.addVideoToHistory(sessionId, metadata);
   }
 
   async addVideoToHistory(sessionId: string, videoMetadata: {

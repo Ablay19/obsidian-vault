@@ -67,8 +67,8 @@ export class ManimRendererService implements RendererService {
       });
 
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Renderer error: ${error}`);
+        const errorText = await response.text();
+        throw new Error(`Renderer error: ${errorText}`);
       }
 
       const result = await response.json() as Record<string, unknown>;
@@ -94,6 +94,7 @@ export class ManimRendererService implements RendererService {
 
   async getStatus(jobId: string): Promise<ManimRenderResponse> {
     const request = this.activeJobs.get(jobId);
+
     if (!request) {
       return {
         jobId,
@@ -176,9 +177,11 @@ export class ManimRendererService implements RendererService {
 
 export class MockRendererService implements RendererService {
   private jobs: Map<string, ManimRenderRequest>;
+  private mockR2: Map<string, string>;
 
   constructor() {
     this.jobs = new Map();
+    this.mockR2 = new Map();
   }
 
   async submitRender(request: ManimRenderRequest): Promise<ManimRenderResponse> {
@@ -197,7 +200,7 @@ export class MockRendererService implements RendererService {
 
   async getStatus(jobId: string): Promise<ManimRenderResponse> {
     const request = this.jobs.get(jobId);
-    
+
     if (!request) {
       return {
         jobId,

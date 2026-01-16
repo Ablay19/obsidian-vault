@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/abdoullahelvogani/obsidian-vault/apps/api-gateway/internal/models"
@@ -194,4 +196,50 @@ func DeleteWorker(w http.ResponseWriter, r *http.Request) {
 
 	duration := time.Since(startTime)
 	logger.Info("Delete worker completed", "worker_id", workerID, "duration_ms", duration.Milliseconds())
+}
+
+func InvokeWorker(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+
+	workerID := r.URL.Path[len("/api/v1/workers/"):]
+	if idx := strings.LastIndex(workerID, "/invoke"); idx != -1 {
+		workerID = workerID[:idx]
+	}
+	logger.Info("Invoke worker request", "worker_id", workerID)
+
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	worker, found := models.GetWorkerByID(workerID)
+	if !found {
+		writeError(w, http.StatusNotFound, "Worker not found")
+		return
+	}
+
+	// Proxy to worker URL - for now using a placeholder URL
+	// In real deployment, this should be configured per worker or discovered
+	workerURL := "https://your-deployed-ai-worker.workers.dev"
+	if worker.ID == "ai-worker-001" {
+		workerURL = "http://localhost:8787" // Default Cloudflare Worker port for local testing
+	}
+
+	resp, err := http.Post(workerURL, "application/json", r.Body)
+	if err != nil {
+		logger.Error("Failed to invoke worker", "error", err, "worker_url", workerURL)
+		writeError(w, http.StatusInternalServerError, "Failed to invoke worker")
+		return
+	}
+	defer resp.Body.Close()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	_, copyErr := io.Copy(w, resp.Body)
+	if copyErr != nil {
+		logger.Error("Failed to copy response body", "error", copyErr)
+	}
+
+	duration := time.Since(startTime)
+	logger.Info("Invoke worker completed", "worker_id", workerID, "duration_ms", duration.Milliseconds())
 }

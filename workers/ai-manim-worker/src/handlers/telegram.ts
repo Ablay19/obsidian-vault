@@ -296,4 +296,112 @@ Please try again or try a different problem description.`;
   getApp(): Hono {
     return this.app;
   }
+
+  private async validateWebhookSecret(request: Request): Promise<boolean> {
+    const secretToken = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
+    return secretToken === this.telegramSecret;
+  }
+
+  private parseTelegramUpdate(update: TelegramUpdate) {
+    const message = update.message;
+    if (!message) return null;
+
+    return {
+      chatId: message.chat.id,
+      userId: message.from?.id?.toString() || 'anonymous',
+      text: message.text || '',
+      messageId: message.message_id,
+    };
+  }
+
+  private validateProblemText(problem: string): { valid: boolean; error?: string } {
+    const MIN_LENGTH = 10;
+    const MAX_LENGTH = 5000;
+
+    if (problem.length < MIN_LENGTH) {
+      return {
+        valid: false,
+        error: `Problem is too short (minimum ${MIN_LENGTH} characters)`,
+      };
+    }
+
+    if (problem.length > MAX_LENGTH) {
+      return {
+        valid: false,
+        error: `Problem is too long (maximum ${MAX_LENGTH} characters)`,
+      };
+    }
+
+    return { valid: true };
+  }
+
+  private async sendTelegramConfirmation(c: Context, chatId: number, jobId: string): Promise<void> {
+    const text = `✅ *Problem Received!*
+
+Job ID: \`${jobId}\`
+
+Your problem is being processed. This typically takes 1-5 minutes.
+I'll notify you when your video is ready!
+
+Use \`/status\` to check progress.`;
+
+    await this.sendMessage(c, chatId, text, { parse_mode: 'Markdown' });
+  }
+
+  private async sendTelegramError(c: Context, chatId: number, error: string): Promise<void> {
+    const text = `❌ *Error*
+
+${error}
+
+Please try again with a different problem description.`;
+    await this.sendMessage(c, chatId, text, { parse_mode: 'Markdown' });
+  }
+
+  private async sendVideoDelivery(c: Context, chatId: number, videoUrl: string, jobId: string): Promise<void> {
+    const text = `🎬 *Your Video is Ready!*
+
+Job ID: \`${jobId}\`
+
+${videoUrl}
+
+⚠️ *Important:* This link expires in 5 minutes and the video will be deleted after first download.
+
+*Tap to view or download your video!*`;
+
+    await this.sendMessage(c, chatId, text, { parse_mode: 'Markdown' });
+  }
+
+  private formatForMobile(text: string): string {
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\n\n+/g, '\n\n')
+      .trim();
+  }
+
+  private async processProblemSubmission(c: Context, chatId: number, userId: string, problem: string): Promise<Response> {
+    const validation = this.validateProblemText(problem);
+    if (!validation.valid) {
+      await this.sendTelegramError(c, chatId, validation.error || 'Invalid problem');
+      return c.json({ ok: false, error: validation.error });
+    }
+
+    const parsed = this.parseTelegramUpdate({
+      message: { message_id: 0, chat: { id: chatId, type: 'private' }, from: { id: parseInt(userId), is_bot: false }, text: problem, date: Math.floor(Date.now() / 1000) },
+      update_id: 0,
+    });
+
+    if (!parsed) {
+      return c.json({ ok: false, error: 'Failed to parse update' });
+    }
+
+    const session = await this.sessionService.getOrCreateSession(chatId.toString());
+    const job = await this.sessionService.createJob(session.session_id, problem);
+
+    await this.sendTelegramConfirmation(c, chatId, job.job_id);
+
+    c.executionCtx.waitUntil(this.processProblemAsync(c, chatId, job.job_id, userId, problem));
+
+    return c.json({ ok: true, job_id: job.job_id });
+  }
 }
