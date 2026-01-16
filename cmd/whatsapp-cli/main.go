@@ -69,8 +69,10 @@ func main() {
 		handleServices()
 	case "media":
 		handleMedia()
-	case "logout":
-		handleLogout()
+	case "template":
+		handleTemplate()
+	case "bulk":
+		handleBulk()
 	default:
 		logger.Error("Unknown command", "command", command)
 		printUsage()
@@ -91,10 +93,13 @@ func printUsage() {
 	fmt.Println("  whatsapp-cli ai <cmd>        - Direct AI interactions")
 	fmt.Println("  whatsapp-cli services <cmd>  - Manage project services")
 	fmt.Println("  whatsapp-cli media <cmd>     - Media processing operations")
+	fmt.Println("  whatsapp-cli template <cmd>  - Message template management")
+	fmt.Println("  whatsapp-cli bulk <cmd>      - Bulk messaging operations")
 	fmt.Println("  whatsapp-cli logout          - Logout and clear session")
 	fmt.Println()
 	fmt.Println("JID format: 1234567890@s.whatsapp.net")
 	fmt.Println("Session is saved automatically after login.")
+	fmt.Println("Advanced features: templates, bulk messaging, rich formatting.")
 	fmt.Println("Integrated with all project services for unified control.")
 }
 
@@ -447,6 +452,209 @@ func handleLogout() {
 	os.Remove(config.WhatsApp.SessionFile)
 	logger.Info("Logged out and session cleared")
 	fmt.Println("Logged out and session cleared!")
+}
+
+func handleTemplate() {
+	if len(os.Args) < 3 {
+		fmt.Println("Template commands:")
+		fmt.Println("  whatsapp-cli template list         - List available templates")
+		fmt.Println("  whatsapp-cli template use <name> <jid> [vars...] - Use template")
+		fmt.Println("  whatsapp-cli template create <name> <content> - Create template")
+		return
+	}
+
+	subCmd := os.Args[2]
+	switch subCmd {
+	case "list":
+		templates, err := loadTemplates()
+		if err != nil {
+			logger.Error("Failed to load templates", "error", err)
+			fmt.Printf("Failed to load templates: %v\n", err)
+			return
+		}
+		fmt.Println("Available Templates:")
+		for _, tmpl := range templates {
+			fmt.Printf("  - %s: %s\n", tmpl.Name, tmpl.Content)
+		}
+	case "use":
+		if len(os.Args) < 5 {
+			fmt.Println("Usage: whatsapp-cli template use <name> <jid> [key=value ...]")
+			return
+		}
+		templateName := os.Args[3]
+		jid := os.Args[4]
+
+		// Parse custom variables
+		customVars := make(map[string]string)
+		for _, arg := range os.Args[5:] {
+			parts := strings.SplitN(arg, "=", 2)
+			if len(parts) == 2 {
+				customVars[parts[0]] = parts[1]
+			}
+		}
+
+		templates, err := loadTemplates()
+		if err != nil {
+			logger.Error("Failed to load templates", "error", err)
+			fmt.Printf("Failed to load templates: %v\n", err)
+			return
+		}
+
+		var selectedTemplate *MessageTemplate
+		for _, tmpl := range templates {
+			if tmpl.Name == templateName {
+				selectedTemplate = &tmpl
+				break
+			}
+		}
+
+		if selectedTemplate == nil {
+			fmt.Printf("Template '%s' not found\n", templateName)
+			return
+		}
+
+		message := renderTemplate(*selectedTemplate, customVars)
+		err = sendMessage(jid, message)
+		if err != nil {
+			logger.Error("Failed to send template message", "error", err, "jid", jid)
+			fmt.Printf("Failed to send message: %v\n", err)
+		} else {
+			logger.Info("Template message sent", "template", templateName, "jid", jid)
+			fmt.Println("Template message sent successfully!")
+		}
+	case "create":
+		if len(os.Args) < 5 {
+			fmt.Println("Usage: whatsapp-cli template create <name> <content>")
+			return
+		}
+		name := os.Args[3]
+		content := strings.Join(os.Args[4:], " ")
+
+		templates, err := loadTemplates()
+		if err != nil {
+			logger.Error("Failed to load templates", "error", err)
+			return
+		}
+
+		newTemplate := MessageTemplate{
+			Name:    name,
+			Content: content,
+		}
+		templates = append(templates, newTemplate)
+
+		err = saveTemplates(templates)
+		if err != nil {
+			logger.Error("Failed to save templates", "error", err)
+			fmt.Printf("Failed to save template: %v\n", err)
+		} else {
+			logger.Info("Template created", "name", name)
+			fmt.Printf("Template '%s' created successfully!\n", name)
+		}
+	default:
+		logger.Error("Unknown template command", "command", subCmd)
+		fmt.Printf("Unknown template command: %s\n", subCmd)
+	}
+}
+
+func handleBulk() {
+	if len(os.Args) < 3 {
+		fmt.Println("Bulk messaging commands:")
+		fmt.Println("  whatsapp-cli bulk list          - List queued bulk messages")
+		fmt.Println("  whatsapp-cli bulk add <jid> <message> - Add message to bulk queue")
+		fmt.Println("  whatsapp-cli bulk send          - Send all queued bulk messages")
+		fmt.Println("  whatsapp-cli bulk clear         - Clear bulk message queue")
+		return
+	}
+
+	subCmd := os.Args[2]
+	switch subCmd {
+	case "list":
+		messages, err := loadBulkMessages()
+		if err != nil {
+			logger.Error("Failed to load bulk messages", "error", err)
+			fmt.Printf("Failed to load bulk messages: %v\n", err)
+			return
+		}
+		fmt.Printf("Queued Bulk Messages: %d\n", len(messages))
+		for i, msg := range messages {
+			fmt.Printf("  %d. %s -> %s\n", i+1, msg.JID, msg.Message)
+		}
+	case "add":
+		if len(os.Args) < 5 {
+			fmt.Println("Usage: whatsapp-cli bulk add <jid> <message>")
+			return
+		}
+		jid := os.Args[3]
+		message := strings.Join(os.Args[4:], " ")
+
+		messages, err := loadBulkMessages()
+		if err != nil {
+			logger.Error("Failed to load bulk messages", "error", err)
+			return
+		}
+
+		newMessage := BulkMessage{
+			JID:     jid,
+			Message: message,
+		}
+		messages = append(messages, newMessage)
+
+		err = saveBulkMessages(messages)
+		if err != nil {
+			logger.Error("Failed to save bulk messages", "error", err)
+			fmt.Printf("Failed to save bulk message: %v\n", err)
+		} else {
+			logger.Info("Bulk message added", "jid", jid)
+			fmt.Println("Bulk message added successfully!")
+		}
+	case "send":
+		messages, err := loadBulkMessages()
+		if err != nil {
+			logger.Error("Failed to load bulk messages", "error", err)
+			fmt.Printf("Failed to load bulk messages: %v\n", err)
+			return
+		}
+
+		if len(messages) == 0 {
+			fmt.Println("No bulk messages to send")
+			return
+		}
+
+		sent := 0
+		failed := 0
+
+		for _, msg := range messages {
+			err := sendMessage(msg.JID, msg.Message)
+			if err != nil {
+				logger.Error("Failed to send bulk message", "error", err, "jid", msg.JID)
+				failed++
+			} else {
+				sent++
+			}
+			// Small delay to avoid rate limiting
+			time.Sleep(100 * time.Millisecond)
+		}
+
+		logger.Info("Bulk send completed", "sent", sent, "failed", failed)
+		fmt.Printf("Bulk send completed: %d sent, %d failed\n", sent, failed)
+
+		// Clear sent messages (in real implementation, might want to keep failed ones)
+		if failed == 0 {
+			saveBulkMessages([]BulkMessage{})
+		}
+	case "clear":
+		err := saveBulkMessages([]BulkMessage{})
+		if err != nil {
+			logger.Error("Failed to clear bulk messages", "error", err)
+			fmt.Printf("Failed to clear bulk messages: %v\n", err)
+		} else {
+			logger.Info("Bulk messages cleared")
+			fmt.Println("Bulk messages cleared!")
+		}
+	default:
+		logger.Error("Unknown bulk command", "command", subCmd)
+		fmt.Printf("Unknown bulk command: %s\n", subCmd)
+	}
 }
 
 type WAHandler struct{}
