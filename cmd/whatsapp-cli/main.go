@@ -1,12 +1,10 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"strings"
-	"time"
 
 	whatsapp "github.com/Rhymen/go-whatsapp"
 )
@@ -241,9 +239,53 @@ func handleStatus() {
 		}
 		return "disconnected"
 	}())
+
+func handleQueue() {
+	if len(os.Args) < 4 {
+		fmt.Println("Usage: whatsapp-cli queue <jid> <message>")
+		os.Exit(1)
+	}
+
+	if queueMgr == nil {
+		fmt.Println("Error: Queue manager not available. Check RabbitMQ connection.")
+		os.Exit(1)
+	}
+
+	jid := os.Args[2]
+	message := strings.Join(os.Args[3:], " ")
+
+	err := queueMessage(jid, message, 1)
+	if err != nil {
+		log.Fatalf("Failed to queue message: %v", err)
+	}
+
+	fmt.Println("Message queued successfully for", jid)
 }
 
-func handleTelegram() {
+func handleSchedule() {
+	if len(os.Args) < 5 {
+		fmt.Println("Usage: whatsapp-cli schedule <jid> <message> <delay>")
+		fmt.Println("Delay format: 30s, 5m, 1h, etc.")
+		os.Exit(1)
+	}
+
+	jid := os.Args[2]
+	message := os.Args[3]
+	delayStr := os.Args[4]
+
+	delay, err := time.ParseDuration(delayStr)
+	if err != nil {
+		log.Fatalf("Invalid delay format: %v", err)
+	}
+
+	// For now, simple implementation - could be enhanced with proper scheduling
+	go func() {
+		time.Sleep(delay)
+		queueMessage(jid, message, 1)
+	}()
+
+	fmt.Printf("Message scheduled for %s in %s\n", jid, delay)
+}
 	if len(os.Args) < 3 {
 		fmt.Println("Telegram commands:")
 		fmt.Println("  whatsapp-cli telegram send <chat_id> <message>  - Send to Telegram")
@@ -553,53 +595,6 @@ func handleLogout() {
 	// Remove session file
 	os.Remove(config.WhatsApp.SessionFile)
 	fmt.Println("Logged out and session cleared!")
-}
-
-func handleQueue() {
-	if len(os.Args) < 4 {
-		fmt.Println("Usage: whatsapp-cli queue <jid> <message>")
-		os.Exit(1)
-	}
-
-	if queueMgr == nil {
-		fmt.Println("Error: Queue manager not available. Check RabbitMQ connection.")
-		os.Exit(1)
-	}
-
-	jid := os.Args[2]
-	message := strings.Join(os.Args[3:], " ")
-
-	err := queueMessage(jid, message, 1)
-	if err != nil {
-		log.Fatalf("Failed to queue message: %v", err)
-	}
-
-	fmt.Println("Message queued successfully for", jid)
-}
-
-func handleSchedule() {
-	if len(os.Args) < 5 {
-		fmt.Println("Usage: whatsapp-cli schedule <jid> <message> <delay>")
-		fmt.Println("Delay format: 30s, 5m, 1h, etc.")
-		os.Exit(1)
-	}
-
-	jid := os.Args[2]
-	message := os.Args[3]
-	delayStr := os.Args[4]
-
-	delay, err := time.ParseDuration(delayStr)
-	if err != nil {
-		log.Fatalf("Invalid delay format: %v", err)
-	}
-
-	// For now, simple implementation - could be enhanced with proper scheduling
-	go func() {
-		time.Sleep(delay)
-		queueMessage(jid, message, 1)
-	}()
-
-	fmt.Printf("Message scheduled for %s in %s\n", jid, delay)
 }
 
 // Message handlers defined in main.go
