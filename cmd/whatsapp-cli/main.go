@@ -56,14 +56,12 @@ func handleLogin() {
 		fmt.Printf("QR Code: %s\n", <-qrChan)
 	}()
 
-	session, err := wac.Login(qrChan)
+	_, err = wac.Login(qrChan)
 	if err != nil {
 		log.Fatalf("Failed to login: %v", err)
 	}
 
-	// Save session
-	saveSession(session)
-	fmt.Println("Login successful!")
+	fmt.Println("Login successful! Use 'receive' to listen for messages.")
 }
 
 func handleSend() {
@@ -72,12 +70,12 @@ func handleSend() {
 		os.Exit(1)
 	}
 
+	if wac == nil {
+		log.Fatal("Not logged in. Run 'login' first.")
+	}
+
 	jid := os.Args[2]
 	message := strings.Join(os.Args[3:], " ")
-
-	if wac == nil {
-		loadSession()
-	}
 
 	msg := whatsapp.TextMessage{
 		Info: whatsapp.MessageInfo{
@@ -96,7 +94,7 @@ func handleSend() {
 
 func handleReceive() {
 	if wac == nil {
-		loadSession()
+		log.Fatal("Not logged in. Run 'login' first.")
 	}
 
 	// Add handler for incoming messages
@@ -110,9 +108,8 @@ func handleReceive() {
 func handleLogout() {
 	if wac != nil {
 		wac.Disconnect()
+		wac = nil
 	}
-	// Remove session file
-	os.Remove("session.gob")
 	fmt.Println("Logged out successfully!")
 }
 
