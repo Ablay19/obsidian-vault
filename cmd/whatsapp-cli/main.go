@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -10,7 +11,6 @@ import (
 	whatsapp "github.com/Rhymen/go-whatsapp"
 )
 
-var wac *whatsapp.Conn
 var config *CLIConfig
 
 func main() {
@@ -121,13 +121,89 @@ func handleSend() {
 	fmt.Println("Message sent successfully!")
 }
 
-func handleReceive() {
-	if wac == nil {
-		log.Fatal("Not logged in. Run 'login' first.")
+type WAHandler struct{}
+
+func (h WAHandler) HandleError(err error) {
+	log.Printf("WhatsApp error: %v", err)
+}
+
+func (h WAHandler) HandleTextMessage(msg whatsapp.TextMessage) {
+	log.Printf("📱 Received text: %s from %s", msg.Text, msg.Info.RemoteJid)
+
+	// Publish to incoming queue
+	if queueMgr != nil {
+		incomingData := map[string]interface{}{
+			"jid":       msg.Info.RemoteJid,
+			"message":   msg.Text,
+			"timestamp": msg.Info.Timestamp,
+		}
+		data, _ := json.Marshal(incomingData)
+		routingKey := fmt.Sprintf("%s.%s", config.RabbitMQ.Queues.Incoming, msg.Info.RemoteJid)
+		queueMgr.PublishMessage(routingKey, string(data))
 	}
 
+	if strings.HasPrefix(msg.Text, "/ask") {
+		prompt := strings.TrimPrefix(msg.Text, "/ask ")
+		log.Printf("Processing AI ask command with prompt: %s", prompt)
+
+		if config.AI.Enabled && queueMgr != nil {
+			// Queue for AI processing
+			aiRequest := map[string]interface{}{
+				"jid":    msg.Info.RemoteJid,
+				"query":  prompt,
+				"model":  config.AI.Models[0],
+			}
+			data, _ := json.Marshal(aiRequest)
+			queueMgr.PublishMessage(config.AI.Queue, string(data))
+			// Note: Can't send reply here as we don't have wac reference
+			log.Printf("Queued AI request for %s", msg.Info.RemoteJid)
+		} else {
+			// Fallback response
+			response := "AI Response: " + prompt
+			log.Printf("Would send response: %s", response)
+		}
+	} else if strings.ToLower(msg.Text) == "ping" {
+		log.Printf("Would send pong to %s", msg.Info.RemoteJid)
+	}
+}
+
+func (h WAHandler) HandleImageMessage(msg whatsapp.ImageMessage) {
+	sender := strings.TrimSuffix(msg.Info.RemoteJid, "@s.whatsapp.net")
+	fmt.Printf("📷 Image received from %s\n", sender)
+
+	// Queue for media processing
+	if queueMgr != nil {
+		mediaData := map[string]interface{}{
+			"type":     "image",
+			"sender":   msg.Info.RemoteJid,
+			"caption":  msg.Caption,
+			"filename": "image.jpg",
+		}
+		data, _ := json.Marshal(mediaData)
+		queueMgr.PublishMessage(config.RabbitMQ.Queues.Media, string(data))
+	}
+}
+
+func handleReceive() {
+	var wac *whatsapp.Conn
+
+	// Load session if not connected
+	conn, err := loadSession()
+	if err != nil {
+		log.Fatal("No saved session. Please run 'login' first.")
+	}
+	wac = conn
+
 	// Add handler for incoming messages
-	wac.AddHandler(handlers.WAHandler{})
+	wac.AddHandler(WAHandler{})
+
+	fmt.Println("Listening for messages... Press Ctrl+C to stop")
+	// Wait indefinitely
+	select {}
+}
+
+	// Add handler for incoming messages
+	wac.AddHandler(WAHandler{})
 
 	fmt.Println("Listening for messages... Press Ctrl+C to stop")
 	// Wait indefinitely

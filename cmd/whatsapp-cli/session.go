@@ -8,8 +8,6 @@ import (
 	whatsapp "github.com/Rhymen/go-whatsapp"
 )
 
-// wac is declared in main.go
-
 func saveSession(session whatsapp.Session) {
 	file, err := os.Create(config.WhatsApp.SessionFile)
 	if err != nil {
@@ -43,14 +41,14 @@ func loadSession() (*whatsapp.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	// Restore session
 	_, err = conn.RestoreWithSession(session)
 	if err != nil {
 		conn.Close()
 		return nil, err
 	}
-
 	return conn, nil
+}
 }
 	defer file.Close()
 
