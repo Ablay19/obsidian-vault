@@ -44,30 +44,7 @@ func loadSession() (*whatsapp.Conn, error) {
 	// Restore session
 	_, err = conn.RestoreWithSession(session)
 	if err != nil {
-		conn.Close()
 		return nil, err
 	}
 	return conn, nil
-}
-}
-	defer file.Close()
-
-	var session whatsapp.Session
-	decoder := gob.NewDecoder(file)
-	err = decoder.Decode(&session)
-	if err != nil {
-		return nil, err
-	}
-
-	conn, err := whatsapp.NewConn(20)
-	if err != nil {
-		return nil, err
-	}
-	// Restore session
-	_, err = conn.RestoreWithSession(session)
-	if err != nil {
-		return nil, err
-	}
-	return conn, nil
-	return conn, err
 }

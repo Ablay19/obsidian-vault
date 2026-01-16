@@ -12,6 +12,7 @@ import (
 )
 
 var config *CLIConfig
+var wac *whatsapp.Conn
 
 func main() {
 	// Load configuration
@@ -343,4 +344,4 @@ func handleSchedule() {
 	fmt.Printf("Message scheduled for %s in %s\n", jid, delay)
 }
 
-// Message handlers moved to handlers.go
+// Message handlers defined in main.go
