@@ -8,7 +8,7 @@ import (
 	whatsapp "github.com/Rhymen/go-whatsapp"
 )
 
-var wac *whatsapp.Conn
+// wac is declared in main.go
 
 func saveSession(session whatsapp.Session) {
 	file, err := os.Create("whatsapp_session.gob")
@@ -39,6 +39,15 @@ func loadSession() (*whatsapp.Conn, error) {
 		return nil, err
 	}
 
-	conn, err := whatsapp.RestoreWithSession(session)
+	conn, err := whatsapp.NewConn(20)
+	if err != nil {
+		return nil, err
+	}
+	// Restore session
+	_, err = conn.RestoreWithSession(session)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
 	return conn, err
 }
