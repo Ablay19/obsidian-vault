@@ -73,6 +73,8 @@ func main() {
 		handleTemplate()
 	case "bulk":
 		handleBulk()
+	case "bridge":
+		handleBridgeCommands(os.Args[1:])
 	default:
 		logger.Error("Unknown command", "command", command)
 		printUsage()
@@ -95,6 +97,7 @@ func printUsage() {
 	fmt.Println("  whatsapp-cli media <cmd>     - Media processing operations")
 	fmt.Println("  whatsapp-cli template <cmd>  - Message template management")
 	fmt.Println("  whatsapp-cli bulk <cmd>      - Bulk messaging operations")
+	fmt.Println("  whatsapp-cli bridge <cmd>    - Cross-platform messaging bridges")
 	fmt.Println("  whatsapp-cli logout          - Logout and clear session")
 	fmt.Println()
 	fmt.Println("JID format: 1234567890@s.whatsapp.net")
