@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	whatsapp "github.com/Rhymen/go-whatsapp"
 	"github.com/rabbitmq/amqp091-go"
 )
 

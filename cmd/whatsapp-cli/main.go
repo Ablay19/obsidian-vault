@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	whatsapp "github.com/Rhymen/go-whatsapp"
 )
@@ -126,11 +127,87 @@ func handleReceive() {
 	}
 
 	// Add handler for incoming messages
-	wac.AddHandler(messageHandler{})
+	wac.AddHandler(handlers.WAHandler{})
 
 	fmt.Println("Listening for messages... Press Ctrl+C to stop")
 	// Wait indefinitely
 	select {}
+}
+
+func handleStatus() {
+	if _, err := os.Stat(config.WhatsApp.SessionFile); os.IsNotExist(err) {
+		fmt.Println("Status: Not logged in (no session file)")
+		return
+	}
+
+	if wac == nil {
+		conn, err := loadSession()
+		if err != nil {
+			fmt.Printf("Status: Session exists but failed to load: %v\n", err)
+			return
+		}
+		wac = conn
+	}
+
+	queueStatus := "without queuing"
+	if queueMgr != nil {
+		queueStatus = "with queuing"
+	}
+
+	fmt.Printf("Status: Connected and ready (%s)\n", queueStatus)
+	fmt.Printf("RabbitMQ: %s\n", func() string {
+		if queueMgr != nil {
+			return "connected"
+		}
+		return "disconnected"
+	}())
+}
+
+func handleQueue() {
+	if len(os.Args) < 4 {
+		fmt.Println("Usage: whatsapp-cli queue <jid> <message>")
+		os.Exit(1)
+	}
+
+	if queueMgr == nil {
+		fmt.Println("Error: Queue manager not available. Check RabbitMQ connection.")
+		os.Exit(1)
+	}
+
+	jid := os.Args[2]
+	message := strings.Join(os.Args[3:], " ")
+
+	err := queueMessage(jid, message, 1)
+	if err != nil {
+		log.Fatalf("Failed to queue message: %v", err)
+	}
+
+	fmt.Println("Message queued successfully for", jid)
+}
+
+func handleSchedule() {
+	if len(os.Args) < 5 {
+		fmt.Println("Usage: whatsapp-cli schedule <jid> <message> <delay>")
+		fmt.Println("Delay format: 30s, 5m, 1h, etc.")
+		os.Exit(1)
+	}
+
+	jid := os.Args[2]
+	message := os.Args[3]
+	delayStr := os.Args[4]
+
+	delay, err := time.ParseDuration(delayStr)
+	if err != nil {
+		log.Fatalf("Invalid delay format: %v", err)
+	}
+
+	// For now, simple implementation - could be enhanced with proper scheduling
+	go func() {
+		time.Sleep(delay)
+		queueMessage(jid, message, 1)
+	}()
+
+	fmt.Printf("Message scheduled for %s in %s\n", jid, delay)
 }
 
 func handleLogout() {
@@ -139,7 +216,7 @@ func handleLogout() {
 		wac = nil
 	}
 	// Remove session file
-	os.Remove("whatsapp_session.gob")
+	os.Remove(config.WhatsApp.SessionFile)
 	fmt.Println("Logged out and session cleared!")
 }
 

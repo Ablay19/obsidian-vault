@@ -6,8 +6,6 @@ import (
 	whatsapp "github.com/Rhymen/go-whatsapp"
 	"log"
 	"strings"
-
-	"github.com/testablay/obsidian-vault/apps/whatsapp-go/internal/services"
 )
 
 type messageHandler struct{}
