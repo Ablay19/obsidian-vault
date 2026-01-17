@@ -1,199 +1,425 @@
-# Security Practices and Guidelines
+# Security Overview
 
-This document outlines the security practices, policies, and procedures implemented in the AI Platform project.
+This document outlines the security measures and best practices implemented in the Mauritania CLI.
 
-## 🔐 Security Overview
+## Security Model
 
-The AI Platform implements a comprehensive security strategy based on the principle of "defense in depth" with multiple layers of protection across infrastructure, application, and operational security.
+### Core Principles
 
-## 🛡️ Security Controls
+1. **Defense in Depth** - Multiple security layers protect against various attack vectors
+2. **Least Privilege** - Commands execute with minimal required permissions
+3. **Secure by Default** - Conservative security settings enabled by default
+4. **Audit Everything** - Comprehensive logging of all operations
 
-### 1. Network Security
+### Threat Model
 
-#### Network Isolation
-- **Kubernetes Network Policies**: Implemented comprehensive network policies that enforce strict traffic control between namespaces and pods
-- **Zero Trust Architecture**: No implicit trust - all communication must be explicitly allowed
-- **Internal-Only Communication**: All inter-service communication is restricted to internal networks only
+**Primary Threats:**
+- Command injection attacks
+- Unauthorized command execution
+- Credential theft
+- Network interception
+- Resource abuse
 
-#### Ingress Security
-- **API Gateway Protection**: All external access goes through the API Gateway with proper authentication
-- **Rate Limiting**: Implemented distributed rate limiting to prevent abuse
-- **Input Validation**: Comprehensive input validation at all API endpoints
+**Secondary Threats:**
+- Denial of service
+- Data exfiltration
+- Session hijacking
+- Malware execution
 
-### 2. Application Security
+## Security Features
 
-#### Authentication & Authorization
-- **JWT-based Authentication**: Secure token-based authentication for API access
-- **Session Management**: Secure session handling with automatic expiration
-- **Role-Based Access Control**: Proper authorization checks throughout the application
+### 1. Command Security
 
-#### Data Protection
-- **Input Sanitization**: All user inputs are sanitized to prevent injection attacks
-- **Output Encoding**: Proper encoding of outputs to prevent XSS attacks
-- **Secure Defaults**: Applications run with minimal required permissions
+#### Input Validation
+```go
+// Command sanitization
+func (csv *CommandSecurityValidator) SanitizeCommand(command string) string {
+    // Remove dangerous characters
+    sanitized := strings.ReplaceAll(command, "\x00", "")
 
-#### Error Handling
-- **Fail-Fast Pattern**: Immediate failure on security violations
-- **Circuit Breaker**: Prevents cascade failures and provides resilience
-- **Structured Logging**: Security events are properly logged without exposing sensitive data
+    // Validate against patterns
+    for _, pattern := range dangerousPatterns {
+        if strings.Contains(strings.ToLower(command), pattern) {
+            return "", fmt.Errorf("dangerous pattern detected: %s", pattern)
+        }
+    }
 
-### 3. Infrastructure Security
+    return sanitized, nil
+}
+```
 
-#### Container Security
-- **Minimal Base Images**: Use of hardened, minimal container images
-- **Non-Root Execution**: Applications run as non-privileged users
-- **Image Scanning**: Automated vulnerability scanning of container images
+#### Command Whitelisting
+```toml
+[security]
+allowed_commands = [
+    "ls", "pwd", "git", "npm", "yarn",
+    "echo", "cat", "head", "tail", "grep"
+]
+max_command_length = 10000
+```
 
-#### Kubernetes Security
-- **Pod Security Standards**: Enforced security contexts for all pods
-- **RBAC**: Role-based access control for cluster operations
-- **Secrets Management**: Secure handling of sensitive configuration
+#### Injection Prevention
+- Null byte filtering
+- Shell metacharacter validation
+- Path traversal protection
+- Command chaining restrictions
 
-### 4. CI/CD Security
+### 2. Transport Security
 
-#### Pipeline Security
-- **Automated Security Scanning**: Integrated security scanning in all pipelines
-  - **SAST (Static Application Security Testing)**: Code analysis with Gosec and CodeQL
-  - **SCA (Software Composition Analysis)**: Dependency vulnerability scanning with Snyk
-  - **Container Scanning**: Image vulnerability scanning with Trivy
-  - **Secrets Detection**: Automated detection of exposed secrets
+#### WhatsApp Security
+- QR code-based authentication (no password storage)
+- End-to-end encrypted sessions
+- Automatic session cleanup
+- Rate limiting (1000 messages/hour)
 
-#### Deployment Security
-- **Immutable Deployments**: Container images are immutable and scanned before deployment
-- **Zero-Downtime Deployments**: Rolling updates ensure service availability
-- **Rollback Capabilities**: Automated rollback procedures for security incidents
+#### Telegram Security
+- Bot token authentication
+- Webhook signature verification (when enabled)
+- Chat ID validation
+- Rate limiting (30 messages/minute)
 
-## 🔍 Security Monitoring
+#### SM APOS Shipper Security
+- API key authentication
+- TLS 1.3 encryption
+- Command encryption in transit
+- Session-based authorization
 
-### Real-Time Monitoring
-- **Prometheus Metrics**: Comprehensive metrics collection for security monitoring
-- **Alerting**: Automated alerts for security events and anomalies
-- **Log Aggregation**: Centralized logging with security event correlation
+### 3. Data Protection
 
-### Security Dashboards
-- **Grafana Dashboards**: Visual monitoring of security metrics
-- **Compliance Monitoring**: Automated compliance checks and reporting
+#### Encryption at Rest
+```go
+// Sensitive data encryption
+func (ce *CommandEncryption) EncryptCommand(command string, key string) (string, error) {
+    // AES-256-GCM encryption
+    block, err := aes.NewCipher(derivedKey)
+    if err != nil {
+        return "", err
+    }
 
-## 🚨 Incident Response
+    aesGCM, err := cipher.NewGCM(block)
+    if err != nil {
+        return "", err
+    }
 
-### Security Incident Process
-1. **Detection**: Automated monitoring and alerting systems detect potential incidents
-2. **Assessment**: Security team assesses the severity and impact
-3. **Containment**: Immediate actions to contain the incident
-4. **Recovery**: Restore systems to normal operation
-5. **Lessons Learned**: Post-incident analysis and improvements
+    // Encrypt with authentication
+    ciphertext := aesGCM.Seal(nil, nonce, []byte(command), nil)
+    return base64.StdEncoding.EncodeToString(append(nonce, ciphertext...)), nil
+}
+```
 
-### Communication
-- **Internal Communication**: Dedicated security incident response channels
-- **External Communication**: Coordinated disclosure for external stakeholders
-- **Transparency**: Regular updates during ongoing incidents
+#### Credential Storage
+- Encrypted API keys and tokens
+- Secure file permissions (600)
+- Isolated configuration directory
+- Automatic credential rotation
 
-## 📋 Compliance
+#### Session Management
+- Automatic session expiration (24 hours)
+- Secure session cleanup
+- Memory-only sensitive data
+- Session audit logging
 
-### Regulatory Compliance
-- **Data Protection**: GDPR/CCPA compliant data handling practices
-- **Privacy by Design**: Privacy considerations built into all features
-- **Audit Logging**: Comprehensive audit trails for compliance reporting
+### 4. Network Security
 
-### Security Standards
-- **OWASP Top 10**: Addressed through secure coding practices
-- **CIS Benchmarks**: Infrastructure hardening following CIS guidelines
-- **NIST Framework**: Security controls aligned with NIST cybersecurity framework
+#### Transport Layer Security
+- HTTPS-only API communications
+- Certificate validation
+- TLS 1.3 support
+- Secure webhook endpoints
 
-## 🛠️ Development Security
+#### Network Monitoring
+- Connectivity verification
+- Certificate expiry monitoring
+- DNS security validation
+- Network anomaly detection
 
-### Secure Coding Practices
-- **Input Validation**: All inputs validated and sanitized
-- **Output Encoding**: Proper encoding to prevent injection attacks
-- **Error Handling**: Secure error messages that don't leak information
-- **Secure Dependencies**: Regular dependency updates and vulnerability management
+### 5. Access Control
 
-### Code Review Security
-- **Security Reviews**: Mandatory security review for all code changes
-- **Automated Checks**: Static analysis tools integrated into CI/CD
-- **Peer Reviews**: Security-focused code reviews by team members
+#### User Authentication
+```go
+// Multi-level authentication
+func (cas *CommandAuthService) AuthenticateCommand(cmd *models.Command, senderID, platform string) error {
+    // Validate sender identity
+    if err := cas.validateSender(senderID, platform); err != nil {
+        return fmt.Errorf("sender validation failed: %w", err)
+    }
 
-## 🔑 Secrets Management
+    // Check command permissions
+    if err := cas.checkCommandPermissions(cmd, senderID); err != nil {
+        return fmt.Errorf("permission denied: %w", err)
+    }
 
-### Secrets Handling
-- **Environment Variables**: Sensitive configuration through environment variables
-- **Kubernetes Secrets**: Secure storage of secrets in Kubernetes
-- **Rotation**: Automated rotation of secrets and credentials
-- **Access Control**: Least privilege access to secrets
+    // Validate command content
+    if err := cas.validateCommandContent(cmd); err != nil {
+        return fmt.Errorf("content validation failed: %w", err)
+    }
 
-### Key Management
-- **Encryption at Rest**: All sensitive data encrypted at rest
-- **TLS Everywhere**: Encrypted communication channels
-- **Certificate Management**: Automated certificate lifecycle management
+    return nil
+}
+```
 
-## 🧪 Security Testing
+#### Role-Based Permissions
+- Platform-specific access control
+- Command-specific permissions
+- Time-based access restrictions
+- Geographic restrictions (future)
 
-### Automated Security Testing
-- **Unit Tests**: Security-focused unit tests
-- **Integration Tests**: Security testing across component boundaries
-- **End-to-End Tests**: Full security validation of user journeys
+### 6. Audit & Monitoring
+
+#### Comprehensive Logging
+```go
+// Security event logging
+func (cas *CommandAuthService) LogAuthAttempt(cmd *models.Command, senderID, platform string, success bool, reason string) {
+    level := "INFO"
+    if !success {
+        level = "WARN"
+    }
+
+    log.WithFields(log.Fields{
+        "sender":   senderID,
+        "platform": platform,
+        "command":  cmd.Command,
+        "success":  success,
+        "reason":   reason,
+        "timestamp": time.Now(),
+    }).Log(level, "Authentication attempt")
+}
+```
+
+#### Security Metrics
+- Failed authentication attempts
+- Command execution statistics
+- Rate limit violations
+- Security incident alerts
+
+## Security Best Practices
+
+### For Administrators
+
+#### 1. Secure Installation
+```bash
+# Secure file permissions
+chmod 700 ~/.mauritania-cli
+chmod 600 ~/.mauritania-cli/config.toml
+chmod 600 ~/.mauritania-cli/commands.db
+
+# Secure binary
+sudo chown root:root /usr/local/bin/mauritania-cli
+sudo chmod 755 /usr/local/bin/mauritania-cli
+```
+
+#### 2. Configuration Hardening
+```toml
+[security]
+enable_encryption = true
+require_approval = true  # For dangerous commands
+max_sessions_per_user = 3
+session_timeout_minutes = 480  # 8 hours
+
+[transports]
+# Use secure endpoints only
+webhook_verify_signatures = true
+force_https = true
+```
+
+#### 3. Network Security
+```bash
+# Configure firewall
+sudo ufw allow 3001/tcp  # CLI API port
+sudo ufw --force enable
+
+# Use VPN for remote access
+# Configure TLS certificates
+```
+
+### For Users
+
+#### 1. Safe Command Practices
+```bash
+# Use read-only commands first
+mauritania-cli send "ls -la"
+mauritania-cli send "pwd"
+
+# Avoid dangerous patterns
+# ❌ DON'T do this:
+mauritania-cli send "rm -rf /"
+mauritania-cli send "sudo apt install malware"
+
+# ✅ DO this instead:
+mauritania-cli send "ls /tmp"
+mauritania-cli send "git status"
+```
+
+#### 2. Credential Management
+```bash
+# Rotate API keys regularly
+mauritania-cli config whatsapp setup  # Re-authenticate
+mauritania-cli config telegram setup  # New bot token
+
+# Don't share session information
+# Use strong, unique credentials
+```
+
+#### 3. Network Awareness
+```bash
+# Verify connection security
+mauritania-cli status
+
+# Use encrypted transports when possible
+mauritania-cli send "sensitive-command" --transport shipper
+
+# Monitor for suspicious activity
+mauritania-cli logs show | grep -i "failed\|error"
+```
+
+## Security Assessment
 
 ### Penetration Testing
-- **Regular Pentests**: Scheduled penetration testing by external experts
-- **Bug Bounty Program**: Responsible disclosure program for security researchers
-- **Internal Testing**: Regular internal security assessments
 
-## 📚 Security Training
+#### Automated Security Tests
+```bash
+# Run security test suite
+go test ./... -tags=security
 
-### Team Security Awareness
-- **Regular Training**: Mandatory security training for all team members
-- **Security Champions**: Designated security advocates in each team
-- **Knowledge Sharing**: Regular security knowledge sharing sessions
+# Vulnerability scanning
+gosec ./...
 
-### Documentation
-- **Security Playbook**: Detailed procedures for security operations
-- **Runbooks**: Step-by-step guides for security incident response
-- **Training Materials**: Comprehensive security training resources
+# Dependency checking
+nancy ./go.sum
+```
 
-## 📞 Contact and Reporting
+#### Manual Security Review
+- Code review for security vulnerabilities
+- Dependency analysis for known CVEs
+- Configuration review for secure defaults
+- Network traffic analysis
 
-### Security Issues
-- **Responsible Disclosure**: Report security vulnerabilities through our bug bounty program
-- **Contact**: security@your-domain.com for security-related inquiries
-- **Emergency**: emergency@your-domain.com for security incidents
+### Compliance Considerations
 
-### Security Team
-- **Security Officer**: Responsible for overall security posture
-- **Incident Response Team**: 24/7 availability for security incidents
-- **Compliance Team**: Ensures regulatory compliance
+#### SOC 2 Compliance
+- Access logging and monitoring
+- Data encryption at rest and in transit
+- Regular security assessments
+- Incident response procedures
 
-## 🔄 Security Updates
+#### GDPR Compliance
+- Minimal data collection
+- User consent for data processing
+- Right to data deletion
+- Data processing transparency
 
-This document is regularly updated to reflect:
-- New security threats and vulnerabilities
-- Changes in regulatory requirements
-- Improvements in security practices
-- Lessons learned from incidents
+## Incident Response
 
-**Last Updated**: January 2025
-**Version**: 1.0
+### Security Incident Procedure
 
----
+1. **Detection**
+   ```bash
+   # Monitor for anomalies
+   mauritania-cli logs show | grep -i "security\|failed"
 
-## 📋 Security Checklist
+   # Check system status
+   mauritania-cli status
+   ```
 
-### Pre-Deployment Checklist
-- [ ] Security scanning passed
-- [ ] Dependencies updated and scanned
-- [ ] Secrets properly configured
-- [ ] Network policies applied
-- [ ] Access controls verified
+2. **Containment**
+   ```bash
+   # Disable compromised transport
+   mauritania-cli config whatsapp disable
 
-### Production Deployment Checklist
-- [ ] Security monitoring enabled
-- [ ] Alerting configured
-- [ ] Backup procedures tested
-- [ ] Rollback plan documented
-- [ ] Incident response plan current
+   # Clear suspicious sessions
+   mauritania-cli session clear --all
 
-### Maintenance Checklist
-- [ ] Regular security updates applied
-- [ ] Penetration testing completed
-- [ ] Security training current
-- [ ] Compliance audits passed
-- [ ] Incident response tested
+   # Enable emergency mode
+   mauritania-cli security lockdown
+   ```
+
+3. **Investigation**
+   ```bash
+   # Export security logs
+   mauritania-cli logs export --security-events --last-24h > incident_logs.json
+
+   # Analyze command patterns
+   mauritania-cli analytics security --last-24h
+   ```
+
+4. **Recovery**
+   ```bash
+   # Rotate all credentials
+   mauritania-cli config rotate-keys
+
+   # Restore from backup
+   mauritania-cli config restore /path/to/backup
+
+   # Resume normal operations
+   mauritania-cli security unlock
+   ```
+
+### Emergency Commands
+
+```bash
+# Complete system lockdown
+mauritania-cli security emergency-stop
+
+# Wipe all sensitive data
+mauritania-cli security wipe --credentials
+
+# Generate security report
+mauritania-cli security audit-report
+
+# Restore from secure backup
+mauritania-cli security restore --secure
+```
+
+## Security Updates
+
+### Regular Maintenance
+
+#### Weekly Tasks
+```bash
+# Update dependencies
+go mod tidy
+go mod download
+
+# Security scan
+gosec ./...
+nancy ./go.sum
+
+# Rotate logs
+mauritania-cli logs rotate
+```
+
+#### Monthly Tasks
+```bash
+# Full security audit
+mauritania-cli security audit
+
+# Update configurations
+mauritania-cli config update-security
+
+# Review access logs
+mauritania-cli analytics access-review
+```
+
+#### Quarterly Tasks
+```bash
+# Penetration testing
+# External security assessment
+# Policy review and updates
+```
+
+## Future Security Enhancements
+
+### Planned Features
+- **Zero-trust architecture** with continuous verification
+- **Hardware security modules** for key storage
+- **Advanced threat detection** with ML
+- **Automated security patching**
+- **Multi-factor authentication** for admin operations
+
+### Research Areas
+- **Post-quantum cryptography** for future-proofing
+- **Blockchain-based audit trails** for immutable logging
+- **AI-powered anomaly detection**
+- **Secure multi-party computation** for collaborative commands
+
+This security overview ensures the Mauritania CLI provides robust protection while enabling remote development in challenging network environments. 🔒🛡️

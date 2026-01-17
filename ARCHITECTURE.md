@@ -1,188 +1,219 @@
-# Architecture Separation
+# Architecture Overview
 
-This document describes the architectural separation between workers (JavaScript/Cloudflare Workers) and Go backend applications.
+## System Architecture
 
-## Overview
+The Mauritania CLI is designed as a modular, transport-agnostic system that enables remote development through various communication channels. The architecture follows clean separation of concerns with clear boundaries between components.
 
-The system is structured as a microservices architecture with:
-- **Go Applications**: Backend services running in containers (Kubernetes)
-- **JavaScript Workers**: Cloudflare Workers for edge processing
-- **Shared Packages**: Common type definitions and communication utilities
+## Core Components
 
-## Directory Structure
+### 1. CLI Layer (`cmd/mauritania-cli/`)
+The command-line interface that users interact with directly.
 
-```
-obsidian-vault/
-├── apps/                    # Go backend applications
-│   └── api-gateway/         # Main API gateway service
-├── workers/                 # Cloudflare Workers
-│   └── ai-worker/          # AI processing worker
-├── packages/                # Shared packages
-│   ├── shared-types/       # Type definitions (Go + TypeScript)
-│   ├── api-contracts/      # OpenAPI specifications
-│   └── communication/      # HTTP client utilities
-├── deploy/                  # Deployment configurations
-│   ├── docker/             # Docker configurations
-│   ├── k8s/                # Kubernetes manifests
-│   └── terraform/          # Infrastructure as code
-├── tests/                   # Integration and e2e tests
-└── .github/workflows/       # CI/CD pipelines
-```
+**Responsibilities:**
+- Command parsing and validation
+- User interaction and feedback
+- Configuration management
+- Queue management and status display
 
-## Quick Start
+**Key Files:**
+- `main.go` - Application entry point
+- `cmd/*.go` - Individual CLI commands
+- Configuration handling and persistence
 
-### Prerequisites
-- Go 1.21+
-- Node.js 18+
-- Docker & Docker Compose
-- Make
+### 2. Transport Layer (`internal/transports/`)
+Handles communication with various external services.
 
-### Setup
+**Supported Transports:**
+- **WhatsApp** - WhatsMeow-based integration
+- **Telegram** - Bot API integration
+- **Facebook** - Messenger API integration
+- **SM APOS Shipper** - Secure network provider
 
-```bash
-# Install dependencies
-make setup
-
-# Start development environment
-docker-compose -f deploy/docker-compose.yml up -d
-
-# Run API Gateway locally
-cd apps/api-gateway && go run cmd/main.go
-
-# Run Worker locally
-cd workers/ai-worker && npm run dev
-```
-
-### Testing
-
-```bash
-# Run all tests
-make arch-test
-
-# Run Go application tests
-cd apps/api-gateway && go test -v ./internal/...
-
-# Run worker tests
-cd workers/ai-worker && npm test
-```
-
-### Deployment
-
-```bash
-# Deploy to development
-make arch-deploy-dev
-
-# Deploy to staging (GitHub Actions)
-# Push to 005-architecture-separation branch
-
-# Deploy to production (GitHub Actions)
-# Push to main branch
-```
-
-## Shared Packages
-
-### shared-types
-Common type definitions used by both Go applications and JavaScript workers.
-
+**Interface Contract:**
 ```go
-import "github.com/abdoullahelvogani/obsidian-vault/packages/shared-types/go"
-
-response := types.APIResponse{
-    Status:  "success",
-    Data:    data,
-    Message: "Operation completed",
+type TransportClient interface {
+    SendMessage(recipient, message string) (*MessageResponse, error)
+    ReceiveMessages() ([]*IncomingMessage, error)
+    GetStatus() (*TransportStatus, error)
+    ValidateCredentials() error
+    GetRateLimit() (*RateLimit, error)
 }
 ```
 
-```typescript
-import { APIResponse } from '@obsidian-vault/shared-types';
+### 3. Service Layer (`internal/services/`)
+Business logic and orchestration.
 
-const response: APIResponse = {
-    status: 'success',
-    data: data,
-    message: 'Operation completed',
-};
+**Key Services:**
+- **CommandAuthService** - Authentication and authorization
+- **ShipperSessionManager** - Session management for secure transport
+- **ShipperCommandExecutor** - Command execution orchestration
+- **TransportSelector** - Intelligent transport selection
+
+### 4. Model Layer (`internal/models/`)
+Data structures and type definitions.
+
+**Key Models:**
+- `Command` - Command representation
+- `CommandResult` - Execution results
+- `ShipperSession` - Session management
+- `TransportStatus` - Transport health status
+
+### 5. Utility Layer (`internal/utils/`)
+Shared utilities and helpers.
+
+**Key Utilities:**
+- **Config** - Configuration management
+- **Logger** - Structured logging
+- **Network** - Connectivity monitoring
+- **Queue** - Offline command queuing
+- **RateLimiter** - Rate limiting implementation
+- **CommandEncryption** - Secure command transport
+
+## Data Flow Architecture
+
+```
+┌─────────────┐    ┌──────────────┐    ┌─────────────┐
+│   User CLI  │───▶│  Transport   │───▶│   Remote    │
+│             │    │  Selection   │    │   Service   │
+└─────────────┘    └──────────────┘    └─────────────┘
+        ▲                    │               │
+        │                    ▼               │
+┌─────────────┐    ┌──────────────┐         │
+│  Command    │◀───│   Queue &    │         │
+│   Results   │    │   Retry      │         │
+└─────────────┘    └──────────────┘         ▼
+                                               │
+                                               ▼
+                                    ┌─────────────┐
+                                    │   Results   │
+                                    │  Display    │
+                                    └─────────────┘
 ```
 
-### communication
-HTTP client utilities for inter-component communication.
+## Security Architecture
 
-```go
-client := communication.NewHttpClient("http://localhost:8080", logger)
-resp, err := client.Get("/api/v1/workers")
-```
+### Transport Security
+- **End-to-end encryption** for sensitive commands
+- **Transport layer security** (TLS/HTTPS)
+- **API key protection** and rotation
+- **Webhook signature validation**
 
-```typescript
-const client = createHttpClient('http://localhost:8080', logger);
-const response = await client.get('/api/v1/workers');
-```
+### Command Security
+- **Input validation** and sanitization
+- **Command allowlisting** for authorized commands
+- **Length limits** and complexity checks
+- **Injection prevention** measures
 
-## API Gateway Endpoints
+### Session Security
+- **Session token encryption** at rest
+- **Automatic session expiration**
+- **Secure credential storage**
+- **Audit logging** for all operations
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /health | Health check |
-| GET | /api/v1/workers | List all workers |
-| GET | /api/v1/workers/:id | Get worker by ID |
-| GET | /api/v1/go-applications | List all Go applications |
-| GET | /api/v1/deployment-pipelines | List deployment pipelines |
-| GET | /api/v1/shared-packages | List shared packages |
+## Network Resilience
 
-## Development Workflow
+### Offline-First Design
+- **Command queuing** when offline
+- **Automatic retry** when connectivity returns
+- **Intelligent backoff** strategies
+- **Partial result handling**
 
-### Creating a New Go Application
+### Multi-Transport Failover
+- **Automatic transport selection** based on availability
+- **Health monitoring** and status tracking
+- **Rate limit awareness** across transports
+- **Cost optimization** between transport options
 
+## Performance Characteristics
+
+### Mobile Optimization
+- **Low memory footprint** (< 15MB binary)
+- **Battery-efficient** background processing
+- **Minimal network usage** with compression
+- **Fast startup times** (< 100ms)
+
+### Scalability Considerations
+- **Horizontal scaling** through multiple transport instances
+- **Load balancing** across available transports
+- **Resource pooling** for connection reuse
+- **Caching layers** for frequently accessed data
+
+## Deployment Architecture
+
+### Termux Deployment
 ```bash
-make create-go-app name=my-service
-cd apps/my-service
-# Implement your service
+# Single binary deployment
+mauritania-cli-termux
+├── Configuration: ~/.mauritania-cli/
+├── Logs: ~/.mauritania-cli/logs/
+├── Cache: ~/.mauritania-cli/cache/
+└── Database: ~/.mauritania-cli/commands.db
 ```
 
-### Creating a New Worker
+### Directory Structure
+```
+/usr/local/bin/
+└── mauritania-cli          # Main binary
 
-```bash
-make create-worker name=my-worker
-cd workers/my-worker
-# Implement your worker
+~/.mauritania-cli/
+├── config.toml            # Configuration file
+├── commands.db            # SQLite database
+├── logs/                  # Log files
+│   ├── mauritania-cli.log
+│   └── transports.log
+└── cache/                 # Cached data
+    ├── whatsapp/
+    ├── telegram/
+    └── shipper/
 ```
 
-### Adding a New Shared Package
+## Monitoring and Observability
 
-```bash
-mkdir packages/my-package
-mkdir packages/my-package/go
-mkdir packages/my-package/typescript
-# Create go.mod and package.json
-```
+### Logging Architecture
+- **Structured logging** with JSON format
+- **Multiple log levels** (DEBUG, INFO, WARN, ERROR)
+- **Transport-specific logs** for debugging
+- **Performance metrics** logging
 
-## Configuration
-
-### Environment Variables
-
-#### API Gateway
-- `LOG_LEVEL`: Logging level (debug, info, warn, error)
-- `PORT`: HTTP server port (default: 8080)
-
-#### Workers
-- `LOG_LEVEL`: Logging level (debug, info, warn, error)
-- `API_GATEWAY_URL`: URL of the API gateway
-
-## Monitoring
+### Metrics Collection
+- **Command execution times**
+- **Transport success/failure rates**
+- **Network latency measurements**
+- **Queue depth and processing rates**
 
 ### Health Checks
-- API Gateway: `http://localhost:8080/health`
-- Workers: `https://<worker>.workers.dev/health`
+- **Transport connectivity** monitoring
+- **Database health** verification
+- **Memory usage** tracking
+- **Goroutine monitoring**
 
-### Logs
-Logs are output in JSON format for easy parsing:
-```json
-{"level":"info","message":"Request completed","method":"GET","url":"/health","duration_ms":5}
-```
+## Error Handling Strategy
 
-## Success Criteria
+### Error Classification
+- **Network Errors** - Temporary connectivity issues
+- **Authentication Errors** - Credential or permission issues
+- **Rate Limit Errors** - API quota exceeded
+- **Validation Errors** - Input validation failures
+- **Execution Errors** - Command execution failures
 
-- ✅ Deployment time decreased from 15 minutes to 3 minutes
-- ✅ Module coupling reduced to under 0.3
-- ✅ Zero-downtime deployments achieved
-- ✅ Inter-component response time <500ms p99
-- ✅ System uptime target 99% with basic redundancy
+### Recovery Strategies
+- **Retry Logic** - Exponential backoff for transient errors
+- **Fallback Transports** - Automatic transport switching
+- **Queue Persistence** - Command preservation across restarts
+- **Graceful Degradation** - Reduced functionality when services unavailable
+
+## Future Extensibility
+
+### Plugin Architecture
+- **Transport plugins** for new communication channels
+- **Command plugins** for specialized command types
+- **Storage plugins** for different database backends
+- **UI plugins** for alternative interfaces
+
+### API Extensions
+- **REST API** for programmatic access
+- **Webhook integrations** for external services
+- **GraphQL API** for complex queries
+- **WebSocket support** for real-time updates
+
+This architecture provides a solid foundation for remote development in low-connectivity environments while maintaining security, reliability, and extensibility.

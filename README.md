@@ -1,207 +1,514 @@
-# Enhanced Cloudflare Workers AI Proxy
+# Mauritania CLI - Network Integration for Remote Development
 
-A high-performance Cloudflare Workers implementation providing intelligent AI proxy services with advanced analytics, caching, rate limiting, and performance monitoring capabilities.
+> **Empowering developers in low-connectivity regions with seamless remote development capabilities**
 
-## 🎯 Key Features
+[![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)](https://golang.org/)
+[![Platform](https://img.shields.io/badge/Platform-Termux%20%7C%20Linux-orange.svg)](https://termux.dev/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-### Core Functionality
-- **AI Provider Proxy**: Seamless routing to multiple AI providers (Gemini, DeepSeek, Groq, OpenAI, etc.)
-- **Intelligent Fallback**: Automatic provider switching based on availability, cost, and performance
-- **Request Optimization**: Smart caching and rate limiting for optimal performance
+## 🌟 Overview
 
-### Advanced Analytics & Monitoring
-- **Real-time Metrics**: Track response times, error rates, cache performance, and system health
-- **Request Tracing**: Complete request lifecycle monitoring with detailed logging
-- **Performance Profiling**: Memory usage, CPU monitoring, and execution timing analysis
+The **Mauritania CLI** is a revolutionary command-line interface designed specifically for developers in regions with limited internet connectivity. It enables seamless remote development by leveraging social media platforms and secure network providers as communication channels.
 
-### Intelligent Caching
-- **LRU Eviction**: Smart cache management with configurable size limits
-- **TTL Management**: Time-based expiration with automatic cleanup
-- **Cache Analytics**: Hit/miss ratios and performance insights
+### 🎯 Key Features
 
-### Performance Optimization
-- **Multi-Algorithm Rate Limiting**: Token bucket, sliding window, and fixed window strategies
-- **Load Balancing**: Intelligent provider selection and automatic failover
-- **Cost Optimization**: Automatic routing based on cost efficiency and performance metrics
+- **📱 Social Media Integration** - Execute commands via WhatsApp, Telegram, and Facebook
+- **🔒 Secure Remote Execution** - SM APOS Shipper integration for encrypted command execution
+- **📶 Offline-First Design** - Intelligent queuing and retry when connectivity returns
+- **🏗️ Mobile-Optimized** - Built specifically for Termux on Android devices
+- **🔄 Multi-Transport Support** - Automatic failover between communication channels
+- **⚡ Real-time Execution** - Live command output and status monitoring
 
-## 🏗️ Architecture
+### 🌍 Why Mauritania CLI?
 
-```
-enhanced-workers/
-├── src/
-│   ├── handlers/          # Request handlers
-│   │   ├── ai-proxy.js    # Main AI proxy logic
-│   │   ├── analytics.js   # Analytics and monitoring
-│   │   └── caching.js     # Cache management
-│   ├── middleware/        # Middleware components
-│   │   ├── rate-limit.js  # Rate limiting logic
-│   │   ├── auth.js        # Authentication
-│   │   └── cors.js        # CORS handling
-│   ├── utils/             # Utility functions
-│   │   ├── providers.js   # AI provider management
-│   │   ├── cache.js       # Caching utilities
-│   │   └── metrics.js     # Metrics collection
-│   └── config.js          # Configuration management
-├── workers/
-│   └── main.js            # Main worker entry point
-├── package.json           # Dependencies and scripts
-└── wrangler.toml          # Cloudflare Workers config
-```
+Traditional remote development requires stable, high-speed internet connections. In many parts of the world, including Mauritania, this simply isn't available. The Mauritania CLI transforms everyday communication tools into powerful development interfaces, enabling:
+
+- **Remote server management** without stable internet
+- **Development workflows** using familiar messaging apps
+- **Secure command execution** through trusted network providers
+- **Collaborative development** in low-connectivity environments
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 18+
-- Wrangler CLI (`npm install -g wrangler`)
-- Cloudflare account with Workers enabled
 
-### Installation & Deployment
+- **Go 1.21+** installed
+- **Termux** (recommended) or Linux environment
+- **Active social media accounts** (WhatsApp, Telegram, or Facebook)
 
-1. **Clone and setup:**
+### Installation
+
+#### Option 1: Pre-built Binary (Recommended)
+
 ```bash
-git clone <repository>
-cd enhanced-workers
-npm install
+# Download for your platform
+# ARM64 Linux (Termux)
+wget https://github.com/your-repo/mauritania-cli/releases/download/v1.0.0/mauritania-cli-linux-arm64
+chmod +x mauritania-cli-linux-arm64
+sudo mv mauritania-cli-linux-arm64 /usr/local/bin/mauritania-cli
+
+# ARM64 Android (Termux direct)
+wget https://github.com/your-repo/mauritania-cli/releases/download/v1.0.0/mauritania-cli-termux
+chmod +x mauritania-cli-termux
 ```
 
-2. **Configure environment:**
+#### Option 2: Build from Source
+
 ```bash
-cp .env.example .env
-# Edit .env with your API keys and Cloudflare tokens
+git clone https://github.com/your-repo/mauritania-cli.git
+cd mauritania-cli
+
+# Build for Termux
+GOOS=android GOARCH=arm64 go build -o mauritania-cli-termux ./cmd/mauritania-cli
+
+# Or build for Linux
+GOOS=linux GOARCH=arm64 go build -o mauritania-cli ./cmd/mauritania-cli
 ```
 
-3. **Deploy to Cloudflare:**
+### Basic Setup
+
 ```bash
-npm run deploy
+# Initialize configuration
+mauritania-cli config init
+
+# Setup your preferred transport
+mauritania-cli config telegram setup
+# OR
+mauritania-cli config whatsapp setup
+# OR
+mauritania-cli config facebook setup
+
+# Configure SM APOS Shipper for secure execution
+mauritania-cli config shipper setup
 ```
 
-## 📚 Documentation
+### First Command
 
-Comprehensive documentation is available in the `workers/docs/` directory:
+```bash
+# Send a simple command
+mauritania-cli send "echo 'Hello from Mauritania CLI!'"
 
-### [👤 User Guides](./workers/docs/user-guides/)
-- [Getting Started](./workers/docs/user-guides/getting-started.md)
-- [Configuration Guide](./workers/docs/user-guides/configuration.md)
-- [Monitoring Dashboard](./workers/docs/user-guides/monitoring.md)
-- [Troubleshooting](./workers/docs/user-guides/troubleshooting.md)
+# Check command status
+mauritania-cli status
 
-### [🛠️ Developer Documentation](./workers/docs/developer-docs/)
-- [Architecture Overview](./workers/docs/developer-docs/architecture.md)
-- [API Reference](./workers/docs/developer-docs/api-reference.md)
-- [Extension Guide](./workers/docs/developer-docs/extension-guide.md)
-- [Testing Guide](./workers/docs/developer-docs/testing.md)
+# View queued commands
+mauritania-cli queue list
+```
 
-### [⚙️ Operations](./workers/docs/operations/)
-- [Deployment Guide](./workers/docs/operations/deployment.md)
-- [Monitoring Setup](./workers/docs/operations/monitoring.md)
-- [Performance Tuning](./workers/docs/operations/performance-tuning.md)
-- [Incident Response](./workers/docs/operations/incident-response.md)
+## 📖 Usage Guide
 
-## ⚙️ Configuration
+### Command Structure
 
-Key configuration options in `wrangler.toml`:
+```bash
+mauritania-cli [command] [subcommand] [flags]
+```
+
+### Core Commands
+
+#### Send Commands
+```bash
+# Send command via default transport
+mauritania-cli send "git status"
+
+# Specify transport explicitly
+mauritania-cli send "npm install" --transport telegram
+
+# Force offline mode (queue for later)
+mauritania-cli send "docker build ." --offline=true
+
+# Set priority (normal, high, urgent)
+mauritania-cli send "systemctl restart nginx" --priority high
+```
+
+#### Configuration Management
+```bash
+# Initialize configuration
+mauritania-cli config init
+
+# Setup transports
+mauritania-cli config whatsapp setup
+mauritania-cli config telegram setup
+mauritania-cli config facebook setup
+mauritania-cli config shipper setup
+
+# View current configuration
+mauritania-cli config show
+
+# Edit configuration
+mauritania-cli config edit
+```
+
+#### Queue Management
+```bash
+# List queued commands
+mauritania-cli queue list
+
+# Clear all queued commands
+mauritania-cli queue clear
+
+# Retry failed commands
+mauritania-cli queue retry
+
+# Show queue statistics
+mauritania-cli queue stats
+```
+
+#### Status Monitoring
+```bash
+# Show overall system status
+mauritania-cli status
+
+# Monitor specific transport
+mauritania-cli status whatsapp
+mauritania-cli status telegram
+
+# View command history
+mauritania-cli history
+
+# Real-time monitoring
+mauritania-cli monitor
+```
+
+## 🔧 Transports
+
+### WhatsApp Integration
+
+**Features:**
+- QR code authentication (no phone number required)
+- Message threading support
+- Automatic message splitting for long outputs
+- Rate limiting (1000 messages/hour)
+
+**Setup:**
+```bash
+mauritania-cli config whatsapp setup
+# Follow QR code authentication prompts
+```
+
+**Usage:**
+```bash
+mauritania-cli send "ls -la" --platform whatsapp
+```
+
+### Telegram Bot Integration
+
+**Features:**
+- Bot-based communication
+- Channel and group support
+- Rich message formatting
+- Webhook support for instant delivery
+
+**Setup:**
+```bash
+# Create bot via @BotFather on Telegram
+# Get your bot token
+mauritania-cli config telegram setup
+```
+
+**Usage:**
+```bash
+mauritania-cli send "git log --oneline" --platform telegram
+```
+
+### Facebook Messenger Integration
+
+**Features:**
+- Page-based communication
+- Rich media support
+- Automated responses
+- Webhook integration
+
+**Setup:**
+```bash
+mauritania-cli config facebook setup
+# Requires Facebook Developer App
+```
+
+### SM APOS Shipper Integration
+
+**Features:**
+- Encrypted command execution
+- Secure network transport
+- Result encryption
+- Audit logging
+
+**Setup:**
+```bash
+mauritania-cli config shipper setup
+# Requires SM APOS credentials
+```
+
+**Usage:**
+```bash
+# Execute sensitive commands securely
+mauritania-cli send "cat /etc/passwd" --transport shipper
+```
+
+## 🏗️ Architecture
+
+### System Components
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   CLI Client    │────│  Transport Layer │────│  Remote Server  │
+│                 │    │                  │    │                 │
+│ • Command Input │    │ • WhatsApp       │    │ • Command Exec  │
+│ • Queue Mgmt    │    │ • Telegram       │    │ • Result Return │
+│ • Status Display│    │ • Facebook       │    │ • Error Handling│
+└─────────────────┘    │ • SM APOS        │    └─────────────────┘
+                       └──────────────────┘
+```
+
+### Data Flow
+
+1. **Command Input** → CLI parses and validates
+2. **Transport Selection** → Chooses optimal communication channel
+3. **Message Encoding** → Encrypts for secure transport
+4. **Network Transmission** → Sends via social media or secure channel
+5. **Remote Execution** → Server executes command
+6. **Result Return** → Encrypted results sent back
+7. **Local Display** → Formatted output to user
+
+### Security Model
+
+- **Transport Encryption** - All communications encrypted
+- **Command Validation** - Input sanitization and security checks
+- **Access Control** - User authentication and authorization
+- **Audit Logging** - Complete command execution history
+- **Rate Limiting** - Prevents abuse and ensures fair usage
+
+## 📊 Monitoring & Analytics
+
+### Real-time Monitoring
+
+```bash
+# Start monitoring dashboard
+mauritania-cli monitor
+
+# View transport status
+mauritania-cli status
+
+# Command execution statistics
+mauritania-cli analytics commands
+
+# Network performance metrics
+mauritania-cli analytics network
+```
+
+### Logging
+
+All activities are logged to `~/.mauritania-cli/logs/`
+
+```bash
+# View recent logs
+mauritania-cli logs show
+
+# Filter logs by transport
+mauritania-cli logs filter --transport whatsapp
+
+# Export logs for analysis
+mauritania-cli logs export --format json
+```
+
+## 🔧 Advanced Configuration
+
+### Configuration File
+
+Location: `~/.mauritania-cli/config.toml`
 
 ```toml
-[vars]
-CACHE_SIZE = "100"
-RATE_LIMIT_PER_HOUR = "1000"
-ENABLE_ANALYTICS = "true"
-LOG_LEVEL = "info"
-DEFAULT_PROVIDER = "gemini"
+[general]
+default_transport = "telegram"
+offline_queue_size = 1000
+log_level = "info"
 
-[ai_providers]
-gemini_api_key = "your_gemini_key"
-deepseek_api_key = "your_deepseek_key"
-groq_api_key = "your_groq_key"
-```
+[transports.social_media.whatsapp]
+database_path = "~/.mauritania-cli/whatsapp"
+rate_limit = 1000
+auto_connect = true
 
-## 📊 Performance Metrics
+[transports.social_media.telegram]
+bot_token = "your_bot_token"
+chat_id = "your_chat_id"
+webhook_url = "https://your-webhook.com"
 
-| Metric | Target | Status |
-|--------|--------|--------|
-| Response Time | <50ms | ✅ Achieved |
-| Cache Hit Rate | >85% | ✅ Achieved |
-| Memory Usage | <10MB | ✅ Achieved |
-| Error Rate | <1% | ✅ Achieved |
+[transports.shipper]
+endpoint = "https://api.shipper.mr"
+api_key = "your_api_key"
+timeout = 300
 
-## 🛠️ Development
-
-### Running Tests
-```bash
-npm run test
-npm run test:integration
-```
-
-### Local Development
-```bash
-npm run dev
-```
-
-### Building for Production
-```bash
-npm run build
-npm run deploy
-```
-
-## 🔒 Security & Privacy
-
-- **API Key Management**: Secure environment variable storage
-- **Request Validation**: Comprehensive input sanitization and validation
-- **Rate Limiting**: Protection against abuse and DoS attacks
-- **Audit Logging**: Complete request/response logging for compliance
-
-## 📈 Monitoring
-
-Access real-time metrics at:
-- **Analytics Dashboard**: `/analytics`
-- **Health Check**: `/health`
-- **Performance Report**: `/performance`
-- **Cache Statistics**: `/cache/stats`
-
-## 🚀 Deployment
-
-### Automated Deployment
-```bash
-npm run deploy
-```
-
-### Manual Deployment via Wrangler
-```bash
-wrangler deploy
+[security]
+enable_encryption = true
+allowed_commands = ["ls", "pwd", "git", "npm"]
+max_command_length = 10000
 ```
 
 ### Environment Variables
+
 ```bash
-CLOUDFLARE_API_TOKEN=your_cloudflare_token
-GEMINI_API_KEY=your_gemini_key
-DEEPSEEK_API_KEY=your_deepseek_key
+# Override configuration
+export MAURITANIA_CLI_DEFAULT_TRANSPORT=whatsapp
+export MAURITANIA_CLI_OFFLINE_MODE=true
+export MAURITANIA_CLI_LOG_LEVEL=debug
+
+# Transport credentials
+export MAURITANIA_TELEGRAM_BOT_TOKEN="your_token"
+export MAURITANIA_SHIPPER_API_KEY="your_key"
 ```
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+#### "Exec format error"
+```bash
+# Wrong architecture - rebuild for your platform
+GOOS=linux GOARCH=arm64 go build -o mauritania-cli ./cmd/mauritania-cli
+```
+
+#### "Network offline" but internet works
+```bash
+# Check network detection
+curl -I google.com
+mauritania-cli status
+
+# Force online mode
+mauritania-cli send "echo test" --offline=false
+```
+
+#### Authentication failures
+```bash
+# Re-authenticate transports
+mauritania-cli config whatsapp setup
+mauritania-cli config telegram setup
+```
+
+#### Commands not executing
+```bash
+# Check queue status
+mauritania-cli queue list
+
+# View command logs
+mauritania-cli logs show --last 10
+
+# Test basic connectivity
+mauritania-cli send "echo 'test'" --transport telegram
+```
+
+### Debug Mode
+
+```bash
+# Enable verbose logging
+mauritania-cli --verbose send "ls -la"
+
+# View debug logs
+mauritania-cli logs show --level debug
+
+# Test transport connectivity
+mauritania-cli test whatsapp
+mauritania-cli test telegram
+```
+
+## 📚 API Reference
+
+### CLI Exit Codes
+
+- `0` - Success
+- `1` - General error
+- `2` - Network error
+- `3` - Authentication error
+- `4` - Configuration error
+- `5` - Command validation error
+
+### Transport Status Codes
+
+- `available` - Transport ready for use
+- `connecting` - Establishing connection
+- `offline` - Temporarily unavailable
+- `error` - Permanent failure
+- `rate_limited` - Exceeded rate limits
+
+### Command Priorities
+
+- `low` - Background tasks
+- `normal` - Standard commands (default)
+- `high` - Important operations
+- `urgent` - Critical commands
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Add tests for new functionality
-4. Ensure all tests pass (`npm run test`)
-5. Submit a pull request
+### Development Setup
 
-### Development Guidelines
-- Use ES modules and modern JavaScript features
-- Follow the existing code style and patterns
-- Add comprehensive tests for new features
-- Update documentation for API changes
-- Use conventional commits
+```bash
+# Clone repository
+git clone https://github.com/your-repo/mauritania-cli.git
+cd mauritania-cli
+
+# Install dependencies
+go mod download
+
+# Run tests
+go test ./...
+
+# Build for multiple platforms
+./scripts/build-all.sh
+
+# Run linting
+golangci-lint run
+```
+
+### Code Structure
+
+```
+cmd/mauritania-cli/           # Main CLI application
+├── main.go                   # Application entry point
+├── cmd/                      # CLI commands
+│   ├── root.go              # Root command
+│   ├── send.go              # Send command
+│   ├── config.go            # Configuration commands
+│   └── ...
+└── internal/                 # Internal packages
+    ├── models/              # Data models
+    ├── transports/          # Transport implementations
+    ├── services/            # Business logic
+    └── utils/               # Utility functions
+```
+
+### Testing
+
+```bash
+# Run all tests
+go test ./...
+
+# Run specific package tests
+go test ./internal/transports/...
+
+# Run with coverage
+go test -cover ./...
+
+# Integration tests
+go test -tags=integration ./...
+```
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
-- **Cloudflare Workers**: Excellent serverless platform
-- **AI Providers**: Gemini, DeepSeek, Groq for powerful AI capabilities
-- **Open Source Community**: For the tools and libraries that make this possible
+- **Mauritanian Developer Community** - For inspiring this project
+- **Termux Team** - For making mobile Linux development possible
+- **WhatsMeow Library** - For WhatsApp Web API implementation
+- **Go Community** - For the excellent tooling and ecosystem
+
+## 📞 Support
+
+- **Issues**: [GitHub Issues](https://github.com/your-repo/mauritania-cli/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/your-repo/mauritania-cli/discussions)
+- **Documentation**: [Wiki](https://github.com/your-repo/mauritania-cli/wiki)
 
 ---
 
-**Built with ❤️ for performance, reliability, and developer experience**
+**Built with ❤️ for developers in low-connectivity regions**
+
+*Transforming communication into computation* 🚀
