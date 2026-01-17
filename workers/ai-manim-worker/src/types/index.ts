@@ -18,6 +18,8 @@ export interface Env {
   AI_PROVIDER: string;
   MANIM_RENDERER_URL: string;
   USE_MOCK_RENDERER: string;
+  AI_PROXY_URL?: string;
+  AI_PROXY_TOKEN?: string;
 }
 
 export interface TelegramUpdate {

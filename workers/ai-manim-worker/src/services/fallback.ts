@@ -69,56 +69,7 @@ class OpenAIProvider implements AIProvider {
   }
 }
 
-class OpenAIProvider implements AIProvider {
-  name = "openai";
-  private env: Env;
-  private logger: ReturnType<typeof createLogger>;
 
-  constructor(env: Env) {
-    this.env = env;
-    this.logger = createLogger({
-      level: (env.LOG_LEVEL as "debug" | "info" | "warn" | "error") || "info",
-      component: "ai-provider",
-    });
-  }
-
-  async generate(prompt: string): Promise<string> {
-    this.logger.info("Generating with OpenAI", { prompt_length: prompt.length });
-
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${this.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [
-          { role: "system", content: "You are a Python code generator for the Manim library." },
-          { role: "user", content: prompt }
-        ],
-        max_tokens: 2048,
-        temperature: 0.1,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      this.logger.error("OpenAI failed", { status: response.status, error: errorText });
-      throw new Error(`OpenAI error: ${response.status}`);
-    }
-
-    const data = await response.json() as any;
-    const result = data.choices?.[0]?.message?.content || "";
-
-    this.logger.info("OpenAI generated code", { code_length: result.length });
-    return result;
-  }
-
-  async isAvailable(): Promise<boolean> {
-    return !!this.env.OPENAI_API_KEY;
-  }
-}
 
 class GeminiProvider implements AIProvider {
   name = "gemini";
@@ -406,6 +357,25 @@ Requirements:
 Problem to visualize:
 ${problem}`;
 
+    // Try AI proxy first if configured
+    if (this.env.AI_PROXY_URL) {
+      try {
+        this.logger.info("Trying AI proxy", { url: this.env.AI_PROXY_URL });
+        const code = await this.callAIProxy(systemPrompt);
+
+        this.logger.info("AI proxy generation successful", {
+          code_length: code.length
+        });
+
+        return code;
+      } catch (error) {
+        this.logger.warn("AI proxy failed, falling back to local providers", {
+          error: (error as Error).message
+        });
+      }
+    }
+
+    // Fallback to local providers
     for (const provider of this.providers) {
       try {
         const isAvailable = await provider.isAvailable();
@@ -441,6 +411,34 @@ ${problem}`;
 
     this.logger.error("All AI providers failed", { errors: allErrors });
     throw new Error(`All AI providers failed: ${allErrors}`);
+  }
+
+  private async callAIProxy(prompt: string): Promise<string> {
+    const proxyUrl = `${this.env.AI_PROXY_URL}/ai`;
+
+    const response = await fetch(proxyUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.env.AI_PROXY_TOKEN || ''}`,
+      },
+      body: JSON.stringify({
+        prompt: prompt,
+        provider: this.env.AI_PROVIDER || 'gemini',
+        maxTokens: 2048,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`AI proxy error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    if (data.success) {
+      return data.response || '';
+    } else {
+      throw new Error(data.error || 'AI proxy request failed');
+    }
   }
 
   private recordSuccess(providerName: string): void {
