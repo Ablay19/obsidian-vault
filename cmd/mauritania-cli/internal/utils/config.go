@@ -59,9 +59,10 @@ type SocialMediaConfig struct {
 
 // WhatsAppConfig holds WhatsApp configuration for WhatsMeow
 type WhatsAppConfig struct {
-	DatabasePath string `mapstructure:"database_path"` // SQLite database path for session storage
-	RateLimit    int    `mapstructure:"rate_limit"`    // messages per hour
-	AutoConnect  bool   `mapstructure:"auto_connect"`  // automatically connect on startup
+	DatabasePath  string `mapstructure:"database_path"`  // SQLite database path for session storage
+	WebhookSecret string `mapstructure:"webhook_secret"` // webhook signature verification secret
+	RateLimit     int    `mapstructure:"rate_limit"`     // messages per hour
+	AutoConnect   bool   `mapstructure:"auto_connect"`   // automatically connect on startup
 }
 
 // TelegramConfig holds Telegram Bot API configuration
@@ -238,7 +239,252 @@ func (cm *ConfigManager) Load() error {
 	fmt.Printf("Debug: After unmarshal, config.Auth.Enabled = %t\n", config.Auth.Enabled)
 
 	cm.config = config
+
+	// Validate configuration
+	if err := cm.Validate(); err != nil {
+		return fmt.Errorf("configuration validation failed: %w", err)
+	}
+
 	return nil
+}
+
+// Validate validates the configuration and returns detailed error messages
+func (cm *ConfigManager) Validate() error {
+	if cm.config == nil {
+		return fmt.Errorf("configuration not loaded")
+	}
+
+	var errors []string
+
+	// Validate database configuration
+	if err := cm.validateDatabaseConfig(); err != nil {
+		errors = append(errors, err.Error())
+	}
+
+	// Validate transport configuration
+	if err := cm.validateTransportConfig(); err != nil {
+		errors = append(errors, err.Error())
+	}
+
+	// Validate authentication configuration
+	if err := cm.validateAuthConfig(); err != nil {
+		errors = append(errors, err.Error())
+	}
+
+	// Validate network configuration
+	if err := cm.validateNetworkConfig(); err != nil {
+		errors = append(errors, err.Error())
+	}
+
+	// Validate logging configuration
+	if err := cm.validateLoggingConfig(); err != nil {
+		errors = append(errors, err.Error())
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("configuration validation failed:\n%s", strings.Join(errors, "\n"))
+	}
+
+	return nil
+}
+
+// validateDatabaseConfig validates database configuration
+func (cm *ConfigManager) validateDatabaseConfig() error {
+	var errors []string
+
+	db := cm.config.Database
+
+	// Validate database type
+	validTypes := []string{"sqlite", "postgres", "mysql"}
+	if !contains(validTypes, db.Type) {
+		errors = append(errors, fmt.Sprintf("  - database.type must be one of: %s, got: %s", strings.Join(validTypes, ", "), db.Type))
+	}
+
+	// Validate SQLite path
+	if db.Type == "sqlite" {
+		if db.Path == "" {
+			errors = append(errors, "  - database.path is required for SQLite")
+		}
+		// Check if directory exists
+		dir := filepath.Dir(db.Path)
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			errors = append(errors, fmt.Sprintf("  - database directory does not exist: %s", dir))
+		}
+	}
+
+	// Validate PostgreSQL/MySQL settings
+	if db.Type == "postgres" || db.Type == "mysql" {
+		if db.Host == "" {
+			errors = append(errors, "  - database.host is required for PostgreSQL/MySQL")
+		}
+		if db.Port <= 0 || db.Port > 65535 {
+			errors = append(errors, "  - database.port must be between 1-65535")
+		}
+		if db.Database == "" {
+			errors = append(errors, "  - database.database is required for PostgreSQL/MySQL")
+		}
+		if db.Username == "" {
+			errors = append(errors, "  - database.username is required for PostgreSQL/MySQL")
+		}
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("database configuration errors:\n%s", strings.Join(errors, "\n"))
+	}
+
+	return nil
+}
+
+// validateTransportConfig validates transport configuration
+func (cm *ConfigManager) validateTransportConfig() error {
+	var errors []string
+
+	transports := cm.config.Transports
+
+	// Validate default transport
+	validDefaults := []string{"social_media", "sm_apos", "nrt"}
+	if !contains(validDefaults, transports.Default) {
+		errors = append(errors, fmt.Sprintf("  - transports.default must be one of: %s, got: %s", strings.Join(validDefaults, ", "), transports.Default))
+	}
+
+	// Validate WhatsApp config
+	whatsapp := transports.SocialMedia.WhatsApp
+	if whatsapp.RateLimit < 0 {
+		errors = append(errors, "  - transports.social_media.whatsapp.rate_limit must be >= 0")
+	}
+	if whatsapp.WebhookSecret == "" {
+		errors = append(errors, "  - transports.social_media.whatsapp.webhook_secret is required for webhook verification")
+	}
+
+	// Validate Telegram config
+	telegram := transports.SocialMedia.Telegram
+	if telegram.RateLimit < 0 {
+		errors = append(errors, "  - transports.social_media.telegram.rate_limit must be >= 0")
+	}
+	if telegram.BotToken == "" {
+		errors = append(errors, "  - transports.social_media.telegram.bot_token is required")
+	}
+
+	// Validate Facebook config
+	facebook := transports.SocialMedia.Facebook
+	if facebook.RateLimit < 0 {
+		errors = append(errors, "  - transports.social_media.facebook.rate_limit must be >= 0")
+	}
+	if facebook.AppID == "" {
+		errors = append(errors, "  - transports.social_media.facebook.app_id is required")
+	}
+	if facebook.AppSecret == "" {
+		errors = append(errors, "  - transports.social_media.facebook.app_secret is required")
+	}
+	if facebook.AccessToken == "" {
+		errors = append(errors, "  - transports.social_media.facebook.access_token is required")
+	}
+
+	// Validate Shipper config
+	shipper := transports.Shipper
+	if shipper.RateLimit < 0 {
+		errors = append(errors, "  - transports.shipper.rate_limit must be >= 0")
+	}
+	if shipper.Timeout <= 0 {
+		errors = append(errors, "  - transports.shipper.timeout must be > 0")
+	}
+
+	// Validate NRT config
+	nrt := transports.NRT
+	if nrt.RateLimit < 0 {
+		errors = append(errors, "  - transports.nrt.rate_limit must be >= 0")
+	}
+	if nrt.Timeout <= 0 {
+		errors = append(errors, "  - transports.nrt.timeout must be > 0")
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("transport configuration errors:\n%s", strings.Join(errors, "\n"))
+	}
+
+	return nil
+}
+
+// validateAuthConfig validates authentication configuration
+func (cm *ConfigManager) validateAuthConfig() error {
+	var errors []string
+
+	auth := cm.config.Auth
+
+	if auth.TokenExpiry <= 0 {
+		errors = append(errors, "  - auth.token_expiry must be > 0 hours")
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("authentication configuration errors:\n%s", strings.Join(errors, "\n"))
+	}
+
+	return nil
+}
+
+// validateNetworkConfig validates network configuration
+func (cm *ConfigManager) validateNetworkConfig() error {
+	var errors []string
+
+	network := cm.config.Network
+
+	if network.Timeout <= 0 {
+		errors = append(errors, "  - network.timeout must be > 0 seconds")
+	}
+
+	if network.RetryAttempts < 0 {
+		errors = append(errors, "  - network.retry_attempts must be >= 0")
+	}
+
+	if network.RetryDelay <= 0 {
+		errors = append(errors, "  - network.retry_delay must be > 0 seconds")
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("network configuration errors:\n%s", strings.Join(errors, "\n"))
+	}
+
+	return nil
+}
+
+// validateLoggingConfig validates logging configuration
+func (cm *ConfigManager) validateLoggingConfig() error {
+	var errors []string
+
+	logging := cm.config.Logging
+
+	validLevels := []string{"debug", "info", "warn", "error"}
+	if !contains(validLevels, logging.Level) {
+		errors = append(errors, fmt.Sprintf("  - logging.level must be one of: %s, got: %s", strings.Join(validLevels, ", "), logging.Level))
+	}
+
+	if logging.MaxSize <= 0 {
+		errors = append(errors, "  - logging.max_size must be > 0 MB")
+	}
+
+	if logging.MaxBackups <= 0 {
+		errors = append(errors, "  - logging.max_backups must be > 0")
+	}
+
+	if logging.MaxAge <= 0 {
+		errors = append(errors, "  - logging.max_age must be > 0 days")
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("logging configuration errors:\n%s", strings.Join(errors, "\n"))
+	}
+
+	return nil
+}
+
+// contains checks if a slice contains a string
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }
 
 // Get returns the current configuration

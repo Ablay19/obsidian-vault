@@ -15,6 +15,7 @@ import (
 type ShipperCommandExecutor struct {
 	db                *database.DB
 	sessionManager    *ShipperSessionManager
+	transportSelector *TransportSelector
 	encryption        *utils.CommandEncryption
 	securityValidator *utils.CommandSecurityValidator
 	logger            *log.Logger
@@ -23,7 +24,7 @@ type ShipperCommandExecutor struct {
 }
 
 // NewShipperCommandExecutor creates a new shipper command executor
-func NewShipperCommandExecutor(db *database.DB, sessionManager *ShipperSessionManager, config *utils.Config, logger *log.Logger) (*ShipperCommandExecutor, error) {
+func NewShipperCommandExecutor(db *database.DB, sessionManager *ShipperSessionManager, transportSelector *TransportSelector, config *utils.Config, logger *log.Logger) (*ShipperCommandExecutor, error) {
 	defaultConfig := utils.DefaultEncryptionConfig()
 	encryption := utils.NewCommandEncryption(&defaultConfig, logger)
 	securityValidator := utils.NewCommandSecurityValidator(logger)
@@ -31,6 +32,7 @@ func NewShipperCommandExecutor(db *database.DB, sessionManager *ShipperSessionMa
 	return &ShipperCommandExecutor{
 		db:                db,
 		sessionManager:    sessionManager,
+		transportSelector: transportSelector,
 		encryption:        encryption,
 		securityValidator: securityValidator,
 		logger:            logger,

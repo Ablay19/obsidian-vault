@@ -1,8 +1,13 @@
 package api
 
 import (
+	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -369,6 +374,41 @@ func (s *Server) handleSocialMediaWebhook(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleWhatsAppWebhook(w http.ResponseWriter, r *http.Request) {
+	// Read the raw payload for signature verification
+	payload, err := io.ReadAll(r.Body)
+	if err != nil {
+		s.logger.Printf("Failed to read WhatsApp webhook body: %v", err)
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+
+	// Get signature from header
+	signature := r.Header.Get("X-Hub-Signature-256")
+	if signature == "" {
+		s.logger.Printf("Missing WhatsApp webhook signature")
+		http.Error(w, "Missing signature", http.StatusUnauthorized)
+		return
+	}
+
+	// Get webhook secret from config
+	webhookSecret := s.config.Transports.SocialMedia.WhatsApp.WebhookSecret
+	if webhookSecret == "" {
+		s.logger.Printf("WhatsApp webhook secret not configured")
+		http.Error(w, "Webhook secret not configured", http.StatusInternalServerError)
+		return
+	}
+
+	// Verify signature using HMAC-SHA256
+	if err := s.verifyWhatsAppSignature(payload, signature, webhookSecret); err != nil {
+		s.logger.Printf("WhatsApp webhook signature verification failed: %v", err)
+		http.Error(w, "Invalid signature", http.StatusUnauthorized)
+		return
+	}
+
+	// Restore body for generic handler
+	r.Body = io.NopCloser(bytes.NewReader(payload))
+
+	// Process the webhook
 	s.handleGenericWebhook(w, r, "whatsapp")
 }
 
@@ -378,6 +418,27 @@ func (s *Server) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleFacebookWebhook(w http.ResponseWriter, r *http.Request) {
 	s.handleGenericWebhook(w, r, "facebook")
+}
+
+// verifyWhatsAppSignature verifies the webhook signature from WhatsApp using HMAC-SHA256
+func (s *Server) verifyWhatsAppSignature(payload []byte, signature, secret string) error {
+	// WhatsApp sends signature in format "sha256=<signature>"
+	if len(signature) <= 7 || signature[:7] != "sha256=" {
+		return fmt.Errorf("invalid signature format")
+	}
+	providedSignature := signature[7:]
+
+	// Calculate expected signature using HMAC-SHA256
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(payload)
+	expectedSignature := hex.EncodeToString(mac.Sum(nil))
+
+	// Use constant-time comparison to prevent timing attacks
+	if !hmac.Equal([]byte(providedSignature), []byte(expectedSignature)) {
+		return fmt.Errorf("webhook signature verification failed")
+	}
+
+	return nil
 }
 
 func (s *Server) handleGenericWebhook(w http.ResponseWriter, r *http.Request, platform string) {

@@ -375,3 +375,184 @@ func (ts *TransportSelector) IsTransportAvailable(platform string) bool {
 	}
 	return false
 }
+
+// ErrorRecoveryResult represents the result of an error recovery attempt
+type ErrorRecoveryResult struct {
+	Success        bool
+	FinalTransport string
+	Attempts       []TransportAttempt
+	Error          error
+}
+
+// TransportAttempt represents a single transport attempt
+type TransportAttempt struct {
+	Transport string
+	Success   bool
+	Error     error
+	Duration  time.Duration
+	Cost      float64
+}
+
+// ExecuteWithFailover executes a command with automatic transport failover
+func (ts *TransportSelector) ExecuteWithFailover(command string, senderID string, executeFunc func(string) error) (*ErrorRecoveryResult, error) {
+	result := &ErrorRecoveryResult{
+		Attempts: []TransportAttempt{},
+	}
+
+	// Get optimal transport initially
+	primaryTransport, err := ts.OptimizeRoute(command, senderID)
+	if err != nil {
+		result.Error = fmt.Errorf("failed to select initial transport: %w", err)
+		return result, result.Error
+	}
+
+	// Try primary transport first
+	startTime := time.Now()
+	err = executeFunc(primaryTransport)
+	duration := time.Since(startTime)
+
+	attempt := TransportAttempt{
+		Transport: primaryTransport,
+		Success:   err == nil,
+		Error:     err,
+		Duration:  duration,
+		Cost:      ts.getTransportCost(primaryTransport),
+	}
+	result.Attempts = append(result.Attempts, attempt)
+
+	// Update stats for primary attempt
+	ts.UpdateTransportStats(primaryTransport, err == nil, duration, attempt.Cost)
+
+	if err == nil {
+		result.Success = true
+		result.FinalTransport = primaryTransport
+		return result, nil
+	}
+
+	ts.logger.Printf("Primary transport %s failed: %v, attempting failover", primaryTransport, err)
+
+	// Primary failed, try failover with different transports
+	failoverTransports := ts.getFailoverTransports(primaryTransport)
+	maxRetries := 2 // Allow up to 2 failover attempts
+
+	for i, transport := range failoverTransports {
+		if i >= maxRetries {
+			break
+		}
+
+		ts.logger.Printf("Attempting failover to transport: %s", transport)
+
+		startTime = time.Now()
+		err = executeFunc(transport)
+		duration = time.Since(startTime)
+
+		attempt := TransportAttempt{
+			Transport: transport,
+			Success:   err == nil,
+			Error:     err,
+			Duration:  duration,
+			Cost:      ts.getTransportCost(transport),
+		}
+		result.Attempts = append(result.Attempts, attempt)
+
+		// Update stats for failover attempt
+		ts.UpdateTransportStats(transport, err == nil, duration, attempt.Cost)
+
+		if err == nil {
+			result.Success = true
+			result.FinalTransport = transport
+			ts.logger.Printf("Failover successful with transport: %s", transport)
+			return result, nil
+		}
+
+		ts.logger.Printf("Failover transport %s also failed: %v", transport, err)
+	}
+
+	// All attempts failed
+	result.Error = fmt.Errorf("all transport attempts failed")
+	return result, result.Error
+}
+
+// getFailoverTransports returns alternative transports for failover, ordered by preference
+func (ts *TransportSelector) getFailoverTransports(failedTransport string) []string {
+	allTransports := ts.getAvailableTransports()
+	failoverCandidates := []string{}
+
+	// Remove the failed transport from candidates
+	for _, transport := range allTransports {
+		if transport != failedTransport {
+			failoverCandidates = append(failoverCandidates, transport)
+		}
+	}
+
+	// If no alternatives, try the failed transport again (might be intermittent)
+	if len(failoverCandidates) == 0 {
+		failoverCandidates = append(failoverCandidates, failedTransport)
+	}
+
+	// Score and sort failover candidates
+	criteria := SelectionCriteria{
+		Priority:         "reliability", // Prioritize reliability for failover
+		ExcludePlatforms: []string{},    // Don't exclude any for failover
+	}
+
+	scored := ts.scoreTransports(failoverCandidates, criteria)
+
+	// Extract transport names in order of score
+	failoverOrder := make([]string, len(scored))
+	for i, score := range scored {
+		failoverOrder[i] = score.Platform
+	}
+
+	return failoverOrder
+}
+
+// RecoverFromTransportFailure attempts to recover from a transport failure
+func (ts *TransportSelector) RecoverFromTransportFailure(failedTransport string) error {
+	ts.logger.Printf("Attempting to recover transport: %s", failedTransport)
+
+	// Mark transport as temporarily unhealthy
+	if stats, exists := ts.transportStats[failedTransport]; exists {
+		stats.IsHealthy = false
+		ts.logger.Printf("Marked transport %s as unhealthy", failedTransport)
+	}
+
+	// Schedule health check (simple implementation - just reset after timeout)
+	go func() {
+		time.Sleep(5 * time.Minute) // Wait 5 minutes before retrying
+		if stats, exists := ts.transportStats[failedTransport]; exists {
+			stats.ConsecutiveFailures = 0 // Reset failure count
+			stats.IsHealthy = true        // Assume recovered
+			ts.logger.Printf("Recovered transport %s after timeout", failedTransport)
+		}
+	}()
+
+	return nil
+}
+
+// GetTransportHealthStatus returns health status for all transports
+func (ts *TransportSelector) GetTransportHealthStatus() map[string]bool {
+	status := make(map[string]bool)
+	for platform, stats := range ts.transportStats {
+		status[platform] = stats.IsHealthy && stats.ConsecutiveFailures < 3
+	}
+	return status
+}
+
+// EnableTransport re-enables a previously failed transport
+func (ts *TransportSelector) EnableTransport(platform string) {
+	if stats, exists := ts.transportStats[platform]; exists {
+		stats.ConsecutiveFailures = 0
+		stats.IsHealthy = true
+		ts.logger.Printf("Re-enabled transport: %s", platform)
+	}
+}
+
+// DisableTransport marks a transport as disabled (for maintenance)
+func (ts *TransportSelector) DisableTransport(platform string) {
+	if stats, exists := ts.transportStats[platform]; exists {
+		stats.IsHealthy = false
+		stats.ConsecutiveFailures = 999 // High number to keep it disabled
+		ts.logger.Printf("Disabled transport: %s", platform)
+	}
+}

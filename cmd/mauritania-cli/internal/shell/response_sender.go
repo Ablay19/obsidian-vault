@@ -8,6 +8,7 @@ import (
 
 	"obsidian-automation/cmd/mauritania-cli/internal/database"
 	"obsidian-automation/cmd/mauritania-cli/internal/models"
+	"obsidian-automation/cmd/mauritania-cli/internal/services"
 	facebook_transport "obsidian-automation/cmd/mauritania-cli/internal/transports/facebook"
 	telegram_transport "obsidian-automation/cmd/mauritania-cli/internal/transports/telegram"
 	whatsapp_transport "obsidian-automation/cmd/mauritania-cli/internal/transports/whatsapp"
@@ -34,21 +35,23 @@ type TransportClient interface {
 
 // ResponseSender handles sending command results back via social media
 type ResponseSender struct {
-	db             *database.DB
-	config         *utils.Config
-	transports     map[string]TransportClient
-	messageHandler *utils.MessageHandler
-	logger         *log.Logger
+	db                *database.DB
+	config            *utils.Config
+	transports        map[string]TransportClient
+	transportSelector *services.TransportSelector
+	messageHandler    *utils.MessageHandler
+	logger            *log.Logger
 }
 
 // NewResponseSender creates a new response sender
-func NewResponseSender(db *database.DB, config *utils.Config, logger *log.Logger) *ResponseSender {
+func NewResponseSender(db *database.DB, config *utils.Config, transportSelector *services.TransportSelector, logger *log.Logger) *ResponseSender {
 	rs := &ResponseSender{
-		db:             db,
-		config:         config,
-		transports:     make(map[string]TransportClient),
-		messageHandler: utils.NewMessageHandler(utils.NewLogger("response-sender")),
-		logger:         logger,
+		db:                db,
+		config:            config,
+		transports:        make(map[string]TransportClient),
+		transportSelector: transportSelector,
+		messageHandler:    utils.NewMessageHandler(utils.NewLogger("response-sender")),
+		logger:            logger,
 	}
 
 	// Initialize available transports
@@ -94,12 +97,6 @@ func (rs *ResponseSender) SendCommandResult(result *models.CommandResult) error 
 		return fmt.Errorf("failed to get command %s: %w", result.CommandID, err)
 	}
 
-	// Get the transport client for this platform
-	transport, exists := rs.transports[cmd.Platform]
-	if !exists {
-		return fmt.Errorf("no transport available for platform: %s", cmd.Platform)
-	}
-
 	// Format the response message
 	responseMessage := rs.formatCommandResult(cmd, result)
 
@@ -108,17 +105,33 @@ func (rs *ResponseSender) SendCommandResult(result *models.CommandResult) error 
 
 	rs.logger.Printf("Sending %d message chunks for command %s", len(chunks), result.CommandID)
 
-	// Send each chunk
+	// Use transport selector with failover for each chunk
 	for i, chunk := range chunks {
 		if len(chunks) > 1 {
 			rs.logger.Printf("Sending chunk %d/%d", i+1, len(chunks))
 		}
 
-		_, err := transport.SendMessage(cmd.SenderID, chunk)
+		// Execute with failover
+		recoveryResult, err := rs.transportSelector.ExecuteWithFailover(
+			fmt.Sprintf("response_chunk_%d", i+1),
+			cmd.SenderID,
+			func(transportName string) error {
+				transport, exists := rs.transports[transportName]
+				if !exists {
+					return fmt.Errorf("transport %s not available", transportName)
+				}
+				_, err := transport.SendMessage(cmd.SenderID, chunk)
+				return err
+			},
+		)
+
 		if err != nil {
-			rs.logger.Printf("Failed to send chunk %d: %v", i+1, err)
-			return fmt.Errorf("failed to send response chunk %d: %w", i+1, err)
+			rs.logger.Printf("Failed to send chunk %d after failover attempts: %v", i+1, err)
+			rs.logger.Printf("Failover attempts: %+v", recoveryResult.Attempts)
+			return fmt.Errorf("failed to send response chunk %d after failover: %w", i+1, err)
 		}
+
+		rs.logger.Printf("Successfully sent chunk %d via %s", i+1, recoveryResult.FinalTransport)
 
 		// Small delay between chunks to avoid rate limiting
 		if i < len(chunks)-1 {
@@ -147,20 +160,30 @@ func (rs *ResponseSender) SendErrorMessage(commandID, errorMessage string) error
 		return fmt.Errorf("failed to get command %s: %w", commandID, err)
 	}
 
-	// Get the transport client
-	transport, exists := rs.transports[cmd.Platform]
-	if !exists {
-		return fmt.Errorf("no transport available for platform: %s", cmd.Platform)
-	}
-
 	// Format error message
 	errorResponse := fmt.Sprintf("❌ Command execution failed:\n\n%s", errorMessage)
 
-	// Send the error message
-	_, err = transport.SendMessage(cmd.SenderID, errorResponse)
+	// Use transport selector with failover
+	recoveryResult, err := rs.transportSelector.ExecuteWithFailover(
+		"error_message",
+		cmd.SenderID,
+		func(transportName string) error {
+			transport, exists := rs.transports[transportName]
+			if !exists {
+				return fmt.Errorf("transport %s not available", transportName)
+			}
+			_, err := transport.SendMessage(cmd.SenderID, errorResponse)
+			return err
+		},
+	)
+
 	if err != nil {
-		return fmt.Errorf("failed to send error message: %w", err)
+		rs.logger.Printf("Failed to send error message after failover attempts: %v", err)
+		rs.logger.Printf("Failover attempts: %+v", recoveryResult.Attempts)
+		return fmt.Errorf("failed to send error message after failover: %w", err)
 	}
+
+	rs.logger.Printf("Successfully sent error message via %s", recoveryResult.FinalTransport)
 
 	// Update command status
 	cmd.Status = models.StatusResponded

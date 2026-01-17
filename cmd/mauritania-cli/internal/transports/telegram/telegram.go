@@ -23,6 +23,7 @@ type TelegramTransport struct {
 	apiURL        string
 	allowedChatID string
 	rateLimiter   *utils.RateLimiter
+	isConnected   bool
 }
 
 // NewTelegramTransport creates a new Telegram transport client
@@ -36,12 +37,71 @@ func NewTelegramTransport(config *utils.Config, logger *log.Logger) (*TelegramTr
 		botToken:      telegramConfig.BotToken,
 		apiURL:        "https://api.telegram.org/bot",
 		allowedChatID: telegramConfig.ChatID,
+		isConnected:   false,
 	}
 
 	// Initialize rate limiter (Telegram allows 30 messages per second)
 	transport.rateLimiter = utils.NewRateLimiter(30*60*60, time.Hour, logger) // 30 per second = ~108k per hour
 
+	// Test connection if bot token is configured
+	if transport.botToken != "" {
+		if err := transport.testConnection(); err != nil {
+			transport.logger.Printf("Telegram connection test failed: %v", err)
+			return transport, nil
+		}
+		transport.isConnected = true
+		transport.logger.Printf("Telegram transport initialized successfully")
+	} else {
+		transport.logger.Printf("Telegram bot token not configured")
+	}
+
 	return transport, nil
+}
+
+// testConnection verifies the Telegram Bot API connection
+func (t *TelegramTransport) testConnection() error {
+	url := fmt.Sprintf("%s%s/getMe", t.apiURL, t.botToken)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create test request: %w", err)
+	}
+
+	resp, err := t.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("connection test failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var telegramResp struct {
+		OK     bool `json:"ok"`
+		Result struct {
+			ID        int64  `json:"id"`
+			Username  string `json:"username"`
+			FirstName string `json:"first_name"`
+		} `json:"result"`
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if err := json.Unmarshal(body, &telegramResp); err != nil {
+		return fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if !telegramResp.OK {
+		return fmt.Errorf("Telegram API returned not OK")
+	}
+
+	t.logger.Printf("Connected to Telegram bot: @%s (ID: %d)", telegramResp.Result.Username, telegramResp.Result.ID)
+	return nil
 }
 
 // SendMessage sends a message via Telegram Bot API
@@ -202,89 +262,37 @@ func (t *TelegramTransport) ReceiveMessages() ([]*models.IncomingMessage, error)
 
 // GetStatus returns the current status of the Telegram transport
 func (t *TelegramTransport) GetStatus() (*models.TransportStatus, error) {
-	// Test connectivity by calling getMe
-	url := fmt.Sprintf("%s%s/getMe", t.apiURL, t.botToken)
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return &models.TransportStatus{
-			Available:   false,
-			LastChecked: time.Now(),
-			Error:       err.Error(),
-		}, nil
-	}
-
-	resp, err := t.httpClient.Do(req)
-	if err != nil {
-		return &models.TransportStatus{
-			Available:   false,
-			LastChecked: time.Now(),
-			Error:       err.Error(),
-		}, nil
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return &models.TransportStatus{
-			Available:   false,
-			LastChecked: time.Now(),
-			Error:       "Failed to read response",
-		}, nil
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return &models.TransportStatus{
-			Available:   false,
-			LastChecked: time.Now(),
-			Error:       fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(body)),
-		}, nil
-	}
-
-	var meResp struct {
-		OK     bool `json:"ok"`
-		Result struct {
-			ID       int64  `json:"id"`
-			Username string `json:"username"`
-		} `json:"result"`
-	}
-
-	if err := json.Unmarshal(body, &meResp); err != nil {
-		return &models.TransportStatus{
-			Available:   false,
-			LastChecked: time.Now(),
-			Error:       "Invalid response format",
-		}, nil
-	}
-
-	available := meResp.OK
-	var errorMsg string
-	if !available {
-		errorMsg = "Bot authentication failed"
-	} else {
-		t.logger.Printf("Telegram bot authenticated: @%s", meResp.Result.Username)
-	}
-
-	return &models.TransportStatus{
-		Available:   available,
+	status := &models.TransportStatus{
+		Available:   t.isConnected,
 		LastChecked: time.Now(),
-		Error:       errorMsg,
-	}, nil
+	}
+
+	if t.botToken == "" {
+		status.Error = "Telegram bot token not configured"
+		status.Available = false
+	} else if !t.isConnected {
+		status.Error = "Telegram connection not established"
+		// Try to reconnect
+		if err := t.testConnection(); err != nil {
+			status.Error = err.Error()
+		} else {
+			t.isConnected = true
+			status.Available = true
+			status.Error = ""
+		}
+	}
+
+	return status, nil
 }
 
 // ValidateCredentials validates that the Telegram bot credentials are working
 func (t *TelegramTransport) ValidateCredentials() error {
-	status, err := t.GetStatus()
-	if err != nil {
-		return err
+	if t.botToken == "" {
+		return fmt.Errorf("telegram bot token not configured")
 	}
 
-	if !status.Available {
-		return fmt.Errorf("Telegram bot validation failed: %s", status.Error)
-	}
-
-	t.logger.Printf("Telegram bot credentials validated successfully")
-	return nil
+	// Test the connection
+	return t.testConnection()
 }
 
 // GetRateLimit returns current rate limiting status
