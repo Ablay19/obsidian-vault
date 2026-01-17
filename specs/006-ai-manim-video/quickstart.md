@@ -1,7 +1,19 @@
 # Quickstart: AI Manim Video Generator
 
-**Feature**: 006-ai-manim-video  
-**Date**: January 15, 2026
+**Feature**: 006-ai-manim-video
+**Date**: January 17, 2026
+**Platforms**: Telegram, WhatsApp, Web Dashboard
+
+---
+
+## Overview
+
+The AI Manim Video Generator creates mathematical animation videos from user input across multiple platforms. Users can submit problems for AI-powered code generation or provide Manim code directly.
+
+**Supported Platforms:**
+- **Telegram**: Bot-based messaging with problem submission
+- **WhatsApp**: Business API integration with direct code detection
+- **Web Dashboard**: Direct code submission with real-time monitoring
 
 ---
 
@@ -79,6 +91,16 @@ GROQ_API_KEY=your-groq-api-key
 
 # HuggingFace - get from https://huggingface.co/settings/tokens
 HF_TOKEN=your-hf-token
+
+# Optional: WhatsApp Business API
+WHATSAPP_API_KEY=your_whatsapp_api_key
+WHATSAPP_API_SECRET=your_whatsapp_api_secret
+WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id
+WHATSAPP_WEBHOOK_VERIFY_TOKEN=your_webhook_verify_token
+
+# Development settings
+LOG_LEVEL=debug
+USE_MOCK_RENDERER=true  # Skip Docker for faster development
 ```
 
 ---
@@ -219,6 +241,36 @@ workers/manim-renderer/
 │   └── cleanup.py
 ├── Dockerfile
 └── requirements.txt
+```
+
+---
+
+## Manual Testing
+
+### Web Dashboard
+1. Open `http://localhost:8787/dashboard`
+2. Submit a mathematical problem or Manim code
+3. Monitor job status and access video when ready
+
+### Telegram Bot (if configured)
+1. Start a chat with your bot
+2. Send a math problem: "Plot y = x² from -5 to 5"
+3. Receive video link when processing completes
+
+### WhatsApp (if configured)
+1. Send message to your WhatsApp Business number
+2. Submit problem or Manim code
+3. Receive video link via WhatsApp
+
+### Direct Code API
+```bash
+# Submit Manim code directly
+curl -X POST http://localhost:8787/api/v1/code \
+  -H "Content-Type: application/json" \
+  -d '{"code": "from manim import *\nclass MyScene(Scene):\n    def construct(self):\n        circle = Circle()\n        self.play(Create(circle))"}'
+
+# Validate code syntax
+curl "http://localhost:8787/api/v1/code?code=from manim import *"
 ```
 
 ---

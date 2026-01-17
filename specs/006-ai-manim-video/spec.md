@@ -15,6 +15,14 @@
 - Q: Video storage duration → A: Immediate deletion after successful delivery (no persistent storage)
 - Q: AI failure handling → A: Fallback to alternative AI provider (resilient)
 
+### Session 2026-01-17
+
+- Q: What are the specific performance targets and concurrent user limits? → A: No specific limits defined (flexible scaling)
+- Q: What accessibility requirements should be included for video delivery and user interface? → A: Full WCAG 2.1 AAA compliance including advanced features
+- Q: What API versioning strategy should be used for external integrations? → A: Semantic versioning with backward compatibility
+- Q: How should the system handle video generation timeouts and resource exhaustion? → A: Graceful degradation with user notification and retry options
+- Q: What security measures should be implemented for user data protection and system security? → A: Minimal security (basic input validation only)
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Problem Submission (Priority: P1)
@@ -90,6 +98,8 @@
 - What if the user requests a visualization of something mathematically impossible or ambiguous?
 - How to manage video storage and delivery for users with large usage volumes?
 - What happens when Manim execution times out for complex animations?
+- **System MUST gracefully degrade when resources are exhausted, notifying users and providing retry options**
+- **System MUST handle timeouts by providing clear status updates and alternative submission methods**
 
 ## Requirements *(mandatory)*
 
@@ -106,6 +116,16 @@
 - **FR-008**: System MUST handle errors gracefully and allow users to retry failed requests
 - **FR-009**: System MUST implement rate limiting to prevent abuse
 - **FR-010**: System MUST set reasonable limits on video duration and complexity
+- **FR-011**: System MUST comply with WCAG 2.1 AAA accessibility standards for all user interfaces
+- **FR-012**: System MUST provide keyboard navigation support for all interactive elements
+- **FR-013**: System MUST include screen reader support for video playback and navigation
+- **FR-014**: System MUST provide text alternatives for all non-text content
+- **FR-015**: System MUST use semantic versioning for API changes with backward compatibility
+- **FR-016**: System MUST provide deprecation notices for breaking API changes
+- **FR-017**: System MUST gracefully degrade when resources are exhausted with user notification
+- **FR-018**: System MUST provide retry options for failed video generation attempts
+- **FR-019**: System MUST handle timeouts with clear status updates and alternative recovery paths
+- **FR-020**: System MUST perform basic input validation on all user submissions
 
 ### Key Entities *(include if feature involves data)*
 
@@ -120,10 +140,10 @@
 ### Measurable Outcomes
 
 - **SC-001**: 95% of valid problem submissions result in successfully generated videos
-- **SC-002**: Video generation completes within 5 minutes for standard problems (under 30 seconds animation)
-- **SC-003**: Generated videos are viewable on standard devices (under 50MB file size)
+- **SC-002**: Video generation completes within reasonable time limits for standard problems (under 30 seconds animation)
+- **SC-003**: Generated videos are viewable on standard devices (reasonable file sizes)
 - **SC-004**: Users can submit problems through Telegram and receive video playback links for immediate download
-- **SC-005**: System handles at least 10 concurrent video generation requests without degradation
+- **SC-005**: System handles concurrent video generation requests with graceful scaling
 - **SC-006**: 90% user satisfaction rating for video clarity and accuracy
 - **SC-007**: Clear error messages guide users to successful resubmission in at least 80% of failure cases
 - **SC-008**: Videos are deleted immediately after successful delivery (zero storage footprint)

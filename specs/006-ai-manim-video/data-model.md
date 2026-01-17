@@ -1,16 +1,16 @@
-# Data Model: AI Manim Video Generator
+# Data Model: AI Manim Video Generator with WhatsApp & Direct Code Enhancement
 
-**Feature**: 006-ai-manim-video  
-**Date**: January 15, 2026  
-**Based On**: [spec.md](spec.md) + [research.md](research.md)
+**Feature**: 006-ai-manim-video
+**Date**: January 17, 2026
+**Based On**: [spec.md](spec.md) + [research.md](research.md) + Session clarifications
 
 ---
 
 ## Entities
 
-### UserSession
+### UserSession (Enhanced)
 
-**Purpose**: Track anonymous user sessions for video generation requests
+**Purpose**: Track anonymous user sessions across multiple platforms (Telegram, WhatsApp, Web)
 
 **Storage**: Cloudflare KV (7-day TTL, auto-extend)
 
@@ -18,23 +18,30 @@
 interface UserSession {
   // Primary key: session_id (UUID v4)
   session_id: string;
-  
-  // Telegram chat ID for delivery
-  telegram_chat_id: string;
-  
+
+  // Platform-specific identifiers
+  telegram_chat_id?: string;     // Telegram chat ID
+  whatsapp_phone_number?: string; // WhatsApp phone number
+  web_session_token?: string;    // Web dashboard session token
+
   // Timestamps
   created_at: string;      // ISO 8601
   last_activity: string;   // ISO 8601 (auto-extend on activity)
-  
+
   // Session metadata
   language_preference?: string;  // Default: "en"
-  
+  platform_primary?: "telegram" | "whatsapp" | "web";
+
   // Video metadata only (no videos stored)
   video_history: VideoMetadata[];
-  
+
   // Statistics
   total_submissions: number;
   successful_generations: number;
+
+  // Accessibility preferences
+  accessibility_enabled?: boolean;
+  screen_reader_preferred?: boolean;
 }
 ```
 
@@ -44,9 +51,9 @@ interface UserSession {
 
 ---
 
-### ProcessingJob
+### ProcessingJob (Enhanced)
 
-**Purpose**: Track the state and progress of video generation requests
+**Purpose**: Track the state and progress of video generation requests from any platform
 
 **Storage**: Cloudflare KV
 
@@ -54,36 +61,45 @@ interface UserSession {
 interface ProcessingJob {
   // Primary key: job_id (UUID v4)
   job_id: string;
-  
+
   // Foreign keys
   session_id: string;  // Reference to UserSession
-  
+
+  // Submission metadata
+  submission_type: "problem" | "direct_code";  // New field for direct code submissions
+  platform: "telegram" | "whatsapp" | "web";   // Source platform
+
   // Input
-  problem_text: string;       // User's mathematical problem
-  problem_language?: string;  // Detected language
-  
+  problem_text?: string;       // User's mathematical problem (for AI generation)
+  manim_code?: string;         // Direct code submission (for direct rendering)
+
   // Processing state
   status: ProcessingStatus;
   status_message?: string;    // Human-readable status
-  
+
   // Timestamps
   created_at: string;         // ISO 8601
-  started_at?: string;        // When AI processing began
+  started_at?: string;        // When processing began
   completed_at?: string;      // When video was ready
-  
-  // AI Generation
+
+  // AI Generation (only for problem submissions)
   ai_provider_used?: string;      // "cloudflare", "groq", "huggingface"
-  manim_code?: string;            // Generated code (for debugging)
+  manim_code_generated?: string;  // AI-generated code
   ai_error?: string;              // Error if AI failed
-  
+
   // Video Output (metadata only - video deleted after delivery)
   video_url?: string;             // Presigned URL for access
   video_key?: string;             // R2 object key (for deletion)
   video_expires_at?: string;      // URL expiration time
-  
+
   // Quality metrics
   render_duration_seconds?: number;
   video_size_bytes?: number;
+
+  // Error handling
+  retry_count?: number;           // Number of retry attempts
+  last_error?: string;            // Last error message
+  graceful_degradation_used?: boolean; // If graceful degradation was applied
 }
 ```
 
@@ -92,8 +108,8 @@ interface ProcessingJob {
 ```typescript
 enum ProcessingStatus {
   QUEUED = "queued",           // Waiting to be processed
-  AI_GENERATING = "ai_generating",  // AI creating Manim code
-  CODE_VALIDATING = "code_validating",  // Syntax check
+  AI_GENERATING = "ai_generating",  // AI creating Manim code (problem submissions)
+  CODE_VALIDATING = "code_validating",  // Syntax check (direct code)
   RENDERING = "rendering",     // Manim rendering video
   UPLOADING = "uploading",     // Uploading to R2
   READY = "ready",             // Video available for download
@@ -103,34 +119,61 @@ enum ProcessingStatus {
 }
 ```
 
-**State Transition Diagram**:
-
-```
-QUEUED → AI_GENERATING → CODE_VALIDATING → RENDERING → UPLOADING → READY
-                                                                      ↓
-  FAILED ←──── AI_GENERATING   ←──── CODE_VALIDATING   ←──── RENDERING ←───
-                      (retry)            (fix code)          (timeout)
-
-READY → DELIVERED → (video auto-deleted)
-READY → EXPIRED → (cleanup after 24h)
-```
-
 ---
 
-### VideoMetadata
+### VideoMetadata (Enhanced)
 
-**Purpose**: Lightweight reference to delivered videos (for history/analytics)
+**Purpose**: Lightweight reference to delivered videos with accessibility information
 
 **Storage**: UserSession.video_history array
 
 ```typescript
 interface VideoMetadata {
   job_id: string;
-  problem_preview: string;    // First 50 chars of problem
+  problem_preview: string;    // First 50 chars of problem or code
+  submission_type: "problem" | "direct_code";
   status: ProcessingStatus;
   created_at: string;
   delivered_at?: string;      // When user accessed video
+  platform: string;           // Delivery platform
   render_duration_seconds?: number;
+
+  // Accessibility metadata
+  has_audio_description?: boolean;
+  keyboard_navigable?: boolean;
+  screen_reader_friendly?: boolean;
+}
+```
+
+---
+
+### PlatformConfiguration
+
+**Purpose**: Store platform-specific configuration and credentials
+
+**Storage**: Cloudflare KV (environment-specific)
+
+```typescript
+interface PlatformConfiguration {
+  platform: "telegram" | "whatsapp";
+
+  // Telegram configuration
+  telegram_bot_token?: string;
+  telegram_webhook_secret?: string;
+
+  // WhatsApp configuration
+  whatsapp_api_key?: string;
+  whatsapp_api_secret?: string;
+  whatsapp_phone_number_id?: string;
+  whatsapp_webhook_verify_token?: string;
+
+  // Rate limiting
+  rate_limit_per_hour: number;
+  rate_limit_burst: number;
+
+  // Feature flags
+  direct_code_enabled: boolean;
+  accessibility_enabled: boolean;
 }
 ```
 
@@ -143,11 +186,14 @@ interface VideoMetadata {
 | Field | Rule |
 |-------|------|
 | session_id | UUID v4, required |
-| telegram_chat_id | Numeric string, required |
+| telegram_chat_id | Numeric string, optional |
+| whatsapp_phone_number | E.164 format, optional |
+| web_session_token | UUID v4, optional |
 | created_at | ISO 8601, required |
 | last_activity | ISO 8601, required |
 | video_history | Array, max 100 entries |
 | total_submissions | Integer, >= 0 |
+| platform_primary | Must match one of the provided platform IDs |
 
 ### ProcessingJob
 
@@ -155,22 +201,52 @@ interface VideoMetadata {
 |-------|------|
 | job_id | UUID v4, required |
 | session_id | Reference to existing UserSession |
-| problem_text | String, 10-5000 chars, required |
+| submission_type | Required enum value |
+| platform | Required platform identifier |
+| problem_text | String, 10-5000 chars (if submission_type=problem) |
+| manim_code | Valid Python code, max 50KB (if submission_type=direct_code) |
 | status | Enum value, required |
 | created_at | ISO 8601, required |
+| retry_count | Integer, 0-3 (max retries) |
 
 ---
 
 ## API Data Types
 
-### Telegram Webhook Payload
+### Platform-Agnostic Request Types
+
+```typescript
+interface VideoSubmissionRequest {
+  platform: "telegram" | "whatsapp" | "web";
+  submission_type: "problem" | "direct_code";
+  content: string;  // problem text or Manim code
+  user_id: string;  // platform-specific user identifier
+}
+
+interface VideoStatusRequest {
+  job_id: string;
+  platform: string;
+}
+
+interface VideoAccessRequest {
+  job_id: string;
+  platform: string;
+  accessibility_options?: {
+    audio_description: boolean;
+    high_contrast: boolean;
+    large_text: boolean;
+  };
+}
+```
+
+### Enhanced Platform-Specific Types
 
 ```typescript
 interface TelegramUpdate {
   update_id: number;
   message?: {
     message_id: number;
-    from: {
+    from?: {
       id: number;
       is_bot: boolean;
       language_code?: string;
@@ -183,29 +259,37 @@ interface TelegramUpdate {
     date: number;
   };
 }
-```
 
-### Video Generation Request (Internal)
-
-```typescript
-interface VideoGenerationRequest {
-  job_id: string;
-  problem_text: string;
-  session_id: string;
-  telegram_chat_id: string;
-  priority: "normal";
+interface WhatsAppWebhook {
+  object: string;
+  entry: Array<{
+    id: string;
+    changes: Array<{
+      value: {
+        messages?: Array<{
+          id: string;
+          from: string;
+          type: string;
+          timestamp: string;
+          text?: { body: string };
+        }>;
+        contacts?: Array<{
+          profile: { name: string };
+          wa_id: string;
+        }>;
+      };
+      field: string;
+    }>;
+  }>;
 }
-```
 
-### Video Generation Response (to User)
-
-```typescript
-interface VideoGenerationResponse {
-  status: "queued" | "processing" | "ready" | "failed";
-  job_id: string;
-  message: string;
-  video_url?: string;  // Only when status=ready
-  expires_at?: string; // URL expiration
+interface DirectCodeSubmission {
+  code: string;
+  options?: {
+    quality: "low" | "medium" | "high";
+    format: "mp4" | "webm";
+    max_duration_seconds?: number;
+  };
 }
 ```
 
@@ -219,7 +303,10 @@ interface VideoGenerationResponse {
 |--------|-------------|---------|
 | UserSession | `session:{uuid}` | `session:550e8400-e29b-41d4-a716-446655440000` |
 | ProcessingJob | `job:{uuid}` | `job:6ba7b810-9dad-11d1-80b4-00c04fd430c8` |
-| SessionIndex | `sessions:by_chat:{chat_id}` | `sessions:by_chat:123456789` |
+| PlatformConfig | `config:platform:{platform}` | `config:platform:whatsapp` |
+| SessionIndex | `sessions:by_telegram:{chat_id}` | `sessions:by_telegram:123456789` |
+| SessionIndex | `sessions:by_whatsapp:{phone}` | `sessions:by_whatsapp:+1234567890` |
+| SessionIndex | `sessions:by_web:{token}` | `sessions:by_web:abc123def456` |
 | JobIndex | `jobs:by_session:{session_id}` | `jobs:by_session:550e8400...` |
 
 ### TTL Strategy
@@ -231,6 +318,31 @@ interface VideoGenerationResponse {
 | ProcessingJob (READY) | 24 hours | Access window |
 | ProcessingJob (DELIVERED) | 7 days | Audit trail |
 | ProcessingJob (FAILED) | 24 hours | Retry window |
+| PlatformConfig | No TTL | Persistent config |
+
+---
+
+## API Contracts Directory Structure
+
+```
+contracts/
+├── openapi.yaml              # Main API specification
+├── telegram-webhook.yaml     # Telegram-specific contracts
+├── whatsapp-webhook.yaml     # WhatsApp-specific contracts
+├── direct-code-api.yaml      # Direct code submission contracts
+└── video-delivery.yaml       # Video access and delivery contracts
+```
+
+---
+
+## Compliance Notes
+
+- **Multi-Platform**: Single session can span multiple platforms
+- **Privacy-First**: No persistent data, immediate video deletion
+- **Accessibility**: WCAG 2.1 AAA compliance with metadata tracking
+- **Graceful Degradation**: Clear error handling with retry options
+- **Security**: Basic input validation, platform-specific authentication
+- **Scalability**: Flexible scaling with no strict performance limits
 
 ---
 
@@ -238,26 +350,16 @@ interface VideoGenerationResponse {
 
 ```
 UserSession (1) ───────┬────── (N) ProcessingJob
-   │                           │
-   └── stores ─────────────────┘
-        video_history[]
-        (metadata only)
-```
+    │                   │
+    ├── telegram_chat_id    ├── submission_type
+    ├── whatsapp_phone      ├── platform
+    └── web_session_token   ├── problem_text OR manim_code
+                            └── video_url (temporary)
 
-```
-ProcessingJob (1) ────── produces ────── VideoFile
-        │                              │
-        └── metadata ──────────────────┘
-             video_url
-             video_key
-             video_size_bytes
-```
-
----
-
-## Compliance Notes
-
-- **Privacy**: No video content stored, only metadata
-- **Retention**: All entities have TTL/expiration
-- **Anonymity**: No PII, session-based tracking only
-- **Audit**: 7-day metadata retention for debugging
+PlatformConfiguration (1) ──── Manages ─── (N) UserSession
+        │
+        ├── telegram_config
+        ├── whatsapp_config
+        └── rate_limits
+```</content>
+<parameter name="filePath">specs/006-ai-manim-video/data-model.md

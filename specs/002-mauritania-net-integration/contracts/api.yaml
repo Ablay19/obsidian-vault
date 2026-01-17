@@ -1,0 +1,479 @@
+openapi: 3.0.3
+info:
+  title: Mauritania Network Integration API
+  description: Internal API for CLI command execution through Mauritanian network services
+  version: 1.0.0
+  contact:
+    name: Mauritania Network Integration Team
+
+servers:
+  - url: http://localhost:3001
+    description: Local CLI server
+  - url: https://mauritania-cli.local
+    description: Production deployment
+
+paths:
+  /commands/execute:
+    post:
+      summary: Execute a command through network transport
+      operationId: executeCommand
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - command
+                - transport
+              properties:
+                command:
+                  type: string
+                  description: Command to execute
+                  maxLength: 4000
+                transport:
+                  type: string
+                  enum: [social_media, sm_apos, nrt]
+                  description: Transport mechanism to use
+                priority:
+                  type: string
+                  enum: [low, normal, high, urgent]
+                  default: normal
+                  description: Command execution priority
+                timeout:
+                  type: integer
+                  minimum: 1
+                  maximum: 300
+                  default: 30
+                  description: Timeout in seconds
+      responses:
+        '202':
+          description: Command accepted for execution
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  commandId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [queued, executing]
+                  estimatedTime:
+                    type: integer
+                    description: Estimated execution time in seconds
+        '400':
+          description: Invalid command or parameters
+        '429':
+          description: Rate limit exceeded
+
+  /commands/{commandId}/status:
+    get:
+      summary: Get command execution status
+      operationId: getCommandStatus
+      parameters:
+        - name: commandId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Command status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandStatus'
+        '404':
+          description: Command not found
+
+  /commands/{commandId}/result:
+    get:
+      summary: Get command execution result
+      operationId: getCommandResult
+      parameters:
+        - name: commandId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Command result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResult'
+        '202':
+          description: Command still executing
+        '404':
+          description: Command not found
+
+  /queue:
+    get:
+      summary: Get queued commands
+      operationId: getQueue
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, retrying, failed]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: Queue contents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  commands:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/QueuedCommand'
+
+  /queue/{commandId}:
+    delete:
+      summary: Remove command from queue
+      operationId: dequeueCommand
+      parameters:
+        - name: commandId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Command removed from queue
+        '404':
+          description: Command not in queue
+
+  /transports:
+    get:
+      summary: Get available transport mechanisms
+      operationId: getTransports
+      responses:
+        '200':
+          description: Available transports
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transports:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TransportInfo'
+
+  /network/routes:
+    get:
+      summary: Get available network routes
+      operationId: getNetworkRoutes
+      responses:
+        '200':
+          description: Network routes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  routes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NetworkRoute'
+
+  /sessions:
+    post:
+      summary: Create shipper session
+      operationId: createShipperSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - credentials
+              properties:
+                credentials:
+                  type: object
+                  description: Authentication credentials for SM APOS Shipper
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShipperSession'
+        '401':
+          description: Authentication failed
+
+    get:
+      summary: Get active sessions
+      operationId: getSessions
+      responses:
+        '200':
+          description: Active sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ShipperSession'
+
+  /social-media/webhook:
+    post:
+      summary: Receive social media command
+      operationId: receiveSocialMediaCommand
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - platform
+                - senderId
+                - message
+              properties:
+                platform:
+                  type: string
+                  enum: [facebook, twitter, whatsapp, telegram]
+                senderId:
+                  type: string
+                message:
+                  type: string
+                  maxLength: 4000
+                messageId:
+                  type: string
+      responses:
+        '200':
+          description: Command received
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  commandId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [received, queued]
+        '400':
+          description: Invalid command format
+
+components:
+  schemas:
+    CommandStatus:
+      type: object
+      required:
+        - commandId
+        - status
+        - createdAt
+      properties:
+        commandId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [received, validated, queued, executing, completed, failed, responded, expired]
+        createdAt:
+          type: string
+          format: date-time
+        queuedAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        progress:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Execution progress percentage
+
+    CommandResult:
+      type: object
+      required:
+        - commandId
+        - status
+        - exitCode
+        - executionTime
+      properties:
+        commandId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [success, failure, partial, timeout]
+        exitCode:
+          type: integer
+          description: Process exit code
+        stdout:
+          type: string
+          description: Standard output
+        stderr:
+          type: string
+          description: Standard error
+        executionTime:
+          type: integer
+          description: Execution time in milliseconds
+        transportUsed:
+          type: string
+          description: Transport mechanism used
+        cost:
+          type: number
+          description: Execution cost
+        completedAt:
+          type: string
+          format: date-time
+
+    QueuedCommand:
+      type: object
+      required:
+        - id
+        - command
+        - queuedAt
+        - priority
+      properties:
+        id:
+          type: string
+          format: uuid
+        command:
+          type: string
+          description: Original command text
+        queuedAt:
+          type: string
+          format: date-time
+        priority:
+          type: integer
+          minimum: 1
+          maximum: 10
+        retryCount:
+          type: integer
+          default: 0
+        nextRetry:
+          type: string
+          format: date-time
+        failureReason:
+          type: string
+
+    TransportInfo:
+      type: object
+      required:
+        - type
+        - name
+        - available
+      properties:
+        type:
+          type: string
+          enum: [social_media, sm_apos, nrt, direct]
+        name:
+          type: string
+          description: Human-readable transport name
+        available:
+          type: boolean
+          description: Whether transport is currently available
+        costPerMB:
+          type: number
+          description: Cost per megabyte
+        latency:
+          type: integer
+          description: Typical latency in milliseconds
+        reliability:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Reliability percentage
+
+    NetworkRoute:
+      type: object
+      required:
+        - id
+        - type
+        - provider
+        - costPerMB
+        - latency
+        - reliability
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [social_media, sm_apos, direct, nrt]
+        provider:
+          type: string
+          description: Network provider name
+        costPerMB:
+          type: number
+        latency:
+          type: integer
+          description: Latency in milliseconds
+        reliability:
+          type: number
+          minimum: 0
+          maximum: 100
+        bandwidth:
+          type: number
+          description: Available bandwidth in Mbps
+        isActive:
+          type: boolean
+        lastTested:
+          type: string
+          format: date-time
+
+    ShipperSession:
+      type: object
+      required:
+        - id
+        - userId
+        - createdAt
+        - expiresAt
+        - permissions
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        permissions:
+          type: array
+          items:
+            type: string
+          description: Allowed operations
+        rateLimit:
+          type: object
+          properties:
+            requestsPerHour:
+              type: integer
+            requestsRemaining:
+              type: integer
+            resetTime:
+              type: string
+              format: date-time
+        lastActivity:
+          type: string
+          format: date-time

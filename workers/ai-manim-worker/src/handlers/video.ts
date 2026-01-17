@@ -86,8 +86,8 @@ export class VideoHandler {
     const { jobId, videoUrl, error } = body;
 
     if (error) {
-      logger.error('Video render failed', { jobId, error });
-      return c.json({ jobId, status: 'failed', error });
+      logger.error(`Video render failed for job ${jobId}: ${String(error)}`);
+      return c.json({ jobId, status: 'failed', error: String(error) });
     }
 
     logger.info('Video render complete', { jobId, videoUrl });

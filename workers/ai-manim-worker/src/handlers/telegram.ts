@@ -171,7 +171,7 @@ _Processing takes 1-5 minutes depending on complexity._`;
   }
 
   private async sendStatus(c: Context, chatId: number, userId: string): Promise<Response> {
-    const session = await this.sessionService.getOrCreateSession(chatId.toString());
+    const session = await this.sessionService.getOrCreateSession("telegram", chatId.toString());
 
     const statusText = `*Your Recent Jobs*
 
@@ -187,7 +187,7 @@ Send me a problem to get started!`;
   }
 
   private async handleProblemSubmission(c: Context, chatId: number, userId: string, problem: string): Promise<Response> {
-    const session = await this.sessionService.getOrCreateSession(chatId.toString());
+    const session = await this.sessionService.getOrCreateSession("telegram", chatId.toString());
     const jobId = crypto.randomUUID();
 
     logger.info('Processing problem submission', {
@@ -395,8 +395,8 @@ ${videoUrl}
       return c.json({ ok: false, error: 'Failed to parse update' });
     }
 
-    const session = await this.sessionService.getOrCreateSession(chatId.toString());
-    const job = await this.sessionService.createJob(session.session_id, problem);
+    const session = await this.sessionService.getOrCreateSession("telegram", chatId.toString());
+    const job = await this.sessionService.createJob(session.session_id, problem, "telegram", "problem");
 
     await this.sendTelegramConfirmation(c, chatId, job.job_id);
 

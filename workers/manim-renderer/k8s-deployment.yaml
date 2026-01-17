@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: manim-renderer
+  namespace: obsidian-system
+  labels:
+    app: manim-renderer
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: manim-renderer
+  template:
+    metadata:
+      labels:
+        app: manim-renderer
+    spec:
+      containers:
+      - name: manim-renderer
+        image: manim-renderer-test:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8000
+          name: http
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 2
+          periodSeconds: 5
+        volumeMounts:
+        - name: temp-storage
+          mountPath: /tmp
+      volumes:
+      - name: temp-storage
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: manim-renderer-service
+  namespace: obsidian-system
+  labels:
+    app: manim-renderer
+spec:
+  selector:
+    app: manim-renderer
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8000
+    protocol: TCP
+  type: ClusterIP

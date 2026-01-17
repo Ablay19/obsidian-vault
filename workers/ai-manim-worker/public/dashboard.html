@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Manim Video Generator</title>
+    <link rel="stylesheet" href="/styles/dashboard.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🎬 AI Manim Video Generator</h1>
+            <p class="subtitle">Mathematical visualizations powered by AI</p>
+        </header>
+
+        <main class="main">
+            <!-- Platform Selector -->
+            <section class="platform-section">
+                <h2>Choose Your Platform</h2>
+                <div class="platform-selector">
+                    <button class="platform-btn active" data-platform="web">
+                        🌐 Web Dashboard
+                    </button>
+                    <button class="platform-btn" data-platform="telegram">
+                        📱 Telegram Bot
+                    </button>
+                    <button class="platform-btn" data-platform="whatsapp">
+                        💬 WhatsApp
+                    </button>
+                </div>
+                <div id="platformInstructions" class="platform-instructions">
+                    <div class="instruction-panel active" data-platform="web">
+                        <h3>Web Dashboard</h3>
+                        <p>Submit problems or Manim code directly through this interface.</p>
+                    </div>
+                    <div class="instruction-panel" data-platform="telegram">
+                        <h3>Telegram Bot</h3>
+                        <p>Send messages to our Telegram bot for AI-powered video generation.</p>
+                        <p><strong>Bot:</strong> <code>@YourManimBot</code></p>
+                    </div>
+                    <div class="instruction-panel" data-platform="whatsapp">
+                        <h3>WhatsApp Integration</h3>
+                        <p>Send problems or Manim code directly via WhatsApp.</p>
+                        <p><strong>Number:</strong> <code>+1 (555) 123-4567</code></p>
+                        <p><strong>Features:</strong> Direct code submission, real-time status updates</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Input Mode Selector -->
+            <section class="mode-section">
+                <h2>Input Method</h2>
+                <div class="mode-selector">
+                    <button class="mode-btn active" data-mode="problem">
+                        🧠 Problem Description
+                    </button>
+                    <button class="mode-btn" data-mode="code">
+                        💻 Manim Code
+                    </button>
+                </div>
+            </section>
+
+            <!-- Problem Input Section -->
+            <section class="input-section active" data-mode="problem">
+                <h2>Describe Your Problem</h2>
+                <form id="problemForm" class="problem-form">
+                    <textarea
+                        id="problemInput"
+                        placeholder="Describe a mathematical problem or concept you'd like visualized..."
+                        rows="4"
+                        maxlength="5000"
+                        required
+                    ></textarea>
+                    <div class="form-footer">
+                        <span class="char-count"><span id="charCount">0</span> / 5000</span>
+                        <button type="submit" id="submitBtn" class="btn-primary">
+                            <span class="btn-text">Generate Video</span>
+                            <span class="btn-loader" style="display: none;">Generating...</span>
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Code Input Section -->
+            <section class="input-section" data-mode="code">
+                <h2>Submit Manim Code</h2>
+                <form id="codeForm">
+                    <div class="code-editor-container">
+                        <div class="code-header">
+                            <span class="code-language">Python (Manim)</span>
+                            <div class="code-options">
+                                <select id="codeQuality" name="quality">
+                                    <option value="medium">Medium Quality</option>
+                                    <option value="low">Low Quality</option>
+                                    <option value="high">High Quality</option>
+                                </select>
+                                <select id="codeFormat" name="format">
+                                    <option value="mp4">MP4 Format</option>
+                                    <option value="webm">WebM Format</option>
+                                </select>
+                            </div>
+                        </div>
+                        <textarea
+                            id="codeInput"
+                            name="code"
+                            class="code-editor"
+                            placeholder="# Example Manim code
+from manim import *
+
+class MyScene(Scene):
+    def construct(self):
+        circle = Circle()
+        self.play(Create(circle))
+        self.wait(2)"
+                            rows="15"
+                            spellcheck="false"
+                            required
+                        ></textarea>
+                        <div class="code-footer">
+                            <div class="code-info">
+                                <span id="codeLines">0 lines</span>
+                                <span id="codeChars">0 characters</span>
+                            </div>
+                            <div class="code-actions">
+                                <button type="button" id="validateBtn" class="btn-secondary">Validate Code</button>
+                                <button type="submit" id="submitCodeBtn" class="btn-primary">
+                                    <span class="btn-text">Render Video</span>
+                                    <span class="btn-loader" style="display: none;">Rendering...</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="code-validation-result" id="validationResult" style="display: none;">
+                        <h4>Validation Result</h4>
+                        <div id="validationContent"></div>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Jobs List Section -->
+            <section class="jobs-section">
+                <h2>Your Videos</h2>
+                <div id="jobsList" class="jobs-list">
+                    <div class="empty-state">
+                        <div class="empty-icon">📹</div>
+                        <p>No videos yet. Submit a problem above to get started!</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Video Player Section -->
+            <section id="videoSection" class="video-section" style="display: none;">
+                <h2>Video Preview</h2>
+                <div class="video-container">
+                    <video id="videoPlayer" controls preload="metadata">
+                        Your browser does not support the video tag.
+                    </video>
+                    <div class="video-controls">
+                        <button id="downloadBtn" class="btn-secondary">⬇️ Download</button>
+                        <button id="closeVideoBtn" class="btn-secondary">✕ Close</button>
+                    </div>
+                </div>
+                <div class="video-info">
+                    <h3 id="videoTitle">Problem Title</h3>
+                    <p id="videoDescription">Problem description</p>
+                </div>
+            </section>
+        </main>
+
+        <!-- Status Messages -->
+        <div id="statusMessage" class="status-message" style="display: none;">
+            <span class="status-text"></span>
+            <button class="status-close" onclick="hideStatusMessage()">✕</button>
+        </div>
+
+        <!-- Job Status Modal -->
+        <div id="jobModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="modal-close" onclick="closeJobModal()">&times;</span>
+                <h3>Job Status</h3>
+                <div class="job-info">
+                    <p><strong>Job ID:</strong> <span id="modalJobId"></span></p>
+                    <p><strong>Problem:</strong> <span id="modalProblem"></span></p>
+                    <p><strong>Status:</strong> <span id="modalStatus" class="status-badge"></span></p>
+                    <p><strong>Created:</strong> <span id="modalCreated"></span></p>
+                </div>
+                <div class="job-progress">
+                    <div class="progress-bar">
+                        <div id="progressFill" class="progress-fill"></div>
+                    </div>
+                    <p id="progressText">Initializing...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/scripts/dashboard.js"></script>
+</body>
+</html>

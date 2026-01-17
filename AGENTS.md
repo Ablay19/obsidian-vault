@@ -607,6 +607,11 @@ ANALYTICS_SAMPLING_RATE = "0.5"
 - Go 1.21+ (backend), JavaScript/Node.js (workers) + Go modules, npm/yarn packages, REST APIs (005-architecture-separation)
 - TypeScript/JavaScript (Cloudflare Workers) | Python 3.11 (Manim execution) + Cloudflare Workers, Cloudflare Workers AI, Telegram Bot API, Manim library (006-ai-manim-video)
 - Cloudflare KV for session metadata | R2 for temporary video storage (immediate delete) (006-ai-manim-video)
+- TypeScript/JavaScript (Cloudflare Workers) | Python 3.11 (Manim execution) + Cloudflare Workers, Cloudflare Workers AI, Telegram/WhatsApp Bot APIs, Manim library (006-ai-manim-video)
+- Node.js 18+ (TypeScript) for cross-platform compatibility + Commander.js (CLI framework), Dockerode (Docker API), @kubernetes/client-node (K8s API), ora (spinners), chalk (colors) (001-cli-service-manager)
+- JSON config files for service definitions, local SQLite for command history (001-cli-service-manager)
+- Node.js 18+ (TypeScript) for cross-platform CLI compatibility with Termux + Social media SDKs, HTTP clients for SM APOS Shipper, Commander.js for CLI framework (002-mauritania-net-integration)
+- Local SQLite for command history and offline queue, JSON for configuration (002-mauritania-net-integration)
 
 ## Recent Changes
 - 005-architecture-separation: Added Go 1.21+ (backend), JavaScript/Node.js (workers) + Go modules, npm/yarn packages, REST APIs

@@ -1,0 +1,112 @@
+[
+  {
+    "id": "rapid_cmd_0",
+    "sender_id": "+22212345678",
+    "platform": "whatsapp",
+    "command": "echo test",
+    "timestamp": "2026-01-17T18:50:38.188257779Z",
+    "priority": "",
+    "status": "received",
+    "transport_id": "",
+    "session_id": ""
+  },
+  {
+    "id": "rapid_cmd_1",
+    "sender_id": "+22212345678",
+    "platform": "whatsapp",
+    "command": "echo test",
+    "timestamp": "2026-01-17T18:50:38.193983028Z",
+    "priority": "",
+    "status": "received",
+    "transport_id": "",
+    "session_id": ""
+  },
+  {
+    "id": "rapid_cmd_2",
+    "sender_id": "+22212345678",
+    "platform": "whatsapp",
+    "command": "echo test",
+    "timestamp": "2026-01-17T18:50:38.196947634Z",
+    "priority": "",
+    "status": "received",
+    "transport_id": "",
+    "session_id": ""
+  },
+  {
+    "id": "rapid_cmd_3",
+    "sender_id": "+22212345678",
+    "platform": "whatsapp",
+    "command": "echo test",
+    "timestamp": "2026-01-17T18:50:38.198936149Z",
+    "priority": "",
+    "status": "received",
+    "transport_id": "",
+    "session_id": ""
+  },
+  {
+    "id": "rapid_cmd_4",
+    "sender_id": "+22212345678",
+    "platform": "whatsapp",
+    "command": "echo test",
+    "timestamp": "2026-01-17T18:50:38.200408334Z",
+    "priority": "",
+    "status": "received",
+    "transport_id": "",
+    "session_id": ""
+  },
+  {
+    "id": "rapid_cmd_5",
+    "sender_id": "+22212345678",
+    "platform": "whatsapp",
+    "command": "echo test",
+    "timestamp": "2026-01-17T18:50:38.202118377Z",
+    "priority": "",
+    "status": "received",
+    "transport_id": "",
+    "session_id": ""
+  },
+  {
+    "id": "rapid_cmd_6",
+    "sender_id": "+22212345678",
+    "platform": "whatsapp",
+    "command": "echo test",
+    "timestamp": "2026-01-17T18:50:38.203081465Z",
+    "priority": "",
+    "status": "received",
+    "transport_id": "",
+    "session_id": ""
+  },
+  {
+    "id": "rapid_cmd_7",
+    "sender_id": "+22212345678",
+    "platform": "whatsapp",
+    "command": "echo test",
+    "timestamp": "2026-01-17T18:50:38.203996238Z",
+    "priority": "",
+    "status": "received",
+    "transport_id": "",
+    "session_id": ""
+  },
+  {
+    "id": "rapid_cmd_8",
+    "sender_id": "+22212345678",
+    "platform": "whatsapp",
+    "command": "echo test",
+    "timestamp": "2026-01-17T18:50:38.204813469Z",
+    "priority": "",
+    "status": "received",
+    "transport_id": "",
+    "session_id": ""
+  },
+  {
+    "id": "rapid_cmd_9",
+    "sender_id": "+22212345678",
+    "platform": "whatsapp",
+    "command": "echo test",
+    "timestamp": "2026-01-17T18:50:38.20565301Z",
+    "priority": "",
+    "status": "received",
+    "transport_id": "",
+    "session_id": ""
+  }
+]
