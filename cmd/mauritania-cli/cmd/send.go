@@ -83,6 +83,9 @@ queued for execution when connectivity allows.`,
 			// Check network connectivity if not in offline mode
 			if !offlineMode {
 				networkStatus := networkMonitor.CheckConnectivity()
+				fmt.Printf("Network status: online=%v, type=%s, latency=%v, error=%v\n",
+					networkStatus.IsOnline, networkStatus.Connectivity, networkStatus.Latency, networkStatus.Error)
+
 				if !networkStatus.IsOnline {
 					logger.Warn("Network offline, queuing command for later retry")
 					fmt.Printf("⚠️  Network offline - command will be queued for retry when connectivity returns\n")

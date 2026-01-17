@@ -87,7 +87,7 @@ func NewNetworkMonitor() *NetworkMonitor {
 			"https://1.1.1.1",
 		},
 		httpClient: &http.Client{
-			Timeout: 5 * time.Second,
+			Timeout: 10 * time.Second, // Increased timeout for mobile
 		},
 		stopChan: make(chan struct{}),
 	}
@@ -140,13 +140,28 @@ func (nm *NetworkMonitor) performConnectivityCheck() NetworkStatus {
 		LastChecked: time.Now(),
 	}
 
-	// Try DNS resolution first (fast)
-	_, err := net.ResolveIPAddr("ip4", "google.com")
-	if err != nil {
-		status.IsOnline = false
-		status.Error = fmt.Errorf("DNS resolution failed: %w", err)
-		status.Connectivity = ConnectivityOffline
-		return status
+	// Try multiple connectivity tests for mobile environments
+	dnsTests := []string{"google.com", "cloudflare.com", "1.1.1.1"}
+	dnsSuccess := false
+
+	for _, host := range dnsTests {
+		if _, err := net.ResolveIPAddr("ip4", host); err == nil {
+			dnsSuccess = true
+			break
+		}
+	}
+
+	// If DNS fails, try direct IP connectivity test
+	if !dnsSuccess {
+		// Test direct connection to Cloudflare DNS
+		conn, err := net.DialTimeout("tcp", "1.1.1.1:53", 3*time.Second)
+		if err != nil {
+			status.IsOnline = false
+			status.Error = fmt.Errorf("DNS and direct IP connectivity tests failed")
+			status.Connectivity = ConnectivityOffline
+			return status
+		}
+		conn.Close()
 	}
 
 	// Try HTTP connectivity to multiple endpoints

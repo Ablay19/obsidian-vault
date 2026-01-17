@@ -60,7 +60,7 @@ func newConfigShowCmd() *cobra.Command {
 			fmt.Printf("Transports:\n")
 			fmt.Printf("  Default: %s\n", config.Transports.Default)
 			fmt.Printf("  Social Media:\n")
-			fmt.Printf("    WhatsApp: %s\n", boolToConfigStatus(cm.IsSet("transports.social_media.whatsapp.api_key")))
+			fmt.Printf("    WhatsApp: %s\n", boolToConfigStatus(cm.IsSet("transports.social_media.whatsapp.database_path")))
 			fmt.Printf("    Telegram: %s\n", boolToConfigStatus(cm.IsSet("transports.social_media.telegram.bot_token")))
 			fmt.Printf("    Facebook: %s\n", boolToConfigStatus(cm.IsSet("transports.social_media.facebook.access_token")))
 			fmt.Printf("  Shipper: %s\n", boolToConfigStatus(cm.IsSet("transports.shipper.api_key")))

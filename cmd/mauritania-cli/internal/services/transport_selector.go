@@ -113,9 +113,8 @@ func (ts *TransportSelector) getAvailableTransports() []string {
 	available := []string{}
 
 	// Check which transports are configured
-	if ts.config.Transports.SocialMedia.WhatsApp.APIKey != "" {
-		available = append(available, "whatsapp")
-	}
+	// WhatsApp with WhatsMeow doesn't need API keys - always available
+	available = append(available, "whatsapp")
 	if ts.config.Transports.SocialMedia.Telegram.BotToken != "" {
 		available = append(available, "telegram")
 	}

@@ -57,15 +57,11 @@ type SocialMediaConfig struct {
 	Facebook FacebookConfig `mapstructure:"facebook"`
 }
 
-// WhatsAppConfig holds WhatsApp API configuration
+// WhatsAppConfig holds WhatsApp configuration for WhatsMeow
 type WhatsAppConfig struct {
-	APIKey        string `mapstructure:"api_key"`
-	APISecret     string `mapstructure:"api_secret"`
-	PhoneNumber   string `mapstructure:"phone_number"`
-	PhoneNumberID string `mapstructure:"phone_number_id"`
-	WebhookURL    string `mapstructure:"webhook_url"`
-	WebhookToken  string `mapstructure:"webhook_token"`
-	RateLimit     int    `mapstructure:"rate_limit"` // messages per hour
+	DatabasePath string `mapstructure:"database_path"` // SQLite database path for session storage
+	RateLimit    int    `mapstructure:"rate_limit"`    // messages per hour
+	AutoConnect  bool   `mapstructure:"auto_connect"`  // automatically connect on startup
 }
 
 // TelegramConfig holds Telegram Bot API configuration
@@ -423,7 +419,7 @@ func (cm *ConfigManager) ValidateConfig() []string {
 	var errors []string
 
 	// Validate transport configurations
-	if cm.config.Transports.SocialMedia.WhatsApp.APIKey == "" &&
+	if cm.config.Transports.SocialMedia.WhatsApp.DatabasePath == "" &&
 		cm.config.Transports.SocialMedia.Telegram.BotToken == "" &&
 		cm.config.Transports.SocialMedia.Facebook.AccessToken == "" {
 		errors = append(errors, "at least one social media transport must be configured")
