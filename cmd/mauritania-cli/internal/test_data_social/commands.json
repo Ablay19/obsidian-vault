@@ -1,0 +1,68 @@
+[
+  {
+    "id": "cmd_whatsapp_simple",
+    "sender_id": "+22212345678",
+    "platform": "whatsapp",
+    "command": "pwd",
+    "timestamp": "2026-01-17T18:50:38.181586251Z",
+    "priority": "",
+    "status": "received",
+    "transport_id": "",
+    "session_id": ""
+  },
+  {
+    "id": "cmd_whatsapp_args",
+    "sender_id": "+22212345678",
+    "platform": "whatsapp",
+    "command": "ls -la /tmp",
+    "timestamp": "2026-01-17T18:50:38.181975223Z",
+    "priority": "",
+    "status": "received",
+    "transport_id": "",
+    "session_id": ""
+  },
+  {
+    "id": "cmd_telegram_simple",
+    "sender_id": "123456789",
+    "platform": "telegram",
+    "command": "pwd",
+    "timestamp": "2026-01-17T18:50:38.183097114Z",
+    "priority": "",
+    "status": "received",
+    "transport_id": "",
+    "session_id": ""
+  },
+  {
+    "id": "cmd_telegram_args",
+    "sender_id": "123456789",
+    "platform": "telegram",
+    "command": "ls -la /tmp",
+    "timestamp": "2026-01-17T18:50:38.18375772Z",
+    "priority": "",
+    "status": "received",
+    "transport_id": "",
+    "session_id": ""
+  },
+  {
+    "id": "cmd_facebook_simple",
+    "sender_id": "facebook_user_123",
+    "platform": "facebook",
+    "command": "pwd",
+    "timestamp": "2026-01-17T18:50:38.185390372Z",
+    "priority": "",
+    "status": "received",
+    "transport_id": "",
+    "session_id": ""
+  },
+  {
+    "id": "cmd_facebook_args",
+    "sender_id": "facebook_user_123",
+    "platform": "facebook",
+    "command": "ls -la /tmp",
+    "timestamp": "2026-01-17T18:50:38.186588129Z",
+    "priority": "",
+    "status": "received",
+    "transport_id": "",
+    "session_id": ""
+  }
+]

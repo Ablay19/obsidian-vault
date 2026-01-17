@@ -221,6 +221,62 @@ class AIFallbackService {
 
 ---
 
+## R6: WhatsApp Integration Patterns
+
+**Question**: How to integrate WhatsApp for programmatic messaging and direct code submission?
+
+### Findings
+
+**WhatsApp API Options**:
+
+1. **WhatsApp Business API** (Recommended):
+   - Official enterprise solution
+   - HTTP API for sending/receiving messages
+   - Webhook support for incoming messages
+   - Template messaging for marketing
+   - Phone number verification required
+
+2. **WhatsApp Cloud API**:
+   - Meta-hosted version of Business API
+   - Easier setup for developers
+   - Similar capabilities but cloud-managed
+
+**Integration Approach**:
+- Use WhatsApp Business API with HTTP webhooks
+- Implement message parsing for direct code detection
+- Support both text and media messages
+- Handle authentication via API keys
+
+**Security Considerations**:
+- API key management (rotate regularly)
+- Webhook signature validation
+- Rate limiting (WhatsApp has strict limits)
+- Content moderation for user-generated code
+
+**Implementation Pattern**:
+```typescript
+class WhatsAppService {
+  async sendMessage(phoneNumber: string, message: string): Promise<void> {
+    // Send via WhatsApp Business API
+  }
+
+  async handleWebhook(payload: WhatsAppWebhook): Promise<void> {
+    // Process incoming messages
+    // Detect Manim code patterns
+    // Route to appropriate handler
+  }
+}
+```
+
+**Cost Structure**:
+- Free tier available for low-volume testing
+- Pay-per-message for production
+- Phone number leasing required
+
+**Decision**: Use WhatsApp Business API with webhook integration for reliable, programmatic messaging with direct code submission support.
+
+---
+
 ## Decisions Summary
 
 | Topic | Decision | Rationale |

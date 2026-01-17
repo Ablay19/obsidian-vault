@@ -1,0 +1,460 @@
+openapi: 3.0.3
+info:
+  title: CLI Service Manager API
+  description: REST API for the CLI Service Manager (internal communication)
+  version: 1.0.0
+  contact:
+    name: AI Manim Video Generator Team
+
+servers:
+  - url: http://localhost:3000
+    description: Development server
+  - url: https://cli-manager.local
+    description: Local deployment
+
+paths:
+  /health:
+    get:
+      summary: Get service health status
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy]
+                  timestamp:
+                    type: string
+                    format: date-time
+                  version:
+                    type: string
+
+  /services:
+    get:
+      summary: List all services
+      operationId: listServices
+      responses:
+        '200':
+          description: List of services
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  services:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ServiceStatus'
+
+    post:
+      summary: Create or update service configuration
+      operationId: upsertService
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceConfig'
+      responses:
+        '201':
+          description: Service created
+        '200':
+          description: Service updated
+
+  /services/{serviceId}:
+    get:
+      summary: Get service status
+      operationId: getService
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Service status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceStatus'
+        '404':
+          description: Service not found
+
+    put:
+      summary: Update service configuration
+      operationId: updateService
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceConfig'
+      responses:
+        '200':
+          description: Service updated
+
+    delete:
+      summary: Remove service configuration
+      operationId: deleteService
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Service removed
+
+  /services/{serviceId}/start:
+    post:
+      summary: Start a service
+      operationId: startService
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Service start initiated
+        '409':
+          description: Service already running
+
+  /services/{serviceId}/stop:
+    post:
+      summary: Stop a service
+      operationId: stopService
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Service stop initiated
+        '409':
+          description: Service not running
+
+  /services/{serviceId}/logs:
+    get:
+      summary: Get service logs
+      operationId: getServiceLogs
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: lines
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: follow
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Service logs
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /environments:
+    get:
+      summary: List environments
+      operationId: listEnvironments
+      responses:
+        '200':
+          description: List of environments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  environments:
+                    type: array
+                    items:
+                      type: string
+
+  /environments/{env}/services/bulk/start:
+    post:
+      summary: Start all services in environment
+      operationId: startAllServices
+      parameters:
+        - name: env
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Bulk start initiated
+
+  /environments/{env}/services/bulk/stop:
+    post:
+      summary: Stop all services in environment
+      operationId: stopAllServices
+      parameters:
+        - name: env
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Bulk stop initiated
+
+  /commands/history:
+    get:
+      summary: Get command execution history
+      operationId: getCommandHistory
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: service
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Command history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  commands:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CommandHistory'
+
+components:
+  schemas:
+    ServiceConfig:
+      type: object
+      required:
+        - id
+        - name
+        - type
+      properties:
+        id:
+          type: string
+          description: Unique service identifier
+        name:
+          type: string
+          description: Human-readable service name
+        type:
+          type: string
+          enum: [docker, kubernetes, process]
+          description: Service orchestration type
+        image:
+          type: string
+          description: Docker image name
+        command:
+          type: array
+          items:
+            type: string
+          description: Process command array
+        ports:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortMapping'
+        dependencies:
+          type: array
+          items:
+            type: string
+          description: Service dependencies
+        environment:
+          type: object
+          additionalProperties:
+            type: string
+          description: Environment variables
+        resources:
+          $ref: '#/components/schemas/ResourceLimits'
+        healthCheck:
+          $ref: '#/components/schemas/HealthCheckConfig'
+
+    PortMapping:
+      type: object
+      required:
+        - container
+        - host
+      properties:
+        container:
+          type: integer
+          description: Internal container port
+        host:
+          type: integer
+          description: External host port
+        protocol:
+          type: string
+          enum: [tcp, udp]
+          default: tcp
+
+    ResourceLimits:
+      type: object
+      properties:
+        cpu:
+          type: object
+          properties:
+            request:
+              type: string
+              description: CPU request (e.g., "100m")
+            limit:
+              type: string
+              description: CPU limit (e.g., "500m")
+        memory:
+          type: object
+          properties:
+            request:
+              type: string
+              description: Memory request (e.g., "64Mi")
+            limit:
+              type: string
+              description: Memory limit (e.g., "256Mi")
+
+    HealthCheckConfig:
+      type: object
+      required:
+        - type
+        - interval
+        - timeout
+        - retries
+      properties:
+        type:
+          type: string
+          enum: [http, tcp, command]
+        endpoint:
+          type: string
+          description: HTTP endpoint for health checks
+        port:
+          type: integer
+          description: TCP port for health checks
+        command:
+          type: array
+          items:
+            type: string
+          description: Command to execute for health checks
+        interval:
+          type: integer
+          description: Check interval in seconds
+        timeout:
+          type: integer
+          description: Timeout in seconds
+        retries:
+          type: integer
+          description: Number of retries before failure
+
+    ServiceStatus:
+      type: object
+      required:
+        - serviceId
+        - state
+        - health
+      properties:
+        serviceId:
+          type: string
+          description: Service identifier
+        state:
+          type: string
+          enum: [stopped, starting, healthy, unhealthy, stopping, failed, unknown]
+          description: Current service state
+        health:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [healthy, unhealthy, unknown]
+            lastCheck:
+              type: string
+              format: date-time
+            message:
+              type: string
+        lastSeen:
+          type: string
+          format: date-time
+        uptime:
+          type: integer
+          description: Uptime in seconds
+        resourceUsage:
+          type: object
+          properties:
+            cpu:
+              type: string
+              description: CPU usage percentage
+            memory:
+              type: string
+              description: Memory usage
+        errorMessage:
+          type: string
+          description: Last error message
+        restartCount:
+          type: integer
+          description: Number of restarts
+
+    CommandHistory:
+      type: object
+      required:
+        - id
+        - timestamp
+        - command
+        - status
+      properties:
+        id:
+          type: string
+          description: Unique command ID
+        timestamp:
+          type: string
+          format: date-time
+          description: Execution timestamp
+        command:
+          type: string
+          description: CLI command executed
+        args:
+          type: array
+          items:
+            type: string
+          description: Command arguments
+        user:
+          type: string
+          description: User who executed command
+        environment:
+          type: string
+          description: Target environment
+        status:
+          type: string
+          enum: [success, failure, partial]
+          description: Execution status
+        duration:
+          type: integer
+          description: Execution time in milliseconds
+        affectedServices:
+          type: array
+          items:
+            type: string
+          description: Services affected by command
+        errorMessage:
+          type: string
+          description: Error details if failed

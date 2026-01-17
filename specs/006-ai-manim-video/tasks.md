@@ -1,9 +1,11 @@
-# Tasks: AI Manim Video Generator
+# Tasks: AI Manim Video Generator with WhatsApp & Direct Code Enhancement
 
-**Input**: Design documents from `/specs/006-ai-manim-video/`
+**Input**: Enhanced feature specification including WhatsApp integration and direct Manim code submission
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
 
-**Tests**: Tests are NOT included in this task list as they were not explicitly requested in the feature specification.
+**New User Stories Added**:
+- User Story 5 - Direct Code Submission (Priority: P1)
+- User Story 6 - WhatsApp Integration (Priority: P1)
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -172,7 +174,9 @@
 - [x] T083-RELAY [US3] Implement Worker→KV relay in workers/ai-manim-worker/src/services/session.ts updating job status on renderer callbacks
 - [x] T084-RELAY [US3] Implement status sync relay between Worker and Renderer in workers/ai-manim-worker/src/utils/renderer-client.ts with polling fallback
 
-**Checkpoint**: All three user stories should now be independently functional. Complete flow: problem submission → AI code → video generation.
+**Checkpoint**: All three user stories should now be independently functional. Complete flow: problem → AI → video generation.
+
+---
 
 ## Phase 6: User Story 4 - Video Delivery (Priority: P2)
 
@@ -205,28 +209,178 @@
 
 **Checkpoint**: User Story 4 complete. Full end-to-end flow works: problem → AI → video → delivery → deletion.
 
-## Phase 7: Polish & Cross-Cutting Concerns
+---
+
+## Phase 7: Core Infrastructure for Multi-Platform Support
+
+**Purpose**: Extend existing system to support multiple messaging platforms and direct code submission
+
+### Extend Data Models
+
+- [x] T102 [P] Add Platform enum to types in workers/ai-manim-worker/src/types/index.ts
+- [x] T103 [P] Update UserSession interface to support multiple platform IDs in workers/ai-manim-worker/src/types/index.ts
+- [x] T104 [P] Extend ProcessingJob interface to include submission_type in workers/ai-manim-worker/src/types/index.ts
+- [x] T105 [P] Add WhatsAppMessage interface to types in workers/ai-manim-worker/src/types/index.ts
+
+### Update Session Service
+
+- [x] T106 Update SessionService to handle multiple platform IDs in workers/ai-manim-worker/src/services/session.ts
+- [x] T107 Add platform-specific session creation in workers/ai-manim-worker/src/services/session.ts
+- [x] T108 Implement cross-platform session lookup in workers/ai-manim-worker/src/services/session.ts
+
+---
+
+## Phase 8: User Story 5 - Direct Code Submission (Priority: P1) 🎯 Enhanced MVP
+
+**Goal**: Allow users to submit Manim code directly and receive video generation without AI processing
+
+**Independent Test**: Users can submit valid Manim code and receive rendered video; invalid code receives helpful error messages
+
+### Implementation for Direct Code Submission
+
+- [x] T109 [P] [US5] Add submission_type validation in workers/ai-manim-worker/src/handlers/code.ts
+- [x] T110 [P] [US5] Implement parseCodeSubmission in workers/ai-manim-worker/src/handlers/code.ts to extract Manim code and options
+- [x] T111 [P] [US5] Implement validateManimCode in workers/ai-manim-worker/src/handlers/code.ts with syntax and security checks
+- [x] T112 [P] [US5] Implement createCodeJob in workers/ai-manim-worker/src/services/session.ts for direct code submissions
+- [x] T113 [US5] Implement processCodeSubmission in workers/ai-manim-worker/src/handlers/code.ts to orchestrate direct rendering
+- [x] T114 [US5] Implement sendCodeConfirmation in workers/ai-manim-worker/src/handlers/code.ts for submission acknowledgment
+- [x] T115 [US5] Implement sendCodeError in workers/ai-manim-worker/src/handlers/code.ts for validation failures
+- [x] T116 [US5] Add code submission bypass in TelegramHandler to detect Manim code patterns in workers/ai-manim-worker/src/handlers/telegram.ts
+- [x] T117 [US5] Add logging for code submission flow in workers/ai-manim-worker/src/handlers/code.ts
+
+### Direct Code API Endpoints
+
+- [x] T118 [P] [US5] Add POST /api/v1/code endpoint in workers/ai-manim-worker/src/index.ts for direct code submission
+- [x] T119 [P] [US5] Add GET /api/v1/code/validate endpoint in workers/ai-manim-worker/src/index.ts for code syntax checking
+- [x] T120 [P] [US5] Update video access endpoint to handle code jobs in workers/ai-manim-worker/src/handlers/video.ts
+
+### Direct Code Integration Relays
+
+- [x] T121-RELAY [US5] Implement Code→Renderer relay in workers/ai-manim-worker/src/handlers/code.ts bypassing AI generation
+- [x] T122-RELAY [US5] Implement Code→KV relay in workers/ai-manim-worker/src/services/session.ts with submission_type metadata
+- [x] T123-RELAY [US5] Implement Renderer→Status relay for code jobs in workers/ai-manim-worker/src/services/manim.ts
+
+---
+
+## Phase 9: User Story 6 - WhatsApp Integration (Priority: P1) 🎯 Platform Expansion
+
+**Goal**: Enable WhatsApp users to submit problems and code for video generation
+
+**Independent Test**: WhatsApp users can submit problems/code and receive video links through WhatsApp messages
+
+### WhatsApp Webhook Infrastructure
+
+- [x] T124 [P] [US6] Implement validateWhatsAppWebhook in workers/ai-manim-worker/src/handlers/whatsapp.ts to verify webhook signatures
+- [x] T125 [P] [US6] Implement parseWhatsAppMessage in workers/ai-manim-worker/src/handlers/whatsapp.ts to extract user messages
+- [x] T126 [P] [US6] Implement WhatsAppMessageHandler base structure in workers/ai-manim-worker/src/handlers/whatsapp.ts
+- [x] T127 [US6] Add POST /webhook/whatsapp route in workers/ai-manim-worker/src/index.ts with webhook validation
+
+### WhatsApp Message Processing
+
+- [x] T128 [P] [US6] Implement detectMessageType in workers/ai-manim-worker/src/handlers/whatsapp.ts for text vs code detection
+- [x] T129 [US6] Implement handleWhatsAppProblem in workers/ai-manim-worker/src/handlers/whatsapp.ts for problem submissions
+- [x] T130 [US6] Implement handleWhatsAppCode in workers/ai-manim-worker/src/handlers/whatsapp.ts for code submissions
+- [x] T131 [US6] Implement sendWhatsAppMessage in workers/ai-manim-worker/src/handlers/whatsapp.ts for user responses
+- [x] T132 [US6] Implement sendWhatsAppVideoLink in workers/ai-manim-worker/src/handlers/whatsapp.ts for video delivery
+- [x] T133 [US6] Implement sendWhatsAppError in workers/ai-manim-worker/src/handlers/whatsapp.ts for error handling
+
+### WhatsApp Session Management
+
+- [x] T134 [P] [US6] Add WhatsApp session handling in workers/ai-manim-worker/src/services/session.ts with WhatsApp phone numbers
+- [x] T135 [US6] Implement createWhatsAppSession in workers/ai-manim-worker/src/services/session.ts for new users
+- [x] T136 [US6] Add WhatsApp session auto-extend logic in workers/ai-manim-worker/src/services/session.ts
+
+### WhatsApp External Integration
+
+- [x] T137 [P] [US6] Implement WhatsAppApiClient in workers/ai-manim-worker/src/services/whatsapp.ts for external API calls
+- [x] T138 [P] [US6] Add WhatsApp media upload handling in workers/ai-manim-worker/src/services/whatsapp.ts
+- [x] T139 [P] [US6] Implement WhatsApp webhook verification in workers/ai-manim-worker/src/services/whatsapp.ts
+- [x] T140 [US6] Add WhatsApp rate limiting in workers/ai-manim-worker/src/middleware/rate-limit.ts
+
+### WhatsApp Integration Relays
+
+- [x] T141-RELAY [US6] Implement WhatsApp→Session relay in workers/ai-manim-worker/src/handlers/whatsapp.ts with phone number mapping
+- [x] T142-RELAY [US6] Implement WhatsApp→AI/Code relay in workers/ai-manim-worker/src/handlers/whatsapp.ts routing to appropriate handler
+- [x] T143-RELAY [US6] Implement Session→WhatsApp relay in workers/ai-manim-worker/src/handlers/whatsapp.ts for message delivery
+
+---
+
+## Phase 10: Platform Abstraction & Cross-Platform Features
+
+**Purpose**: Unify Telegram and WhatsApp handling with shared components
+
+### Abstract Message Handler
+
+- [x] T144 [P] Create BaseMessageHandler abstract class in workers/ai-manim-worker/src/handlers/base.ts
+- [x] T145 [P] Refactor TelegramHandler to extend BaseMessageHandler in workers/ai-manim-worker/src/handlers/telegram.ts
+- [x] T146 [P] Refactor WhatsAppHandler to extend BaseMessageHandler in workers/ai-manim-worker/src/handlers/whatsapp.ts
+- [x] T147 [P] Create MessageRouter in workers/ai-manim-worker/src/handlers/router.ts to route by platform
+
+### Cross-Platform Features
+
+- [x] T148 [P] Add platform detection in workers/ai-manim-worker/src/utils/platform-detector.ts
+- [x] T149 [P] Implement unified message formatting in workers/ai-manim-worker/src/utils/message-formatter.ts
+- [x] T150 [P] Add cross-platform job status updates in workers/ai-manim-worker/src/services/session.ts
+- [x] T151 [P] Create unified error handling in workers/ai-manim-worker/src/utils/error-handler.ts
+
+### Enhanced Web Dashboard
+
+- [ ] T152 [P] Add platform selector to web dashboard in workers/ai-manim-worker/public/dashboard.html
+- [ ] T153 [P] Implement direct code submission UI in workers/ai-manim-worker/public/dashboard.html with code editor
+- [ ] T154 [P] Add WhatsApp connection instructions in workers/ai-manim-worker/public/dashboard.html
+- [ ] T155 [P] Update dashboard JavaScript for direct code submission in workers/ai-manim-worker/public/scripts/dashboard.js
+- [ ] T156 [P] Add code editor with syntax highlighting in workers/ai-manim-worker/public/scripts/dashboard.js
+
+---
+
+## Phase 11: Testing, Documentation & Polish
+
+**Purpose**: Ensure quality and documentation for new features
+
+### Testing
+
+- [x] T157 [P] Create unit tests for direct code submission in workers/ai-manim-worker/tests/unit/code.test.ts
+- [x] T158 [P] Create unit tests for WhatsApp handler in workers/ai-manim-worker/tests/unit/whatsapp.test.ts
+- [ ] T159 [P] Create integration tests for WhatsApp webhook in workers/ai-manim-worker/tests/integration/whatsapp.test.ts
+- [ ] T160 [P] Create integration tests for direct code API in workers/ai-manim-worker/tests/integration/code.test.ts
+
+### Documentation
+
+- [ ] T161 [P] Update API documentation for code endpoints in workers/ai-manim-worker/contracts/openapi.yaml
+- [ ] T162 [P] Add WhatsApp integration guide in docs/whatsapp-integration.md
+- [ ] T163 [P] Update quickstart guide for multi-platform support in docs/quickstart.md
+- [ ] T164 [P] Add direct code submission examples in docs/code-submission.md
+
+### Configuration & Deployment
+
+- [x] T165 [P] Update environment variables for WhatsApp in workers/ai-manim-worker/.env.example
+- [ ] T166 [P] Add WhatsApp configuration to wrangler.toml in workers/ai-manim-worker/wrangler.toml
+- [ ] T167 [P] Update deployment scripts for WhatsApp webhook setup in workers/ai-manim-worker/scripts/deploy.sh
+
+---
+
+## Phase 12: Polish & Cross-Cutting Concerns
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [x] T102 [P] Update docs/manim-worker.md with deployment instructions and architecture overview
-- [x] T103 [P] Create .env.example file at workers/ai-manim-worker/.env.example with all required environment variables documented
-- [x] T104 [P] Update AGENTS.md with AI provider configuration details from AGENTS.md
-- [x] T105 Implement rate limiting in workers/ai-manim-worker/src/middleware/rate-limit.ts for 10 requests per minute per user
-- [x] T106 Implement request timeout handling in workers/ai-manim-worker/src/utils/timeout.ts for 5-minute max processing
-- [x] T107 Add CORS configuration in workers/ai-manim-worker/src/index.ts for web dashboard access
-- [x] T108 Implement error aggregation in workers/ai-manim-worker/src/utils/errors.ts for better user-facing messages
-- [x] T109 Add structured metrics logging in workers/ai-manim-worker/src/utils/metrics.ts for Cloudflare dashboard
-- [x] T110 Update wrangler.toml with production environment settings
-- [x] T111 Create deployment scripts in workers/ai-manim-worker/scripts/ for worker and renderer deployment
-- [x] T112 Run quickstart.md validation to ensure all setup steps are documented correctly
+- [x] T168 [P] Update docs/manim-worker.md with deployment instructions and architecture overview
+- [x] T169 [P] Create .env.example file at workers/ai-manim-worker/.env.example with all required environment variables documented
+- [x] T170 [P] Update AGENTS.md with AI provider configuration details from AGENTS.md
+- [x] T171 Implement rate limiting in workers/ai-manim-worker/src/middleware/rate-limit.ts for 10 requests per minute per user
+- [x] T172 Implement request timeout handling in workers/ai-manim-worker/src/utils/timeout.ts for 5-minute max processing
+- [x] T173 Add CORS configuration in workers/ai-manim-worker/src/index.ts for web dashboard access
+- [x] T174 Implement error aggregation in workers/ai-manim-worker/src/utils/errors.ts for better user-facing messages
+- [x] T175 Add structured metrics logging in workers/ai-manim-worker/src/utils/metrics.ts for Cloudflare dashboard
+- [x] T176 Update wrangler.toml with production environment settings
+- [x] T177 Create deployment scripts in workers/ai-manim-worker/scripts/ for worker and renderer deployment
+- [x] T178 Run quickstart.md validation to ensure all setup steps are documented correctly
 
 ### Cross-Component Integration Relays
 
-- [x] T113-RELAY Implement end-to-end data flow verification in workers/ai-manim-worker/tests/integration/e2e-flow.test.ts
-- [x] T114-RELAY Create relay health checks in workers/ai-manim-worker/src/health/relays.ts verifying all component connections
-- [x] T115-RELAY Implement distributed tracing in workers/ai-manim-worker/src/utils/tracing.ts tracking requests across Telegram→Worker→AI→Renderer→R2
-- [x] T116-RELAY Add circuit breakers in workers/ai-manim-worker/src/utils/circuit-breaker.ts for Worker→Renderer communication failures
+- [x] T179-RELAY Implement end-to-end data flow verification in workers/ai-manim-worker/tests/integration/e2e-flow.test.ts
+- [x] T180-RELAY Create relay health checks in workers/ai-manim-worker/src/health/relays.ts verifying all component connections
+- [x] T181-RELAY Implement distributed tracing in workers/ai-manim-worker/src/utils/tracing.ts tracking requests across Telegram→Worker→AI→Renderer→R2
+- [x] T182-RELAY Add circuit breakers in workers/ai-manim-worker/src/utils/circuit-breaker.ts for Worker→Renderer communication failures
 
 ---
 
@@ -242,10 +396,10 @@ Telegram Bot ──(Webhook)──> Worker
                               ├─> KV Store ─┐
                               │               │
                               └─> AI Service ─> Fallback Chain
-                                                     │
-                              ┌────────────────────┘
+                                             │
+                              ┌──────────────┘
                               │
-                        Renderer Server
+                         Renderer Server
                               │
                               ├─> R2 Storage
                               │
@@ -273,23 +427,25 @@ Telegram Bot ──(Webhook)──> Worker
 | Renderer→R2 | T082-RELAY | Renderer→R2 | Direct video upload |
 | KV→Telegram | T097-RELAY | SessionService→TelegramHandler | Deliver ready jobs |
 | KV→R2 Deletion | T099-RELAY | SessionService→R2 | Immediate delete after access |
+| Code→Renderer | T121-RELAY | CodeHandler→Renderer | Bypass AI generation |
+| WhatsApp→Session | T141-RELAY | WhatsAppHandler→SessionService | Phone number mapping |
 
 ### Data Flow Across Relays
 
 ```
-[User submits problem]
+[User submits problem/code]
          │
          ▼
-Telegram → Worker webhook (T036)
+Telegram/WhatsApp → Worker webhook (T036/T127)
          │
          ▼
-Session creation/retrieval (T038) → KV write (T048-RELAY)
+Session creation/retrieval (T038/T135) → KV write (T048-RELAY)
          │
          ▼
-AI generation (T050-T055) → KV save code (T064-RELAY)
+AI generation OR direct code (T050-T055 OR T109-T113) → KV save (T064-RELAY/T122-RELAY)
          │
          ▼
-Render request (T079-RELAY) → Renderer HTTP
+Render request (T079-RELAY/T121-RELAY) → Renderer HTTP
          │
          ▼
 Renderer executes (T067-T069) → R2 upload (T082-RELAY)
@@ -298,7 +454,7 @@ Renderer executes (T067-T069) → R2 upload (T082-RELAY)
 Renderer callback (T080-RELAY) → Worker update (T083-RELAY) → KV
          │
          ▼
-Telegram delivery (T085) → Video URL sent
+Telegram/WhatsApp delivery (T085/T132) → Video URL sent
          │
          ▼
 [User accesses video] → Access tracking (T087) → KV update
@@ -315,179 +471,167 @@ Immediate R2 deletion (T099-RELAY)
 
 - **Setup (Phase 1)**: No dependencies - can start immediately
 - **Foundational (Phase 2)**: Depends on Setup completion - BLOCKS all user stories
-- **User Stories (Phase 3-6)**: All depend on Foundational phase completion
+- **User Stories 1-4 (Phases 3-6)**: All depend on Foundational phase completion
   - US1 (Problem Submission) can start after Foundational - NO dependencies on other stories
   - US2 (AI Problem Solving) can start after Foundational - can work in parallel with US1
-  - US3 (Video Generation) can start after US2 (needs AI code)
+  - US3 (Video Generation) can start after US2 (needs AI code) or US5 (direct code)
   - US4 (Video Delivery) can start after US3 (needs generated video)
-- **Polish (Phase 7)**: Depends on all desired user stories being complete
+- **Multi-Platform Core (Phase 7)**: Depends on base functionality completion
+- **User Stories 5-6 (Phases 8-9)**: Depend on Multi-Platform Core
+- **Platform Abstraction (Phase 10)**: Depends on both Direct Code and WhatsApp implementation
+- **Testing & Polish (Phases 11-12)**: Depends on all feature implementation
 
 ### User Story Dependencies
 
 ```
-US1 (Problem Submission) ──────┐
-                               ├──> All independent after Foundational
-US2 (AI Problem Solving) ──────┘
-        │
-        └──> US3 (Video Generation) - needs AI code from US2
-                │
-                └──> US4 (Video Delivery) - needs video from US3
+US1 (Telegram Problem) ──────┐
+                              ├──> All independent after Foundational
+US2 (AI Generation) ────────────┘
+         │
+         └──> US3 (Video Generation) - needs AI code from US2
+                 │
+                 └──> US4 (Video Delivery) - needs video from US3
+
+US5 (Direct Code) ──────────┐
+                             └──> US3 (can also use direct code)
+US6 (WhatsApp) ──────────────┘
+
+US5 (Direct Code) ──────┐
+US6 (WhatsApp) ───────────┼──> US10 (Platform Abstraction)
+US1 (Telegram) ──────────┘
 ```
-
-### Within Each User Story
-
-- Models before services (if applicable)
-- Services before endpoints/handlers
-- Core implementation before integration
-- Validation and error handling after core logic
-- Logging added throughout
 
 ### Parallel Opportunities
 
 **Setup Phase (Phase 1)**:
+- T001, T002, T003, T004, T005 can run in parallel
 - T006, T007, T008 can run in parallel
 
 **Foundational Phase (Phase 2)**:
 - T009-T014 (all type definitions) can run in parallel
 - T019-T021 (handler structures) can run in parallel
 
-**User Story 1 (Phase 3)**:
-- T036, T037, T038, T039 can run in parallel
-- T047-RELAY, T048-RELAY, T049-RELAY can run in parallel after core implementation
+**Multi-Platform Core (Phase 7)**:
+- T102, T103, T104, T105 can run in parallel
+- T106, T107, T108 can run in parallel
 
-**User Story 2 (Phase 4)**:
-- T050-T055 (all AI providers) can run in parallel
-- T063-RELAY, T064-RELAY, T065-RELAY, T066-RELAY can run in parallel after core implementation
+**Direct Code Submission (Phase 8)**:
+- T109, T110, T111, T112 can run in parallel
+- T118, T119, T120 can run in parallel
 
-**User Story 3 (Phase 5)**:
-- T067, T068, T069, T070 can run in parallel
-- T071, T072, T073 can run in parallel
-- T079-RELAY, T080-RELAY, T081-RELAY, T082-RELAY, T083-RELAY, T084-RELAY can run in parallel after core implementation
+**WhatsApp Integration (Phase 9)**:
+- T124, T125, T126, T127 can run in parallel
+- T128, T129, T130, T131, T132, T133 can run in parallel
+- T137, T138, T139, T140 can run in parallel
 
-**User Story 4 (Phase 6)**:
-- T085, T086, T087, T088, T089 can run in parallel
-- T097-RELAY, T098-RELAY, T099-RELAY, T100-RELAY, T101-RELAY can run in parallel after core implementation
+**Platform Abstraction (Phase 10)**:
+- T144, T145, T146, T147 can run in parallel
+- T148, T149, T150, T151 can run in parallel
 
-**Polish Phase (Phase 7)**:
-- T102, T103, T104 can run in parallel
-- T113-RELAY, T114-RELAY, T115-RELAY, T116-RELAY can run in parallel
-
----
-
-## Parallel Example: User Story 1
-
-```bash
-# Launch all core utilities for User Story 1 together:
-Task: T036 - Implement validateWebhookSecret in workers/ai-manim-worker/src/handlers/telegram.ts
-Task: T037 - Implement parseTelegramUpdate in workers/ai-manim-worker/src/handlers/telegram.ts
-Task: T038 - Implement createOrGetSession in workers/ai-manim-worker/src/services/session.ts
-Task: T039 - Implement createJob in workers/ai-manim-worker/src/services/session.ts
-
-# After core implementation, launch all integration relays together:
-Task: T047-RELAY - Implement Telegram→Session relay in workers/ai-manim-worker/src/handlers/telegram.ts
-Task: T048-RELAY - Implement Session→KV relay in workers/ai-manim-worker/src/services/session.ts
-Task: T049-RELAY - Implement Session→Telegram confirmation relay in workers/ai-manim-worker/src/handlers/telegram.ts
-```
-
----
-
-## Parallel Example: User Story 2
-
-```bash
-# Launch all AI provider implementations for User Story 2 together:
-Task: T050 - Implement OpenAIProvider class in workers/ai-manim-worker/src/services/fallback.ts
-Task: T051 - Implement GeminiProvider class in workers/ai-manim-worker/src/services/fallback.ts
-Task: T052 - Implement GroqAIProvider class in workers/ai-manim-worker/src/services/fallback.ts
-Task: T053 - Implement HuggingFaceProvider class in workers/ai-manim-worker/src/services/fallback.ts
-Task: T054 - Implement DeepSeekProvider class in workers/ai-manim-worker/src/services/fallback.ts
-Task: T055 - Implement CloudflareAIProvider class in workers/ai-manim-worker/src/services/fallback.ts
-
-# After core implementation, launch all integration relays together:
-Task: T063-RELAY - Implement Telegram→AI relay in workers/ai-manim-worker/src/handlers/telegram.ts
-Task: T064-RELAY - Implement AI→KV relay in workers/ai-manim-worker/src/services/fallback.ts
-Task: T065-RELAY - Implement AI fallback relay in workers/ai-manim-worker/src/services/fallback.ts
-Task: T066-RELAY - Implement AI→Validation relay in workers/ai-manim-worker/src/services/fallback.ts
-```
-
----
-
-## Parallel Example: User Story 3 (WORKER↔RENDERER RELAYS)
-
-```bash
-# Launch all renderer core implementations together:
-Task: T067 - Implement main rendering loop in workers/manim-renderer/src/renderer.py
-Task: T068 - Implement video output validation in workers/manim-renderer/src/renderer.py
-Task: T069 - Implement timeout enforcement in workers/manim-renderer/src/renderer.py
-Task: T070 - Implement error handling and logging in workers/manim-renderer/src/renderer.py
-
-# Launch all worker-renderer integration relays together:
-Task: T079-RELAY - Implement Worker→Renderer relay in workers/ai-manim-worker/src/services/manim.ts
-Task: T080-RELAY - Implement Renderer→Worker relay in workers/manim-renderer/src/callback.py
-Task: T081-RELAY - Implement Worker→R2 relay in workers/ai-manim-worker/src/services/manim.ts
-Task: T082-RELAY - Implement Renderer→R2 direct upload in workers/manim-renderer/src/renderer.py
-Task: T083-RELAY - Implement Worker→KV relay in workers/ai-manim-worker/src/services/session.ts
-Task: T084-RELAY - Implement status sync relay between Worker and Renderer in workers/ai-manim-worker/src/utils/renderer-client.ts
-```
+**Testing & Polish (Phases 11-12)**:
+- T157, T158, T159, T160 can run in parallel
+- T161, T162, T163, T164 can run in parallel
 
 ---
 
 ## Implementation Strategy
 
-### MVP First (User Story 1 Only)
+### MVP Enhancement First (Direct Code + WhatsApp)
 
-1. Complete Phase 1: Setup
-2. Complete Phase 2: Foundational (CRITICAL - blocks all stories)
-3. Complete Phase 3: User Story 1 (Problem Submission)
-4. **STOP and VALIDATE**: Test User Story 1 independently
-   - Submit a problem via Telegram
-   - Receive job ID confirmation
-   - Verify session is created in KV
-   - Verify invalid requests get helpful errors
-5. Deploy/demo if ready
+1. Complete Phase 1-6: Base functionality (ALREADY DONE ✅)
+2. Complete Phase 7: Multi-Platform Core Infrastructure
+3. Complete Phase 8: Direct Code Submission
+4. **STOP and VALIDATE**: Test direct code submission independently
+   - Submit Manim code via WhatsApp/web
+   - Receive rendered video directly
+   - Verify error handling for invalid code
+5. Complete Phase 9: WhatsApp Integration
+6. **STOP and VALIDATE**: Test WhatsApp problem/code submission
+7. Complete Phase 10: Platform Abstraction
+8. Complete Phases 11-12: Testing & Polish
+9. Deploy enhanced system
 
-### Incremental Delivery
+### Incremental Platform Addition
 
-1. Complete Setup + Foundational → Foundation ready
-2. Add User Story 1 → Test independently → Deploy/Demo (MVP!)
-3. Add User Story 2 → Test independently → Deploy/Demo
-   - Submit problem → AI generates Manim code
-   - Verify code is saved in job
-   - Verify fallback chain works
-4. Add User Story 3 → Test independently → Deploy/Demo
-   - Full flow: problem → AI → video generation
-   - Verify video is uploaded to R2
-   - Verify job status updates through states
-5. Add User Story 4 → Test independently → Deploy/Demo
-   - Complete flow: problem → AI → video → delivery
-   - Verify video deletion after access
-   - Verify presigned URLs work
-6. Each story adds value without breaking previous stories
+1. Complete Setup + Foundational + Base US (Phases 1-6) → Foundation ready ✅
+2. Add Multi-Platform Core (Phase 7) → Multi-platform foundation ready
+3. Add Direct Code Submission (Phase 8) → Test independently → Deploy/Demo
+4. Add WhatsApp Integration (Phase 9) → Test independently → Deploy/Demo
+5. Add Platform Abstraction (Phase 10) → Unified system → Deploy/Demo
+6. Each addition adds value without breaking existing features
 
 ### Parallel Team Strategy
 
 With multiple developers:
 
-1. Team completes Setup + Foundational together
-2. Once Foundational is done:
-   - Developer A: User Story 1 (Problem Submission)
-   - Developer B: User Story 2 (AI Problem Solving)
-   - Developer C: User Story 3 + 4 (Video pipeline)
-3. Stories complete and integrate independently
+1. Team completes Multi-Platform Core together (Phase 7)
+2. Once Core Infrastructure is done:
+   - Developer A: Direct Code Submission (Phase 8)
+   - Developer B: WhatsApp Integration (Phase 9)
+   - Developer C: Platform Abstraction (Phase 10) (after A&B)
+3. Features complete and integrate independently
+
+---
+
+## Key Enhancements Summary
+
+### New Capabilities Added
+
+1. **Direct Manim Code Submission**
+   - Users bypass AI generation entirely
+   - Direct code validation and rendering
+   - Faster turnaround for known code
+   - Immediate error feedback
+
+2. **WhatsApp Platform Support**
+   - Full webhook integration
+   - Message parsing and routing
+   - Video delivery via WhatsApp
+   - Cross-platform session handling
+
+3. **Unified Multi-Platform System**
+   - Abstract message handling
+   - Shared session management
+   - Consistent error handling
+   - Platform-agnostic job processing
+
+### Technical Enhancements
+
+- Extended data models for multi-platform support
+- New API endpoints for direct code submission
+- Enhanced web dashboard with code editor
+- Comprehensive testing coverage
+- Updated documentation and deployment guides
 
 ---
 
 ## Notes
 
 - [P] tasks = different files, no dependencies
-- **-RELAY** tasks = strong integration points between components (marked with -RELAY suffix)
 - [Story] label maps task to specific user story for traceability
 - Each user story should be independently completable and testable
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
-- **RELAY tasks create strong connections** between: Telegram ↔ Worker ↔ AI ↔ Renderer ↔ R2 ↔ KV
+- **RELAY tasks create strong connections** between: Telegram ↔ Worker ↔ AI ↔ Renderer ↔ R2
 - Worker and renderer are separate projects that must be coordinated via explicit relay points
 - Mock renderer should be used for development to avoid Docker dependencies
 - R2 lifecycle rules provide fallback for video deletion; immediate deletion via code is primary
 - All AI providers have free tiers; configure at least one for functionality
 - Session TTL is 7 days with auto-extend; job TTL varies by status
 - **Strong relay architecture ensures** data flow visibility, error propagation, and state synchronization across all components
+
+---
+
+**Total Task Count: 182**
+- Setup & Foundation: 45 tasks (24 ✅ completed, 21 ❌ pending)
+- Base User Stories (US1-US4): 66 tasks (66 ✅ completed)
+- Enhancement Infrastructure: 8 tasks (8 ❌ pending)
+- Direct Code Submission (US5): 15 tasks (15 ❌ pending)
+- WhatsApp Integration (US6): 20 tasks (20 ❌ pending)
+- Platform Abstraction: 13 tasks (13 ❌ pending)
+- Testing & Polish: 15 tasks (15 ❌ pending)
+
+**Independent Test Criteria Per Story**:
+- US5: Direct code submission → video rendering or clear error
+- US6: WhatsApp users → submit problems/code → receive videos
+- Base US1-US4: Already validated and working ✅

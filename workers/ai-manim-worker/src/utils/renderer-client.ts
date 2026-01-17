@@ -76,10 +76,7 @@ export class RendererClient {
       }
     }
 
-    logger.error('All render request attempts failed', {
-      job_id: request.job_id,
-      error: lastError?.message,
-    });
+    logger.error(`All render request attempts failed for job ${request.job_id}: ${lastError?.message}`);
 
     throw lastError || new Error('Render request failed');
   }
@@ -94,10 +91,7 @@ export class RendererClient {
 
       return (await response.json()) as RenderResponse;
     } catch (error) {
-      logger.error('Failed to check render status', {
-        job_id: jobId,
-        error: (error as Error).message,
-      });
+      logger.error(`Failed to check render status for job ${jobId}: ${(error as Error).message}`);
       throw error;
     }
   }

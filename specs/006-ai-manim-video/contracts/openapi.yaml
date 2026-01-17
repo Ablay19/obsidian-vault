@@ -1,19 +1,26 @@
 openapi: 3.0.3
 info:
-  title: AI Manim Video Generator API
-  description: |
-    API for generating mathematical video animations via Telegram.
-    
-    ## Flow
-    1. User submits problem via Telegram
-    2. AI generates Manim animation code
-    3. Video is rendered and uploaded to R2
-    4. User receives web link for video access
-    
-    ## Security
-    - Telegram webhooks require secret token validation
-    - Video URLs are presigned and single-use
-    - All video data is deleted immediately after access
+   title: AI Manim Video Generator API
+   description: |
+     API for generating mathematical video animations via multiple platforms.
+
+     ## Flow
+     1. User submits problem or Manim code via Telegram, WhatsApp, or Web
+     2. AI generates Manim animation code (if problem submitted) or validates direct code
+     3. Video is rendered and uploaded to R2 with immediate deletion
+     4. User receives platform-specific link for video access
+
+     ## Platforms Supported
+     - **Telegram**: Webhook-based messaging with bot integration
+     - **WhatsApp**: Business API integration with direct code detection
+     - **Web**: Direct code submission with code editor
+
+     ## Security
+     - Platform-specific webhook validation (secret tokens, signatures)
+     - Video URLs are presigned and single-use (5-minute expiration)
+     - All video data deleted immediately after access
+     - Basic input validation on all submissions
+     - Rate limiting per platform and user
   version: 1.0.0
   contact:
     name: AI Manim Video Generator
@@ -47,10 +54,82 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WebhookResponse'
-        '401':
-          description: Unauthorized - invalid secret token
-        '400':
-          description: Bad request - invalid update format
+         '401':
+           description: Unauthorized - invalid secret token
+         '400':
+           description: Bad request - invalid update format
+
+   /webhook/whatsapp:
+     post:
+       summary: WhatsApp webhook endpoint
+       description: Receives messages and commands from WhatsApp users
+       security:
+         - WhatsAppSignature: []
+       tags:
+         - WhatsApp
+       requestBody:
+         required: true
+         content:
+           application/json:
+             schema:
+               $ref: '#/components/schemas/WhatsAppWebhook'
+       responses:
+         '200':
+           description: Update processed successfully
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/WebhookResponse'
+         '401':
+           description: Unauthorized - invalid signature
+         '400':
+           description: Bad request - invalid webhook format
+
+   /api/v1/code:
+     post:
+       summary: Submit direct Manim code
+       description: Submit Manim animation code directly for rendering
+       tags:
+         - Code
+       requestBody:
+         required: true
+         content:
+           application/json:
+             schema:
+               $ref: '#/components/schemas/DirectCodeSubmission'
+       responses:
+         '202':
+           description: Code queued for rendering
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/JobResponse'
+         '400':
+           description: Invalid code or request format
+         '429':
+           description: Rate limit exceeded
+
+     get:
+       summary: Validate Manim code syntax
+       description: Check if provided Manim code is syntactically valid
+       tags:
+         - Code
+       parameters:
+         - name: code
+           in: query
+           required: true
+           schema:
+             type: string
+             description: Manim code to validate
+       responses:
+         '200':
+           description: Validation result
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/CodeValidationResponse'
+         '400':
+           description: Invalid code format
 
   /api/v1/jobs:
     post:
@@ -159,11 +238,15 @@ paths:
                 $ref: '#/components/schemas/HealthResponse'
 
 components:
-  securitySchemes:
-    TelegramSecretToken:
-      type: apiKey
-      in: header
-      name: X-Telegram-Bot-Api-Secret-Token
+   securitySchemes:
+     TelegramSecretToken:
+       type: apiKey
+       in: header
+       name: X-Telegram-Bot-Api-Secret-Token
+     WhatsAppSignature:
+       type: apiKey
+       in: header
+       name: X-Hub-Signature-256
 
   schemas:
     # Telegram Types
@@ -203,8 +286,124 @@ components:
                   type: string
             text:
               type: string
-            date:
-              type: integer
+             date:
+               type: integer
+
+     # WhatsApp Types
+     WhatsAppWebhook:
+       type: object
+       required:
+         - object
+         - entry
+       properties:
+         object:
+           type: string
+           description: Always "whatsapp_business_account"
+         entry:
+           type: array
+           items:
+             type: object
+             required:
+               - id
+               - changes
+             properties:
+               id:
+                 type: string
+                 description: WhatsApp Business Account ID
+               changes:
+                 type: array
+                 items:
+                   type: object
+                   required:
+                     - value
+                     - field
+                   properties:
+                     value:
+                       type: object
+                       properties:
+                         messages:
+                           type: array
+                           items:
+                             type: object
+                             required:
+                               - id
+                               - from
+                               - type
+                               - timestamp
+                             properties:
+                               id:
+                                 type: string
+                               from:
+                                 type: string
+                                 description: Sender phone number
+                               type:
+                                 type: string
+                                 enum: [text, image, document]
+                               timestamp:
+                                 type: string
+                               text:
+                                 type: object
+                                 properties:
+                                   body:
+                                     type: string
+                         contacts:
+                           type: array
+                           items:
+                             type: object
+                             properties:
+                               profile:
+                                 type: object
+                                 properties:
+                                   name:
+                                     type: string
+                               wa_id:
+                                 type: string
+                                 description: WhatsApp ID
+                     field:
+                       type: string
+                       enum: [messages]
+
+     # Direct Code Types
+     DirectCodeSubmission:
+       type: object
+       required:
+         - code
+       properties:
+         code:
+           type: string
+           minLength: 10
+           maxLength: 50000
+           description: Valid Python Manim code
+         options:
+           type: object
+           properties:
+             quality:
+               type: string
+               enum: [low, medium, high]
+               default: medium
+             format:
+               type: string
+               enum: [mp4, webm]
+               default: mp4
+             max_duration_seconds:
+               type: integer
+               minimum: 1
+               maximum: 300
+               default: 30
+
+     CodeValidationResponse:
+       type: object
+       properties:
+         valid:
+           type: boolean
+         errors:
+           type: array
+           items:
+             type: string
+         warnings:
+           type: array
+           items:
+             type: string
 
     # Job Types
     CreateJobRequest:

@@ -53,7 +53,7 @@ class OpenAIProvider implements AIProvider {
 
     if (!response.ok) {
       const errorText = await response.text();
-      this.logger.error("OpenAI failed", { status: response.status, error: errorText });
+      this.logger.error(`OpenAI failed with status ${response.status}: ${errorText}`);
       throw new ProviderError(`OpenAI error: ${response.status}`, this.name, response.status);
     }
 
@@ -105,11 +105,11 @@ class GeminiProvider implements AIProvider {
 
     if (!response.ok) {
       const errorText = await response.text();
-      this.logger.error("Gemini failed", { status: response.status, error: errorText });
+      this.logger.error(`Gemini failed with status ${response.status}: ${errorText}`);
       throw new ProviderError(`Gemini error: ${response.status}`, this.name, response.status);
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     const result = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     this.logger.info("Gemini generated code", { code_length: result.length });
@@ -155,11 +155,11 @@ class GroqAIProvider implements AIProvider {
 
     if (!response.ok) {
       const errorText = await response.text();
-      this.logger.error("Groq AI failed", { status: response.status, error: errorText });
+      this.logger.error(`Groq AI failed with status ${response.status}: ${errorText}`);
       throw new ProviderError(`Groq AI error: ${response.status}`, this.name, response.status);
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     const result = data.choices?.[0]?.message?.content || "";
 
     this.logger.info("Groq AI generated code", { code_length: result.length });
@@ -204,11 +204,11 @@ class HuggingFaceProvider implements AIProvider {
 
     if (!response.ok) {
       const errorText = await response.text();
-      this.logger.error("HuggingFace AI failed", { status: response.status, error: errorText });
+      this.logger.error(`HuggingFace AI failed with status ${response.status}: ${errorText}`);
       throw new ProviderError(`HuggingFace AI error: ${response.status}`, this.name, response.status);
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     const result = Array.isArray(data) ? data[0]?.generated_text || "" : data.generated_text || "";
 
     this.logger.info("HuggingFace AI generated code", { code_length: result.length });
@@ -254,11 +254,11 @@ class DeepSeekProvider implements AIProvider {
 
     if (!response.ok) {
       const errorText = await response.text();
-      this.logger.error("DeepSeek failed", { status: response.status, error: errorText });
+      this.logger.error(`DeepSeek failed with status ${response.status}: ${errorText}`);
       throw new ProviderError(`DeepSeek error: ${response.status}`, this.name, response.status);
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     const result = data.choices?.[0]?.message?.content || "";
 
     this.logger.info("DeepSeek generated code", { code_length: result.length });
@@ -303,11 +303,11 @@ class CloudflareAIProvider implements AIProvider {
 
     if (!response.ok) {
       const errorText = await response.text();
-      this.logger.error("Cloudflare AI failed", { status: response.status, error: errorText });
+      this.logger.error(`Cloudflare AI failed with status ${response.status}: ${errorText}`);
       throw new ProviderError(`Cloudflare AI error: ${response.status}`, this.name, response.status);
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     const result = data.result?.response || "";
 
     this.logger.info("Cloudflare AI generated code", { code_length: result.length });
@@ -409,7 +409,7 @@ ${problem}`;
       .map(stats => stats.lastError!)
       .join("; ");
 
-    this.logger.error("All AI providers failed", { errors: allErrors });
+    this.logger.error(`All AI providers failed: ${allErrors}`);
     throw new Error(`All AI providers failed: ${allErrors}`);
   }
 
@@ -433,7 +433,7 @@ ${problem}`;
       throw new Error(`AI proxy error: ${response.status} ${response.statusText}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     if (data.success) {
       return data.response || '';
     } else {

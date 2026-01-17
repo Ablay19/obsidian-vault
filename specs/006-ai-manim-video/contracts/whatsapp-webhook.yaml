@@ -1,0 +1,125 @@
+openapi: 3.0.3
+info:
+  title: WhatsApp Integration API
+  description: WhatsApp Business API webhook contracts for AI Manim Video Generator
+  version: 1.0.0
+
+paths:
+  /webhook/whatsapp:
+    post:
+      summary: WhatsApp webhook endpoint
+      description: Receives messages and commands from WhatsApp users
+      security:
+        - WhatsAppSignature: []
+      tags:
+        - WhatsApp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WhatsAppWebhook'
+      responses:
+        '200':
+          description: Update processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '401':
+          description: Unauthorized - invalid signature
+        '400':
+          description: Bad request - invalid webhook format
+
+components:
+  securitySchemes:
+    WhatsAppSignature:
+      type: apiKey
+      in: header
+      name: X-Hub-Signature-256
+
+  schemas:
+    WhatsAppWebhook:
+      type: object
+      required:
+        - object
+        - entry
+      properties:
+        object:
+          type: string
+          description: Always "whatsapp_business_account"
+        entry:
+          type: array
+          items:
+            type: object
+            required:
+              - id
+              - changes
+            properties:
+              id:
+                type: string
+                description: WhatsApp Business Account ID
+              changes:
+                type: array
+                items:
+                  type: object
+                  required:
+                    - value
+                    - field
+                  properties:
+                    value:
+                      type: object
+                      properties:
+                        messages:
+                          type: array
+                          items:
+                            type: object
+                            required:
+                              - id
+                              - from
+                              - type
+                              - timestamp
+                            properties:
+                              id:
+                                type: string
+                              from:
+                                type: string
+                                description: Sender phone number
+                              type:
+                                type: string
+                                enum: [text, image, document]
+                              timestamp:
+                                type: string
+                              text:
+                                type: object
+                                properties:
+                                  body:
+                                    type: string
+                        contacts:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              profile:
+                                type: object
+                                properties:
+                                  name:
+                                    type: string
+                              wa_id:
+                                type: string
+                                description: WhatsApp ID
+                    field:
+                      type: string
+                      enum: [messages]
+
+    WebhookResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        job_id:
+          type: string
+          format: uuid</content>
+<parameter name="filePath">specs/006-ai-manim-video/contracts/whatsapp-webhook.yaml

@@ -1,0 +1,91 @@
+# Network Policy - API Gateway external access (controlled)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-gateway-external-access
+  namespace: obsidian-system
+spec:
+  podSelector:
+    matchLabels:
+      app: api-gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+        - podSelector:
+            matchLabels:
+              app: nginx-ingress-controller
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# Network Policy - Manim Renderer internal only (deny external access)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: manim-renderer-internal-only
+  namespace: obsidian-system
+spec:
+  podSelector:
+    matchLabels:
+      app: manim-renderer
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: obsidian-system
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+# Network Policy - Restrict external egress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: restrict-external-egress
+  namespace: obsidian-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: obsidian-system
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+        - podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443  # HTTPS for external APIs
+        - protocol: TCP
+          port: 80   # HTTP for external APIs
+---
+# Pod Security Standards (using labels)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pod-security-config
+  namespace: obsidian-system
+data:
+  security-context: |
+    runAsNonRoot: true
+    runAsUser: 1000
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]

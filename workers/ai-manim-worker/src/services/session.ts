@@ -1,4 +1,4 @@
-import type { Env, UserSession, ProcessingJob, VideoMetadata, ProcessingStatus } from "../types";
+import type { Env, UserSession, ProcessingJob, VideoMetadata, ProcessingStatus, Platform } from "../types";
 import { createLogger } from "../utils/logger";
 import { JOB_TTL_SECONDS } from "../utils/constants";
 
@@ -18,8 +18,8 @@ export class SessionService {
     });
   }
 
-  async getOrCreateSession(chatId: string): Promise<UserSession> {
-    const existingSession = await this.findSessionByChatId(chatId);
+  async getOrCreateSession(platform: Platform, userId: string): Promise<UserSession> {
+    const existingSession = await this.findSessionByPlatformUserId(platform, userId);
     if (existingSession) {
       await this.extendSession(existingSession.session_id);
       return existingSession;
@@ -30,29 +30,49 @@ export class SessionService {
 
     const session: UserSession = {
       session_id: sessionId,
-      telegram_chat_id: chatId,
       created_at: now,
       last_activity: now,
+      platform_primary: platform,
       video_history: [],
       total_submissions: 0,
       successful_generations: 0,
     };
 
+    // Set platform-specific ID
+    switch (platform) {
+      case "telegram":
+        session.telegram_chat_id = userId;
+        break;
+      case "whatsapp":
+        session.whatsapp_phone_number = userId;
+        break;
+      case "web":
+        session.web_session_token = userId;
+        break;
+    }
+
     await this.saveSession(session);
-    this.logger.info("Created new session", { session_id: sessionId, chat_id: chatId });
+    this.logger.info("Created new session", { session_id: sessionId, platform, user_id: userId });
 
     return session;
   }
 
-  async findSessionByChatId(chatId: string): Promise<UserSession | null> {
-    const key = `sessions:by_chat:${chatId}`;
-    const sessionId = await this.env.SESSIONS.get(key) as string | null;
+  // Backward compatibility method
+  async getOrCreateSessionByTelegramChatId(chatId: string): Promise<UserSession> {
+    return this.getOrCreateSession("telegram", chatId);
+  }
 
-    if (!sessionId) {
-      return null;
-    }
+  async findSessionByPlatformUserId(platform: Platform, userId: string): Promise<UserSession | null> {
+    const key = `sessions:by_${platform}:${userId}`;
+    const sessionId = await this.env.SESSIONS.get(key) as string | null;
+    if (!sessionId) return null;
 
     return this.getSession(sessionId);
+  }
+
+  // Backward compatibility method
+  async findSessionByChatId(chatId: string): Promise<UserSession | null> {
+    return this.findSessionByPlatformUserId("telegram", chatId);
   }
 
   async getSession(sessionId: string): Promise<UserSession | null> {
@@ -62,13 +82,28 @@ export class SessionService {
 
   async saveSession(session: UserSession): Promise<void> {
     const sessionKey = `${SESSION_PREFIX}${session.session_id}`;
-    const chatIndexKey = `sessions:by_chat:${session.telegram_chat_id}`;
-
-    await Promise.all([
+    const indexOperations: Promise<void>[] = [
       this.env.SESSIONS.put(sessionKey, JSON.stringify(session), { expirationTtl: SESSION_TTL_SECONDS }),
-      this.env.SESSIONS.put(chatIndexKey, session.session_id, { expirationTtl: SESSION_TTL_SECONDS }),
-    ]);
+    ];
 
+    // Create indexes for all platform IDs that exist
+    if (session.telegram_chat_id) {
+      indexOperations.push(
+        this.env.SESSIONS.put(`sessions:by_telegram:${session.telegram_chat_id}`, session.session_id, { expirationTtl: SESSION_TTL_SECONDS })
+      );
+    }
+    if (session.whatsapp_phone_number) {
+      indexOperations.push(
+        this.env.SESSIONS.put(`sessions:by_whatsapp:${session.whatsapp_phone_number}`, session.session_id, { expirationTtl: SESSION_TTL_SECONDS })
+      );
+    }
+    if (session.web_session_token) {
+      indexOperations.push(
+        this.env.SESSIONS.put(`sessions:by_web:${session.web_session_token}`, session.session_id, { expirationTtl: SESSION_TTL_SECONDS })
+      );
+    }
+
+    await Promise.all(indexOperations);
     this.logger.debug("Session saved", { session_id: session.session_id });
   }
 
@@ -102,14 +137,17 @@ export class SessionService {
     await this.saveSession(session);
   }
 
-  async createJob(sessionId: string, problemText: string): Promise<ProcessingJob> {
+  async createJob(sessionId: string, problemText: string, platform: Platform, submissionType: "problem" | "direct_code" = "problem"): Promise<ProcessingJob> {
     const jobId = crypto.randomUUID();
     const now = new Date().toISOString();
 
     const job: ProcessingJob = {
       job_id: jobId,
       session_id: sessionId,
-      problem_text: problemText,
+      submission_type: submissionType,
+      platform: platform,
+      problem_text: submissionType === "problem" ? problemText : undefined,
+      manim_code: submissionType === "direct_code" ? problemText : undefined,
       status: 'queued',
       created_at: now,
       started_at: undefined,
@@ -186,7 +224,7 @@ export class SessionService {
     if (session) {
       await this.addVideoToHistory(session.session_id, {
         job_id: job.job_id,
-        problem_preview: job.problem_text.substring(0, 50),
+        problem_preview: (job.problem_text || job.manim_code || "").substring(0, 50),
         status: 'delivered',
         render_duration_seconds: job.render_duration_seconds,
       });

@@ -1,0 +1,79 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: obsidian-system
+  labels:
+    name: obsidian-system
+    environment: development
+    security: "restricted"
+---
+# Network Policy - Deny all external ingress by default
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all-external-ingress
+  namespace: obsidian-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress: []
+---
+# Network Policy - Allow internal communication only
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-internal-communication
+  namespace: obsidian-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: obsidian-system
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+        - podSelector:
+            matchLabels:
+              app: nginx-ingress-controller
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: obsidian-system
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+        - podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+---
+# Resource Quota - Prevent resource exhaustion
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: obsidian-system-quota
+  namespace: obsidian-system
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 4Gi
+    limits.cpu: "4"
+    limits.memory: 8Gi
+    pods: "20"
+    services: "10"
+    persistentvolumeclaims: "5"
