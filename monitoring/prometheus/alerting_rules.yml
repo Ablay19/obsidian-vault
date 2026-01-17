@@ -1,0 +1,150 @@
+groups:
+  - name: ai_platform_alerts
+    rules:
+      # Service availability alerts
+      - alert: APIGatewayDown
+        expr: up{job="api-gateway"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: api-gateway
+        annotations:
+          summary: "API Gateway is down"
+          description: "API Gateway has been down for more than 1 minute."
+          runbook_url: "https://github.com/your-org/ai-platform/runbooks/api-gateway-down"
+
+      - alert: AIWorkerDown
+        expr: up{job="ai-worker"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          service: ai-worker
+        annotations:
+          summary: "AI Worker is unreachable"
+          description: "AI Worker has been unreachable for more than 2 minutes."
+          runbook_url: "https://github.com/your-org/ai-platform/runbooks/ai-worker-down"
+
+      - alert: ManimRendererDown
+        expr: up{job="manim-renderer"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: manim-renderer
+        annotations:
+          summary: "Manim Renderer is down"
+          description: "Manim Renderer has been down for more than 1 minute."
+          runbook_url: "https://github.com/your-org/ai-platform/runbooks/manim-renderer-down"
+
+      # Performance alerts
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"[5][0-9][0-9]", job="api-gateway"}[5m]) / rate(http_requests_total{job="api-gateway"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: api-gateway
+        annotations:
+          summary: "High error rate on API Gateway"
+          description: "API Gateway error rate is {{ $value | printf \"%.2f\" }}% over the last 5 minutes."
+          runbook_url: "https://github.com/your-org/ai-platform/runbooks/high-error-rate"
+
+      - alert: SlowResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="api-gateway"}[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: api-gateway
+        annotations:
+          summary: "Slow response times on API Gateway"
+          description: "95th percentile response time is {{ $value | printf \"%.2f\" }}s over the last 5 minutes."
+          runbook_url: "https://github.com/your-org/ai-platform/runbooks/slow-response-time"
+
+      # Resource alerts
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | printf \"%.1f\" }}% on {{ $labels.instance }}."
+          runbook_url: "https://github.com/your-org/ai-platform/runbooks/high-memory-usage"
+
+      - alert: HighCPUUsage
+        expr: (1 - rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value | printf \"%.1f\" }}% on {{ $labels.instance }}."
+          runbook_url: "https://github.com/your-org/ai-platform/runbooks/high-cpu-usage"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is below 10% on {{ $labels.mountpoint }}."
+          runbook_url: "https://github.com/your-org/ai-platform/runbooks/low-disk-space"
+
+      # Container-specific alerts
+      - alert: ContainerRestarting
+        expr: rate(container_last_seen{container!=""}[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: containers
+        annotations:
+          summary: "Container restarting frequently"
+          description: "Container {{ $labels.container }} is restarting."
+          runbook_url: "https://github.com/your-org/ai-platform/runbooks/container-restarting"
+
+      - alert: ContainerHighCPU
+        expr: rate(container_cpu_usage_seconds_total[5m]) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: containers
+        annotations:
+          summary: "Container high CPU usage"
+          description: "Container {{ $labels.container }} CPU usage is high."
+          runbook_url: "https://github.com/your-org/ai-platform/runbooks/container-high-cpu"
+
+      - alert: ContainerHighMemory
+        expr: (container_memory_usage_bytes / container_spec_memory_limit_bytes) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: containers
+        annotations:
+          summary: "Container high memory usage"
+          description: "Container {{ $labels.container }} memory usage is above 90%."
+          runbook_url: "https://github.com/your-org/ai-platform/runbooks/container-high-memory"
+
+      # Business logic alerts
+      - alert: ManimRendererQueueFull
+        expr: manim_jobs_queued > 10
+        for: 2m
+        labels:
+          severity: warning
+          service: manim-renderer
+        annotations:
+          summary: "Manim renderer queue is full"
+          description: "There are {{ $value }} jobs queued for rendering."
+          runbook_url: "https://github.com/your-org/ai-platform/runbooks/manim-queue-full"
+
+      - alert: AIProviderFailures
+        expr: rate(ai_provider_failures_total[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: ai-worker
+        annotations:
+          summary: "High AI provider failure rate"
+          description: "AI provider failures are occurring at {{ $value | printf \"%.1f\" }}/minute."
+          runbook_url: "https://github.com/your-org/ai-platform/runbooks/ai-provider-failures"
