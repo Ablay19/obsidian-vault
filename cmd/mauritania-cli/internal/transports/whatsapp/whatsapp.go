@@ -1,105 +1,153 @@
 package transports
 
 import (
-	"bytes"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
+	"context"
+	"database/sql"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
-	"strconv"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/mdp/qrterminal/v3"
+	"go.mau.fi/whatsmeow"
+	waProto "go.mau.fi/whatsmeow/binary/proto"
+	"go.mau.fi/whatsmeow/store/sqlstore"
+	"go.mau.fi/whatsmeow/types"
+	waLog "go.mau.fi/whatsmeow/util/log"
+	"google.golang.org/protobuf/proto"
 
 	"obsidian-automation/cmd/mauritania-cli/internal/models"
 	"obsidian-automation/cmd/mauritania-cli/internal/utils"
 )
 
 // WhatsAppTransport implements the TransportClient interface for WhatsApp
-// Uses WhatsApp Business API for reliable server-side messaging
+// Uses WhatsMeow library for native WhatsApp Web integration
 type WhatsAppTransport struct {
-	config        *utils.Config
-	logger        *log.Logger
-	rateLimiter   *utils.RateLimiter
-	httpClient    *http.Client
-	apiURL        string
-	accessToken   string
-	phoneNumberID string
-	webhookSecret string
-	isConnected   bool
-	lastUpdateID  int64
+	config      *utils.Config
+	logger      *log.Logger
+	rateLimiter *utils.RateLimiter
+	client      *whatsmeow.Client
+	storeDir    string
+	isConnected bool
 }
 
-// NewWhatsAppTransport creates a new WhatsApp transport client using Business API
+// NewWhatsAppTransport creates a new WhatsApp transport client using WhatsMeow
 func NewWhatsAppTransport(config *utils.Config, logger *log.Logger) (*WhatsAppTransport, error) {
 	transport := &WhatsAppTransport{
-		config:       config,
-		logger:       logger,
-		httpClient:   &http.Client{Timeout: 30 * time.Second},
-		apiURL:       "https://graph.facebook.com/v18.0/",
-		isConnected:  false,
-		lastUpdateID: 0,
+		config:      config,
+		logger:      logger,
+		isConnected: false,
 	}
 
-	// Get configuration values
-	whatsappConfig := config.Transports.SocialMedia.WhatsApp
-	transport.accessToken = config.Transports.Shipper.APIKey      // Use shipper API key as access token for now
-	transport.phoneNumberID = config.Transports.Shipper.APISecret // Use shipper API secret as phone number ID for now
-	transport.webhookSecret = whatsappConfig.WebhookSecret
+	// Initialize rate limiter (WhatsApp: 1000 messages per hour)
+	transport.rateLimiter = utils.NewRateLimiter(1000, time.Hour, logger)
 
-	// Initialize rate limiter (WhatsApp Business API: 250 messages per day for free tier)
-	transport.rateLimiter = utils.NewRateLimiter(250, 24*time.Hour, logger)
-
-	// Check if properly configured
-	if transport.accessToken == "" || transport.phoneNumberID == "" {
-		transport.logger.Printf("WhatsApp Business API not configured - access token and phone number ID required")
-		return transport, nil
+	// Set up store directory
+	storeDir := config.Transports.SocialMedia.WhatsApp.DatabasePath
+	if storeDir == "" {
+		homeDir, _ := os.UserHomeDir()
+		storeDir = filepath.Join(homeDir, ".mauritania-cli", "whatsapp")
 	}
 
-	// Test connection
-	if err := transport.testConnection(); err != nil {
-		transport.logger.Printf("WhatsApp connection test failed: %v", err)
-		return transport, nil
+	transport.storeDir = storeDir
+
+	// Create store directory
+	if err := os.MkdirAll(storeDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create store directory: %w", err)
 	}
 
-	transport.isConnected = true
-	transport.logger.Printf("WhatsApp Business API transport initialized successfully")
+	// Initialize database and client
+	if err := transport.initClient(); err != nil {
+		return nil, fmt.Errorf("failed to initialize WhatsApp client: %w", err)
+	}
+
+	transport.logger.Printf("WhatsApp transport initialized with WhatsMeow")
 	return transport, nil
 }
 
-// testConnection verifies the WhatsApp Business API connection
-func (w *WhatsAppTransport) testConnection() error {
-	url := fmt.Sprintf("%s%s", w.apiURL, w.phoneNumberID)
+// initClient initializes the WhatsApp client
+func (w *WhatsAppTransport) initClient() error {
+	dbLog := waLog.Stdout("Database", "ERROR", true)
+	ctx := context.Background()
 
-	req, err := http.NewRequest("GET", url, nil)
+	container, err := sqlstore.New(ctx, "sqlite3", fmt.Sprintf("file:%s/whatsapp.db?_foreign_keys=on", w.storeDir), dbLog)
 	if err != nil {
-		return fmt.Errorf("failed to create test request: %w", err)
+		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+w.accessToken)
-
-	resp, err := w.httpClient.Do(req)
+	deviceStore, err := container.GetFirstDevice(ctx)
 	if err != nil {
-		return fmt.Errorf("connection test failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+		if err == sql.ErrNoRows {
+			deviceStore = container.NewDevice()
+		} else {
+			return fmt.Errorf("failed to get device: %w", err)
+		}
 	}
 
-	w.logger.Printf("WhatsApp Business API connection test successful")
+	logger := waLog.Stdout("Client", "ERROR", true)
+	w.client = whatsmeow.NewClient(deviceStore, logger)
+
+	// Check if already authenticated
+	if deviceStore.ID != nil {
+		w.isConnected = true
+		w.logger.Printf("Found existing WhatsApp session")
+	}
+
 	return nil
 }
 
-// SendMessage sends a message via WhatsApp Business API
+// Login initiates the WhatsApp Web login process
+func (w *WhatsAppTransport) Login(ctx context.Context) error {
+	if w.IsLoggedIn() {
+		w.logger.Printf("Already logged in to WhatsApp")
+		return nil
+	}
+
+	qrChan, err := w.client.GetQRChannel(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get QR channel: %w", err)
+	}
+
+	if err := w.client.Connect(); err != nil {
+		return fmt.Errorf("failed to connect: %w", err)
+	}
+
+	w.logger.Printf("Scan the QR code below with WhatsApp on your phone:")
+	fmt.Println()
+
+	for evt := range qrChan {
+		if evt.Event == "code" {
+			// Display QR code
+			qrterminal.GenerateHalfBlock(evt.Code, qrterminal.M, os.Stdout)
+			fmt.Println()
+			w.logger.Printf("QR code displayed above - scan with WhatsApp")
+		} else if evt.Event == "success" {
+			w.logger.Printf("✅ Successfully authenticated with WhatsApp!")
+			w.isConnected = true
+			return nil
+		} else if evt.Event == "timeout" {
+			return fmt.Errorf("QR code scan timeout - please try again")
+		}
+	}
+
+	return fmt.Errorf("authentication failed")
+}
+
+// IsLoggedIn checks if the client is authenticated
+func (w *WhatsAppTransport) IsLoggedIn() bool {
+	return w.client.Store.ID != nil
+}
+
+// SendMessage sends a message via WhatsApp using WhatsMeow
 func (w *WhatsAppTransport) SendMessage(recipient, message string) (*models.MessageResponse, error) {
-	// Check if configured
-	if w.accessToken == "" || w.phoneNumberID == "" {
-		return nil, fmt.Errorf("WhatsApp Business API not configured - missing access token or phone number ID")
+	ctx := context.Background()
+
+	// Check if connected
+	if !w.client.IsConnected() {
+		return nil, fmt.Errorf("not connected to WhatsApp")
 	}
 
 	// Check rate limit
@@ -107,74 +155,27 @@ func (w *WhatsAppTransport) SendMessage(recipient, message string) (*models.Mess
 		return nil, fmt.Errorf("rate limit exceeded")
 	}
 
-	// Prepare request payload
-	requestBody := map[string]interface{}{
-		"messaging_product": "whatsapp",
-		"to":                recipient,
-		"type":              "text",
-		"text": map[string]string{
-			"body": message,
-		},
-	}
-
-	jsonData, err := json.Marshal(requestBody)
+	// Parse recipient JID
+	recipientJID, err := parseJID(recipient)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+		return nil, fmt.Errorf("invalid recipient: %w", err)
 	}
 
-	// Create HTTP request
-	url := fmt.Sprintf("%s%s/messages", w.apiURL, w.phoneNumberID)
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	// Send message
+	msg := &waProto.Message{
+		Conversation: proto.String(message),
+	}
+
+	resp, err := w.client.SendMessage(ctx, recipientJID, msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+w.accessToken)
-	req.Header.Set("Content-Type", "application/json")
-
-	// Send request
-	resp, err := w.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Read response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		w.logger.Printf("WhatsApp API error: %s", string(body))
-		return nil, fmt.Errorf("WhatsApp API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	// Parse response
-	var whatsappResp struct {
-		MessagingProduct string `json:"messaging_product"`
-		Contacts         []struct {
-			Input string `json:"input"`
-			WaID  string `json:"wa_id"`
-		} `json:"contacts"`
-		Messages []struct {
-			ID string `json:"id"`
-		} `json:"messages"`
-	}
-
-	if err := json.Unmarshal(body, &whatsappResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	if len(whatsappResp.Messages) == 0 {
-		return nil, fmt.Errorf("no message ID returned from WhatsApp API")
+		return nil, fmt.Errorf("failed to send message: %w", err)
 	}
 
 	// Record rate limit usage
 	w.rateLimiter.RecordUsage()
 
 	response := &models.MessageResponse{
-		MessageID: whatsappResp.Messages[0].ID,
+		MessageID: resp.ID,
 		Status:    "sent",
 		Timestamp: time.Now(),
 	}
@@ -183,11 +184,11 @@ func (w *WhatsAppTransport) SendMessage(recipient, message string) (*models.Mess
 	return response, nil
 }
 
-// ReceiveMessages retrieves pending messages via webhook or polling
+// ReceiveMessages retrieves pending messages from WhatsApp
 func (w *WhatsAppTransport) ReceiveMessages() ([]*models.IncomingMessage, error) {
-	// WhatsApp Business API primarily uses webhooks, but we can poll for messages
-	// For now, return empty as webhooks are the preferred method
-	w.logger.Printf("WhatsApp: ReceiveMessages called (webhook-based transport)")
+	// WhatsMeow handles messages through event handlers
+	// For polling, we could check for new messages, but events are preferred
+	w.logger.Printf("WhatsApp: ReceiveMessages called (event-driven transport)")
 	return []*models.IncomingMessage{}, nil
 }
 
@@ -198,30 +199,35 @@ func (w *WhatsAppTransport) GetStatus() (*models.TransportStatus, error) {
 		LastChecked: time.Now(),
 	}
 
-	if w.accessToken == "" || w.phoneNumberID == "" {
-		status.Error = "WhatsApp Business API not configured - missing access token or phone number ID"
+	if w.client == nil {
+		status.Error = "WhatsApp client not initialized"
 		status.Available = false
-	} else if !w.isConnected {
-		status.Error = "WhatsApp Business API connection not established"
+	} else if !w.IsLoggedIn() {
+		status.Error = "WhatsApp not logged in - please run 'mauritania-cli whatsapp login'"
+		status.Available = false
+	} else if !w.client.IsConnected() {
+		status.Error = "WhatsApp client not connected"
+		status.Available = false
+		w.isConnected = false
 	} else {
 		status.Error = ""
+		w.isConnected = true
 	}
 
 	return status, nil
 }
 
-// ValidateCredentials validates WhatsApp Business API credentials
+// ValidateCredentials validates WhatsApp WhatsMeow connection
 func (w *WhatsAppTransport) ValidateCredentials() error {
-	if w.accessToken == "" {
-		return fmt.Errorf("WhatsApp access token not configured")
+	if w.client == nil {
+		return fmt.Errorf("WhatsApp client not initialized")
 	}
 
-	if w.phoneNumberID == "" {
-		return fmt.Errorf("WhatsApp phone number ID not configured")
+	if !w.IsLoggedIn() {
+		return fmt.Errorf("WhatsApp not logged in")
 	}
 
-	// Test the connection
-	return w.testConnection()
+	return nil
 }
 
 // GetRateLimit returns current rate limiting status
@@ -333,10 +339,15 @@ func (w *WhatsAppTransport) VerifyWebhookSignature(payload []byte, signature str
 	return nil
 }
 
-// min returns the minimum of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
+// parseJID parses a JID from a string
+func parseJID(jid string) (types.JID, error) {
+	if strings.Contains(jid, "@") {
+		return types.ParseJID(jid)
 	}
-	return b
+
+	// Assume it's a phone number
+	return types.JID{
+		User:   jid,
+		Server: types.DefaultUserServer,
+	}, nil
 }

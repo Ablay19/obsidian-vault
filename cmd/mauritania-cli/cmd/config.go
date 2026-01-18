@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"obsidian-automation/cmd/mauritania-cli/internal/ui"
 	"obsidian-automation/cmd/mauritania-cli/internal/utils"
 )
 
@@ -200,38 +201,44 @@ func newConfigShowCmd() *cobra.Command {
 				return encoder.Encode(config)
 			}
 
-			// Pretty print configuration
-			fmt.Println("📋 Current Configuration:")
-			fmt.Println()
+			// Pretty print configuration with styled output
+			ui.Header("📋 Current Configuration")
 
-			fmt.Printf("Database:\n")
-			fmt.Printf("  Type: %s\n", config.Database.Type)
+			// Database section
+			dbContent := fmt.Sprintf("Type: %s\n", config.Database.Type)
 			if config.Database.Type == "sqlite" {
-				fmt.Printf("  Path: %s\n", config.Database.Path)
+				dbContent += fmt.Sprintf("Path: %s\n", config.Database.Path)
 			}
-			fmt.Println()
+			ui.Println(ui.InfoBox("Database", strings.TrimSuffix(dbContent, "\n")))
 
-			fmt.Printf("Transports:\n")
-			fmt.Printf("  Default: %s\n", config.Transports.Default)
-			fmt.Printf("  Social Media:\n")
-			fmt.Printf("    WhatsApp: %s\n", boolToConfigStatus(cm.IsSet("transports.social_media.whatsapp.database_path")))
-			fmt.Printf("    Telegram: %s\n", boolToConfigStatus(cm.IsSet("transports.social_media.telegram.bot_token")))
-			fmt.Printf("    Facebook: %s\n", boolToConfigStatus(cm.IsSet("transports.social_media.facebook.access_token")))
-			fmt.Printf("  Shipper: %s\n", boolToConfigStatus(cm.IsSet("transports.shipper.api_key")))
-			fmt.Println()
+			// Transports section
+			transportContent := fmt.Sprintf("Default: %s\n\n", config.Transports.Default)
+			transportContent += "Social Media:\n"
+			transportContent += fmt.Sprintf("  WhatsApp: %s\n", boolToConfigStatus(cm.IsSet("transports.social_media.whatsapp.database_path")))
+			transportContent += fmt.Sprintf("  Telegram: %s\n", boolToConfigStatus(cm.IsSet("transports.social_media.telegram.bot_token")))
+			transportContent += fmt.Sprintf("  Facebook: %s\n", boolToConfigStatus(cm.IsSet("transports.social_media.facebook.access_token")))
+			transportContent += fmt.Sprintf("\nShipper: %s", boolToConfigStatus(cm.IsSet("transports.shipper.api_key")))
+			ui.Println(ui.InfoBox("Transports", transportContent))
 
-			fmt.Printf("Network:\n")
-			fmt.Printf("  Timeout: %d seconds\n", config.Network.Timeout)
-			fmt.Printf("  Retry Attempts: %d\n", config.Network.RetryAttempts)
-			fmt.Printf("  Offline Mode: %t\n", config.Network.OfflineMode)
-			fmt.Println()
+			// Network section
+			networkContent := fmt.Sprintf("Timeout: %d seconds\n", config.Network.Timeout)
+			networkContent += fmt.Sprintf("Retry Attempts: %d\n", config.Network.RetryAttempts)
+			networkContent += fmt.Sprintf("Offline Mode: %t", config.Network.OfflineMode)
+			ui.Println(ui.InfoBox("Network", networkContent))
 
-			fmt.Printf("Logging:\n")
-			fmt.Printf("  Level: %s\n", config.Logging.Level)
-			fmt.Printf("  File: %s\n", config.Logging.File)
-			fmt.Println()
+			// Logging section
+			loggingContent := fmt.Sprintf("Level: %s\n", config.Logging.Level)
+			loggingContent += fmt.Sprintf("File: %s", config.Logging.File)
+			ui.Println(ui.InfoBox("Logging", loggingContent))
 
-			fmt.Printf("Authentication:\n")
+			// Authentication section
+			authContent := "Enabled: "
+			if config.Auth.Enabled {
+				authContent += "Yes"
+			} else {
+				authContent += "No"
+			}
+			ui.Println(ui.InfoBox("Authentication", authContent))
 			fmt.Printf("  Enabled: %t\n", config.Auth.Enabled)
 			if config.Auth.Enabled {
 				fmt.Printf("  Allowed Users: %d\n", len(config.Auth.AllowedUsers))

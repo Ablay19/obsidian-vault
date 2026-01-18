@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"obsidian-automation/cmd/mauritania-cli/internal/ui"
 )
 
 // newQueueCmd creates the queue command
@@ -19,7 +20,7 @@ func newQueueCmd() *cobra.Command {
 			Use:   "list",
 			Short: "List queued commands",
 			RunE: func(cmd *cobra.Command, args []string) error {
-				fmt.Println("Queued commands: 0")
+				ui.Println(ui.InfoBox("Queue Status", "Queued commands: 0\nNo commands waiting for execution"))
 				return nil
 			},
 		},
@@ -27,7 +28,7 @@ func newQueueCmd() *cobra.Command {
 			Use:   "clear",
 			Short: "Clear queued commands",
 			RunE: func(cmd *cobra.Command, args []string) error {
-				fmt.Println("Queue cleared")
+				ui.Println(ui.SuccessBox("Queue Cleared", "All queued commands have been removed"))
 				return nil
 			},
 		},

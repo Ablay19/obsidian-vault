@@ -440,6 +440,62 @@ Solution:
 - Reinitialize modules: rm go.sum && go mod tidy
 ```
 
+## MCP Server Setup (AI Integration)
+
+The Mauritania CLI includes an MCP (Model Context Protocol) server for AI-assisted diagnostics and problem handling.
+
+### Starting the MCP Server
+
+```bash
+# Start MCP server with stdio transport (for local AI clients)
+mauritania-cli mcp-server --transport stdio
+
+# Start MCP server with HTTP transport (for remote AI access)
+mauritania-cli mcp-server --transport http --port 8080 --host 0.0.0.0
+```
+
+### AI Client Integration
+
+#### Claude Desktop
+Add to `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "mauritania-cli": {
+      "command": "mauritania-cli",
+      "args": ["mcp-server", "--transport", "stdio"]
+    }
+  }
+}
+```
+
+#### Other AI Clients
+For HTTP transport, configure with:
+```json
+{
+  "mcpServers": {
+    "mauritania-cli": {
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}
+```
+
+### Available MCP Tools
+
+- **status**: Check transport connectivity
+- **logs**: Retrieve filtered log entries
+- **diagnostics**: Run system health checks
+- **config**: View sanitized configuration
+- **test_connection**: Test specific transport
+- **error_metrics**: Get error statistics
+
+### Security Notes
+
+- All sensitive data is automatically sanitized
+- Rate limiting prevents abuse (100 requests/hour)
+- Local transport (stdio) recommended for security
+
 ## Post-Installation Tasks
 
 ### 1. Set Up Backups

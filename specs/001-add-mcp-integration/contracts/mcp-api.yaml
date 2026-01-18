@@ -1,0 +1,124 @@
+openapi: 3.0.3
+info:
+  title: Mauritania CLI MCP Server API
+  version: 1.0.0
+  description: HTTP transport for MCP server exposing diagnostic tools for AI assistants
+
+servers:
+  - url: http://localhost:8080
+    description: Default development server
+
+paths:
+  /mcp:
+    post:
+      summary: Execute MCP tool
+      description: Execute a diagnostic tool via MCP protocol over HTTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolRequest'
+      responses:
+        '200':
+          description: Tool execution result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolResult'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    ToolRequest:
+      type: object
+      required:
+        - method
+        - params
+      properties:
+        method:
+          type: string
+          enum: [tools/call]
+          description: MCP method
+        params:
+          type: object
+          required:
+            - name
+          properties:
+            name:
+              type: string
+              enum: [status, logs, diagnostics, config, test_connection, error_metrics]
+              description: Tool name
+            arguments:
+              type: object
+              description: Tool-specific arguments
+
+    ToolResult:
+      type: object
+      required:
+        - result
+      properties:
+        result:
+          type: object
+          properties:
+            content:
+              type: array
+              items:
+                $ref: '#/components/schemas/Content'
+            isError:
+              type: boolean
+              default: false
+
+    Content:
+      type: object
+      required:
+        - type
+        - text
+      properties:
+        type:
+          type: string
+          enum: [text]
+        text:
+          type: string
+          description: Tool output content
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: integer
+            message:
+              type: string
+            data:
+              type: object
+
+  securitySchemes:
+    NoAuth:
+      type: http
+      scheme: none
+      description: No authentication required for local diagnostic access

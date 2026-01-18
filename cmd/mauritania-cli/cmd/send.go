@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"obsidian-automation/cmd/mauritania-cli/internal/database"
 	"obsidian-automation/cmd/mauritania-cli/internal/models"
+	"obsidian-automation/cmd/mauritania-cli/internal/ui"
 	"obsidian-automation/cmd/mauritania-cli/internal/utils"
 )
 
@@ -83,17 +84,18 @@ queued for execution when connectivity allows.`,
 			// Check network connectivity if not in offline mode
 			if !offlineMode {
 				networkStatus := networkMonitor.CheckConnectivity()
-				fmt.Printf("Network status: online=%v, type=%s, latency=%v, error=%v\n",
-					networkStatus.IsOnline, networkStatus.Connectivity, networkStatus.Latency, networkStatus.Error)
+				networkContent := fmt.Sprintf("Online: %t\nType: %s\nLatency: %v",
+					networkStatus.IsOnline, networkStatus.Connectivity, networkStatus.Latency.Round(time.Millisecond))
+				if networkStatus.Error != nil {
+					networkContent += fmt.Sprintf("\nError: %v", networkStatus.Error)
+				}
+				ui.Println(ui.InfoBox("Network Status", networkContent))
 
 				if !networkStatus.IsOnline {
-					logger.Warn("Network offline, queuing command for later retry")
-					fmt.Printf("⚠️  Network offline - command will be queued for retry when connectivity returns\n")
+					ui.Warning("Network offline - command will be queued for retry when connectivity returns")
 				} else {
-					logger.Info("Network connectivity established", map[string]any{
-						"type":    networkStatus.Connectivity,
-						"latency": networkStatus.Latency,
-					})
+					ui.Info("Network connectivity established (%s, %v latency)",
+						networkStatus.Connectivity, networkStatus.Latency.Round(time.Millisecond))
 				}
 			}
 
@@ -134,24 +136,26 @@ queued for execution when connectivity allows.`,
 				logger.Warn("Failed to save command history", err)
 			}
 
-			// Display result
+			// Display result with styled output
 			networkStatus := networkMonitor.GetStatus()
-			fmt.Printf("Command queued for execution:\n")
-			fmt.Printf("  ID: %s\n", cmdModel.ID)
-			fmt.Printf("  Command: %s\n", command)
-			fmt.Printf("  Transport: %s\n", selectedTransport)
-			fmt.Printf("  Priority: %s\n", priority)
-			fmt.Printf("  Status: %s\n", cmdModel.Status)
-			fmt.Printf("  Network: %s", networkStatus.Connectivity)
+			resultContent := fmt.Sprintf("ID: %s\nCommand: %s\nTransport: %s\nPriority: %s\nStatus: %s\nNetwork: %s",
+				ui.FormatID(cmdModel.ID[:8]+"..."),
+				ui.FormatCommand(command),
+				ui.FormatTransport(selectedTransport),
+				string(priority),
+				ui.FormatStatus(string(cmdModel.Status)),
+				networkStatus.Connectivity)
+
 			if networkStatus.IsOnline {
-				fmt.Printf(" (online, %v latency)", networkStatus.Latency.Round(time.Millisecond))
+				resultContent += fmt.Sprintf(" (online, %v latency)", networkStatus.Latency.Round(time.Millisecond))
 			} else {
-				fmt.Printf(" (offline)")
+				resultContent += " (offline)"
 			}
-			fmt.Printf("\n")
+
+			ui.Println(ui.SuccessBox("Command Queued", resultContent))
 
 			if !networkMonitor.IsOnline() && !offlineMode {
-				fmt.Printf("💡 Tip: Command will be retried automatically when network connectivity returns\n")
+				ui.Info("Command will be retried automatically when network connectivity returns")
 			}
 
 			return nil

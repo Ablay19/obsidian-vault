@@ -39,6 +39,8 @@ and SM APOS Shipper for regions with limited direct internet access.`,
 	cmd.AddCommand(newLogsCmd())
 	cmd.AddCommand(newSecurityCmd())
 	cmd.AddCommand(newTUICmd())
+	cmd.AddCommand(newWhatsAppCmd())
+	cmd.AddCommand(newTUICmd())
 
 	// Add Carapace completion
 	carapace.Gen(cmd)
