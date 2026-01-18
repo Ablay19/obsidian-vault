@@ -1,0 +1,220 @@
+# Quick Start Guide
+
+## Overview
+
+This guide helps you quickly set up and run the functionality validation, documentation creation, and directory cleanup tools for the Mauritania CLI project.
+
+## Prerequisites
+
+- Go 1.25.4 or later
+- Git
+- Make (optional, for convenient commands)
+- Access to the project repository
+
+## Installation
+
+### 1. Clone and Setup
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd obsidian-vault
+
+# Install dependencies
+go mod download
+
+# Build the CLI application
+go build -o mauritania-cli ./cmd/mauritania-cli
+```
+
+### 2. Install Documentation Tools
+
+```bash
+# Install pkgsite for documentation generation
+go install golang.org/x/pkgsite/cmd/pkgsite@latest
+
+# Verify installation
+pkgsite -help
+```
+
+## Quick Usage
+
+### 1. Validate Functionality
+
+Run comprehensive validation to check all features and test coverage:
+
+```bash
+# Run validation with coverage analysis
+./mauritania-cli test --project bot --config dev
+
+# Run Doppler-specific tests only
+./mauritania-cli test --project bot --config dev --doppler-only
+
+# Run CI/CD validation with coverage reporting
+./mauritania-cli ci-test --project bot --config dev
+```
+
+### 2. Generate Documentation
+
+Create comprehensive documentation for the codebase:
+
+```bash
+# Start local documentation server
+pkgsite -open .
+
+# Generate API documentation
+go doc ./...
+
+# Generate coverage report
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out -o coverage.html
+```
+
+### 3. Clean Directory Structure
+
+Remove unnecessary files and organize directories:
+
+```bash
+# Standard cleanup
+go clean -modcache -testcache
+
+# Remove build artifacts
+go clean -i
+
+# Tidy dependencies
+go mod tidy
+
+# Remove untracked files (careful!)
+git clean -fdX
+```
+
+## Common Workflows
+
+### Validation Workflow
+
+1. **Run Tests**: Execute the full test suite to validate functionality
+2. **Check Coverage**: Review coverage reports to identify gaps
+3. **Fix Issues**: Address any failing tests or coverage gaps
+4. **Re-run Validation**: Confirm all tests pass with 70%+ coverage
+
+```bash
+# Step 1: Run tests
+./mauritania-cli test
+
+# Step 2: Check coverage
+go tool cover -func=coverage.out
+
+# Step 3: Fix issues (manual)
+# Step 4: Re-run
+./mauritania-cli test
+```
+
+### Documentation Workflow
+
+1. **Review Existing Docs**: Check current documentation status
+2. **Generate Missing Docs**: Create documentation for uncovered areas
+3. **Validate Quality**: Ensure docs are complete and accurate
+4. **Publish**: Update documentation sources
+
+```bash
+# Step 1: Review
+pkgsite -open .
+
+# Step 2: Generate (manual process)
+# Step 3: Validate
+go test -run=Example
+
+# Step 4: Commit and push
+git add docs/
+git commit -m "Update documentation"
+git push
+```
+
+### Cleanup Workflow
+
+1. **Analyze Structure**: Review current directory organization
+2. **Identify Targets**: Find unnecessary files and directories
+3. **Execute Cleanup**: Remove identified items safely
+4. **Validate**: Ensure no functionality is broken
+
+```bash
+# Step 1: Analyze
+find . -type f -name "*.tmp" -o -name "*.bak" -o -name "*.log"
+
+# Step 2: Identify targets
+# Step 3: Cleanup
+go clean -modcache -testcache
+
+# Step 4: Validate
+./mauritania-cli test
+```
+
+## Success Criteria
+
+### Functionality Validation
+- ✅ All tests pass
+- ✅ Test coverage ≥ 70%
+- ✅ No critical failures
+- ✅ Validation completes in < 2 hours
+
+### Documentation Creation
+- ✅ README files in all major directories
+- ✅ API documentation complete
+- ✅ Setup instructions comprehensive
+- ✅ Code comments follow standards
+
+### Directory Cleanup
+- ✅ Unnecessary files removed
+- ✅ Structure follows conventions
+- ✅ Build artifacts excluded
+- ✅ All functionality preserved
+
+## Troubleshooting
+
+### Common Issues
+
+**Issue**: Tests failing with import errors
+```bash
+# Solution: Update dependencies
+go mod tidy
+go mod download
+```
+
+**Issue**: Low test coverage
+```bash
+# Solution: Identify uncovered areas
+go test -coverprofile=coverage.out ./...
+go tool cover -func=coverage.out | sort -k3 -n
+```
+
+**Issue**: Documentation not generating
+```bash
+# Solution: Install pkgsite
+go install golang.org/x/pkgsite/cmd/pkgsite@latest
+pkgsite -open .
+```
+
+**Issue**: Cleanup removes important files
+```bash
+# Solution: Use dry run first
+git clean -fdX --dry-run
+# Review files before actual cleanup
+```
+
+### Getting Help
+
+- Check existing documentation: `pkgsite -open .`
+- Review test output for specific error messages
+- Use git status to verify what files will be affected by cleanup
+- Consult team members for complex configuration issues
+
+## Next Steps
+
+After completing the quick start:
+
+1. **Integrate with CI/CD**: Add validation to your pipeline
+2. **Schedule Regular Cleanup**: Set up periodic maintenance
+3. **Monitor Coverage**: Track trends over time
+4. **Maintain Documentation**: Keep docs current with code changes
+
+For detailed information, see the full documentation generated by `pkgsite` and the comprehensive guides in the `docs/` directory.
