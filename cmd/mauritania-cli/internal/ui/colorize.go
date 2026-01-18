@@ -43,64 +43,64 @@ func NewColorize() *Colorize {
 func (c *Colorize) Success(format string, args ...interface{}) {
 	timestamp := time.Now().Format("15:04:05")
 	message := fmt.Sprintf(format, args...)
-	fmt.Fprintf(os.Stderr, "%s %s %s %s\n", c.info.Sprintf("%s", timestamp), c.success.Sprintf("✅"), c.success.Sprintf("SUCCESS"), message)
+	fmt.Fprintf(os.Stderr, "%s %s %s %s\n", c.info.Sprint(timestamp), c.success.Sprint("✅"), c.success.Sprint("SUCCESS"), message)
 }
 
 // Error prints an error message
 func (c *Colorize) Error(format string, args ...interface{}) {
 	timestamp := time.Now().Format("15:04:05")
 	message := fmt.Sprintf(format, args...)
-	fmt.Fprintf(os.Stderr, "%s %s %s %s\n", c.info.Sprintf("%s", timestamp), c.error.Sprintf("❌"), c.error.Sprintf("ERROR"), message)
+	fmt.Fprintf(os.Stderr, "%s %s %s %s\n", c.info.Sprint(timestamp), c.error.Sprint("❌"), c.error.Sprint("ERROR"), message)
 }
 
 // Warning prints a warning message
 func (c *Colorize) Warning(format string, args ...interface{}) {
 	timestamp := time.Now().Format("15:04:05")
 	message := fmt.Sprintf(format, args...)
-	fmt.Fprintf(os.Stderr, "%s %s %s %s\n", c.info.Sprintf("%s", timestamp), c.warning.Sprintf("⚠️"), c.warning.Sprintf("WARN"), message)
+	fmt.Fprintf(os.Stderr, "%s %s %s %s\n", c.info.Sprint(timestamp), c.warning.Sprint("⚠️"), c.warning.Sprint("WARN"), message)
 }
 
 // Info prints an info message
 func (c *Colorize) Info(format string, args ...interface{}) {
 	timestamp := time.Now().Format("15:04:05")
 	message := fmt.Sprintf(format, args...)
-	fmt.Fprintf(os.Stderr, "%s %s %s %s\n", c.info.Sprintf("%s", timestamp), c.info.Sprintf("ℹ️"), c.info.Sprintf("INFO"), message)
+	fmt.Fprintf(os.Stderr, "%s %s %s %s\n", c.info.Sprint(timestamp), c.info.Sprint("ℹ️"), c.info.Sprint("INFO"), message)
 }
 
 // Command prints a command message
 func (c *Colorize) Command(format string, args ...interface{}) {
 	timestamp := time.Now().Format("15:04:05")
 	message := fmt.Sprintf(format, args...)
-	fmt.Fprintf(os.Stderr, "%s %s %s %s\n", c.info.Sprintf("%s", timestamp), c.command.Sprintf("🔧"), c.command.Sprintf("CMD"), message)
+	fmt.Fprintf(os.Stderr, "%s %s %s %s\n", c.info.Sprint(timestamp), c.command.Sprint("🔧"), c.command.Sprint("CMD"), message)
 }
 
 // Header prints a header
 func (c *Colorize) Header(format string, args ...interface{}) {
 	message := fmt.Sprintf(format, args...)
-	fmt.Fprintf(os.Stdout, "%s\n", c.header.Sprintf(message))
+	fmt.Fprintf(os.Stdout, "%s\n", c.header.Sprint(message))
 }
 
 // Print prints regular output
 func (c *Colorize) Print(format string, args ...interface{}) {
 	message := fmt.Sprintf(format, args...)
-	fmt.Fprintf(os.Stdout, "%s", c.output.Sprintf(message))
+	fmt.Fprintf(os.Stdout, "%s", c.output.Sprint(message))
 }
 
 // Println prints regular output with newline
 func (c *Colorize) Println(format string, args ...interface{}) {
 	message := fmt.Sprintf(format, args...)
-	fmt.Fprintf(os.Stdout, "%s\n", c.output.Sprintf(message))
+	fmt.Fprintf(os.Stdout, "%s\n", c.output.Sprint(message))
 }
 
 // Printf prints formatted output
 func (c *Colorize) Printf(format string, args ...interface{}) {
 	message := fmt.Sprintf(format, args...)
-	fmt.Fprintf(os.Stdout, "%s", c.output.Sprintf(message))
+	fmt.Fprintf(os.Stdout, "%s", c.output.Sprint(message))
 }
 
 // FormatCommand formats a command with styling
 func (c *Colorize) FormatCommand(cmd string) string {
-	return c.command.Sprintf("🔧 %s", cmd)
+	return c.command.Sprint("🔧 " + cmd)
 }
 
 // FormatPath formats a file path with styling
@@ -297,7 +297,6 @@ func (c *Colorize) ProgressBar(current, total int, width int) string {
 		current, total, percentage*100)
 }
 
-// ErrorBox creates an error-styled box
 // GetColorize returns a global colorize instance
 var globalColorize *Colorize
 

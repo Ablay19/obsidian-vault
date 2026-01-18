@@ -1,8 +1,9 @@
+//go:build demo
+
 package main
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"obsidian-automation/cmd/mauritania-cli/internal/ui"
