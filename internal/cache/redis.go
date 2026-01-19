@@ -27,7 +27,7 @@ type RedisConfig struct {
 
 // RedisCache implements Cache interface using Redis
 type RedisCache struct {
-	client *redis.Client
+	client redis.UniversalClient
 	logger *zap.Logger
 	config RedisConfig
 }
@@ -172,7 +172,7 @@ func (rc *RedisCache) Increment(ctx context.Context, key string) (int64, error) 
 	}
 
 	rc.logger.Debug("Cache incremented", zap.String("key", key), zap.Int64("value", val))
-	return val, 0
+	return val, nil
 }
 
 // Decrement decrements the number stored at key by one
@@ -184,7 +184,7 @@ func (rc *RedisCache) Decrement(ctx context.Context, key string) (int64, error) 
 	}
 
 	rc.logger.Debug("Cache decremented", zap.String("key", key), zap.Int64("value", val))
-	return val, 0
+	return val, nil
 }
 
 // GetJSON retrieves and unmarshals a JSON value from cache

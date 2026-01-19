@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"obsidian-automation/cmd/mauritania-cli/internal/models"
@@ -298,6 +299,103 @@ func (t *TelegramTransport) ValidateCredentials() error {
 // GetRateLimit returns current rate limiting status
 func (t *TelegramTransport) GetRateLimit() (*models.RateLimit, error) {
 	return t.rateLimiter.GetStatus()
+}
+
+// HandleAICommand processes AI-related commands
+func (t *TelegramTransport) HandleAICommand(chatID int64, userID string, command string, args []string) error {
+	switch command {
+	case "math", "animate":
+		return t.handleMathVideoCommand(chatID, userID, args)
+	case "status":
+		return t.handleStatusCommand(chatID, userID)
+	default:
+		t.sendMessage(chatID, "Unknown AI command. Use /help for available commands.")
+		return nil
+	}
+}
+
+// handleMathVideoCommand processes math video generation requests
+func (t *TelegramTransport) handleMathVideoCommand(chatID int64, userID string, args []string) error {
+	if len(args) == 0 {
+		t.sendMessage(chatID, "Please provide a mathematical problem or concept to visualize. Example: `/math Explain the Pythagorean theorem`")
+		return nil
+	}
+
+	problem := strings.Join(args, " ")
+
+	// Validate problem length
+	if len(problem) < 10 {
+		t.sendMessage(chatID, "Problem description too short. Please provide more detail.")
+		return nil
+	}
+
+	if len(problem) > 2000 {
+		t.sendMessage(chatID, "Problem description too long. Please keep it under 2000 characters.")
+		return nil
+	}
+
+	// Send confirmation
+	jobID := fmt.Sprintf("tg_%d_%d", chatID, time.Now().Unix())
+	t.sendMessage(chatID, fmt.Sprintf("🎬 *Processing your request...*\n\nProblem: %s\nJob ID: `%s`\n\nThis may take 2-5 minutes.", problem[:100]+"...", jobID))
+
+	// Here we would integrate with the AI service
+	// For now, send a placeholder response
+	go func() {
+		time.Sleep(3 * time.Second) // Simulate processing
+		t.sendMessage(chatID, fmt.Sprintf("✅ *Video Generated!*\n\nJob ID: `%s`\n\n[Video would be available here in production]", jobID))
+	}()
+
+	return nil
+}
+
+// handleStatusCommand shows current AI job status
+func (t *TelegramTransport) handleStatusCommand(chatID int64, userID string) error {
+	// Placeholder status response
+	statusText := `*AI Job Status*
+
+No active jobs found.
+
+Use /math or /animate to create educational videos!`
+
+	t.sendMessage(chatID, statusText)
+	return nil
+}
+
+// sendMessage is a helper to send messages via Telegram API
+func (t *TelegramTransport) sendMessage(chatID int64, text string) error {
+	// Implementation would use Telegram Bot API
+	t.logger.Printf("Telegram AI response to %d: %s", chatID, text[:100]+"...")
+	return nil
+}
+
+// SendFile sends a file via Telegram Bot API
+func (t *TelegramTransport) SendFile(recipient, filePath string, metadata map[string]interface{}) (*models.FileResponse, error) {
+	// Telegram supports file uploads via sendDocument API
+	t.logger.Printf("Telegram SendFile not yet implemented: %s to %s", filePath, recipient)
+
+	// Placeholder implementation
+	return &models.FileResponse{
+		FileID:      "telegram_file_pending",
+		FileSize:    0,
+		ContentType: "application/octet-stream",
+		Status:      "pending_implementation",
+		Timestamp:   time.Now(),
+	}, fmt.Errorf("SendFile not yet implemented for Telegram transport")
+}
+
+// SendBinary sends binary data via Telegram Bot API
+func (t *TelegramTransport) SendBinary(recipient string, data []byte, metadata map[string]interface{}) (*models.FileResponse, error) {
+	// Telegram supports binary uploads via sendDocument API
+	t.logger.Printf("Telegram SendBinary not yet implemented: %d bytes to %s", len(data), recipient)
+
+	// Placeholder implementation
+	return &models.FileResponse{
+		FileID:      "telegram_binary_pending",
+		FileSize:    int64(len(data)),
+		ContentType: "application/octet-stream",
+		Status:      "pending_implementation",
+		Timestamp:   time.Now(),
+	}, fmt.Errorf("SendBinary not yet implemented for Telegram transport")
 }
 
 // SetWebhook sets up a webhook for receiving messages (alternative to polling)

@@ -23,6 +23,12 @@ type TransportClient interface {
 
 	// GetRateLimit returns current rate limiting status
 	GetRateLimit() (*models.RateLimit, error)
+
+	// SendFile sends a binary file via the transport
+	SendFile(recipient, filePath string, metadata map[string]interface{}) (*models.FileResponse, error)
+
+	// SendBinary sends binary data via the transport
+	SendBinary(recipient string, data []byte, metadata map[string]interface{}) (*models.FileResponse, error)
 }
 
 // MessageResponse represents the response from sending a message
@@ -95,6 +101,26 @@ func (m *MockTransportClient) GetRateLimit() (*models.RateLimit, error) {
 		RequestsRemaining: 100,
 		ResetTime:         time.Now().Add(time.Hour),
 		IsThrottled:       false,
+	}, nil
+}
+
+func (m *MockTransportClient) SendFile(recipient, filePath string, metadata map[string]interface{}) (*models.FileResponse, error) {
+	return &models.FileResponse{
+		FileID:      "mock_file_123",
+		FileSize:    1024,
+		ContentType: "application/octet-stream",
+		Status:      "sent",
+		Timestamp:   time.Now(),
+	}, nil
+}
+
+func (m *MockTransportClient) SendBinary(recipient string, data []byte, metadata map[string]interface{}) (*models.FileResponse, error) {
+	return &models.FileResponse{
+		FileID:      "mock_binary_123",
+		FileSize:    int64(len(data)),
+		ContentType: "application/octet-stream",
+		Status:      "sent",
+		Timestamp:   time.Now(),
 	}, nil
 }
 

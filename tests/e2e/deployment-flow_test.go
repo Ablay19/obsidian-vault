@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -13,7 +12,6 @@ import (
 
 // TestDeploymentFlow tests the complete deployment flow for architectural separation
 func TestDeploymentFlow(t *testing.T) {
-	ctx := context.Background()
 	baseURL := "http://localhost:8080"
 
 	t.Run("API Gateway Deployment Independence", func(t *testing.T) {

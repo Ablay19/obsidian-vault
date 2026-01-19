@@ -44,11 +44,13 @@ and SM APOS Shipper for regions with limited direct internet access.`,
 		rootCmd.AddCommand(newWhatsAppCmd())
 		rootCmd.AddCommand(newTestCmd())
 		rootCmd.AddCommand(newCITestCmd())
+		rootCmd.AddCommand(newMCPServerCmd())
 
 		// Add new commands
 		rootCmd.AddCommand(cleanupCmd)
 		rootCmd.AddCommand(docsCmd)
 		rootCmd.AddCommand(validateCmd)
+		rootCmd.AddCommand(aiCmd)
 
 		// Add Carapace completion
 		carapace.Gen(rootCmd)

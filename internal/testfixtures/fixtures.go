@@ -1,9 +1,16 @@
 package testfixtures
 
 import (
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
+	"obsidian-automation/internal/ai"
 	"obsidian-automation/internal/auth"
+	"obsidian-automation/internal/models"
 	"obsidian-automation/internal/vectorstore"
 	"obsidian-automation/internal/whatsapp"
 )
@@ -324,8 +331,8 @@ func (tf *TestFixtures) SearchResults(count int) []vectorstore.SearchResult {
 // AI Fixtures
 
 // ValidGenerationOptions returns valid AI generation options
-func (tf *TestFixtures) ValidGenerationOptions() GenerationOptions {
-	return GenerationOptions{
+func (tf *TestFixtures) ValidGenerationOptions() ai.GenerationOptions {
+	return ai.GenerationOptions{
 		Model:        "gpt-3.5-turbo",
 		MaxTokens:    150,
 		Temperature:  0.7,
@@ -337,7 +344,7 @@ func (tf *TestFixtures) ValidGenerationOptions() GenerationOptions {
 }
 
 // StreamingGenerationOptions returns options for streaming generation
-func (tf *TestFixtures) StreamingGenerationOptions() GenerationOptions {
+func (tf *TestFixtures) StreamingGenerationOptions() ai.GenerationOptions {
 	opts := tf.ValidGenerationOptions()
 	opts.Stream = true
 	return opts
@@ -358,8 +365,8 @@ func (tf *TestFixtures) ShortPrompt() string {
 }
 
 // ValidGenerationResult returns a valid generation result
-func (tf *TestFixtures) ValidGenerationResult() GenerationResult {
-	return GenerationResult{
+func (tf *TestFixtures) ValidGenerationResult() ai.GenerationResult {
+	return ai.GenerationResult{
 		Content:      "This is a sample AI response for testing purposes.",
 		Model:        "gpt-3.5-turbo",
 		Provider:     "openai",
@@ -373,7 +380,7 @@ func (tf *TestFixtures) ValidGenerationResult() GenerationResult {
 }
 
 // ErrorGenerationResult returns a generation result with an error
-func (tf *TestFixtures) ErrorGenerationResult() GenerationResult {
+func (tf *TestFixtures) ErrorGenerationResult() ai.GenerationResult {
 	result := tf.ValidGenerationResult()
 	result.Content = ""
 	result.FinishReason = "error"
@@ -443,8 +450,8 @@ func (tf *TestFixtures) ErrorHTTPResponse() *http.Response {
 // Database Fixtures
 
 // ValidUser returns a valid user for database testing
-func (tf *TestFixtures) ValidUser() User {
-	return User{
+func (tf *TestFixtures) ValidUser() models.User {
+	return models.User{
 		ID:        "user_123",
 		Email:     "test@example.com",
 		Name:      "Test User",
@@ -455,7 +462,7 @@ func (tf *TestFixtures) ValidUser() User {
 }
 
 // AdminUser returns an admin user for testing
-func (tf *TestFixtures) AdminUser() User {
+func (tf *TestFixtures) AdminUser() models.User {
 	user := tf.ValidUser()
 	user.ID = "admin_123"
 	user.Email = "admin@example.com"
@@ -465,8 +472,8 @@ func (tf *TestFixtures) AdminUser() User {
 }
 
 // ProcessingFile returns a valid processing file for testing
-func (tf *TestFixtures) ProcessingFile() ProcessingFile {
-	return ProcessingFile{
+func (tf *TestFixtures) ProcessingFile() models.ProcessingFile {
+	return models.ProcessingFile{
 		ID:          "file_123",
 		Hash:        "abc123def456",
 		FileName:    "test_document.pdf",
@@ -484,7 +491,7 @@ func (tf *TestFixtures) ProcessingFile() ProcessingFile {
 }
 
 // CompletedProcessingFile returns a completed processing file
-func (tf *TestFixtures) CompletedProcessingFile() ProcessingFile {
+func (tf *TestFixtures) CompletedProcessingFile() models.ProcessingFile {
 	file := tf.ProcessingFile()
 	file.Status = "completed"
 	file.Summary = "This is a test document summary."
@@ -494,7 +501,7 @@ func (tf *TestFixtures) CompletedProcessingFile() ProcessingFile {
 }
 
 // FailedProcessingFile returns a failed processing file
-func (tf *TestFixtures) FailedProcessingFile() ProcessingFile {
+func (tf *TestFixtures) FailedProcessingFile() models.ProcessingFile {
 	file := tf.ProcessingFile()
 	file.Status = "failed"
 	return file
@@ -503,8 +510,8 @@ func (tf *TestFixtures) FailedProcessingFile() ProcessingFile {
 // Session fixtures
 
 // ValidUserSession returns a valid user session
-func (tf *TestFixtures) ValidUserSession() UserSession {
-	return UserSession{
+func (tf *TestFixtures) ValidUserSession() models.UserSession {
+	return models.UserSession{
 		ID:           "session_123",
 		UserID:       "user_456",
 		SessionToken: "valid_session_token_789",
@@ -516,7 +523,7 @@ func (tf *TestFixtures) ValidUserSession() UserSession {
 }
 
 // ExpiredUserSession returns an expired user session
-func (tf *TestFixtures) ExpiredUserSession() UserSession {
+func (tf *TestFixtures) ExpiredUserSession() models.UserSession {
 	session := tf.ValidUserSession()
 	session.ID = "expired_session_123"
 	session.ExpiresAt = time.Now().Add(-1 * time.Hour)

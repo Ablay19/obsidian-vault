@@ -9,6 +9,15 @@ import (
 	"github.com/spf13/viper"
 )
 
+// AIConfig holds AI service configuration
+type AIConfig struct {
+	ManimWorkerURL string `mapstructure:"manim_worker_url"` // Cloudflare Worker URL
+	APIKey         string `mapstructure:"api_key"`          // API key for authentication
+	Timeout        int    `mapstructure:"timeout"`          // request timeout in seconds
+	RetryAttempts  int    `mapstructure:"retry_attempts"`   // number of retries
+	RetryDelay     int    `mapstructure:"retry_delay"`      // delay between retries in seconds
+}
+
 // Config represents the application configuration
 type Config struct {
 	// Database settings
@@ -19,6 +28,9 @@ type Config struct {
 
 	// Authentication settings
 	Auth AuthConfig `mapstructure:"auth"`
+
+	// AI service configuration
+	AI AIConfig `mapstructure:"ai"`
 
 	// Network settings
 	Network NetworkConfig `mapstructure:"network"`

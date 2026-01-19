@@ -280,3 +280,35 @@ func (f *FacebookTransport) VerifyWebhookSignature(payload []byte, signature str
 
 	return nil
 }
+
+// SendFile sends a file via Facebook Messenger
+func (f *FacebookTransport) SendFile(recipient, filePath string, metadata map[string]interface{}) (*models.FileResponse, error) {
+	// Facebook Messenger supports file attachments
+	// This would implement file upload to Facebook's servers
+	f.logger.Printf("Facebook SendFile not yet implemented: %s to %s", filePath, recipient)
+
+	// Placeholder implementation
+	return &models.FileResponse{
+		FileID:      "facebook_file_pending",
+		FileSize:    0,
+		ContentType: "application/octet-stream",
+		Status:      "pending_implementation",
+		Timestamp:   time.Now(),
+	}, fmt.Errorf("SendFile not yet implemented for Facebook transport")
+}
+
+// SendBinary sends binary data via Facebook Messenger
+func (f *FacebookTransport) SendBinary(recipient string, data []byte, metadata map[string]interface{}) (*models.FileResponse, error) {
+	// Facebook Messenger supports binary attachments
+	// This would implement binary upload to Facebook's servers
+	f.logger.Printf("Facebook SendBinary not yet implemented: %d bytes to %s", len(data), recipient)
+
+	// Placeholder implementation
+	return &models.FileResponse{
+		FileID:      "facebook_binary_pending",
+		FileSize:    int64(len(data)),
+		ContentType: "application/octet-stream",
+		Status:      "pending_implementation",
+		Timestamp:   time.Now(),
+	}, fmt.Errorf("SendBinary not yet implemented for Facebook transport")
+}

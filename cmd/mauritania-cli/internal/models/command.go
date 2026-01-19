@@ -83,6 +83,16 @@ type RateLimit struct {
 	IsThrottled       bool      `json:"is_throttled"`
 }
 
+// FileResponse represents the response from sending a file
+type FileResponse struct {
+	FileID      string    `json:"file_id"`
+	FileSize    int64     `json:"file_size"`
+	ContentType string    `json:"content_type"`
+	Status      string    `json:"status"`
+	Timestamp   time.Time `json:"timestamp"`
+	URL         string    `json:"url,omitempty"` // Public URL if available
+}
+
 // ShipperTransport defines the interface for SM APOS Shipper transport
 type ShipperTransport interface {
 	// Authenticate establishes a session with the shipper service

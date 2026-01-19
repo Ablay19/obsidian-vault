@@ -4,11 +4,33 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"gopkg.in/yaml.v3"
 )
+
+// ToolConfig represents the configuration for an opencode tool
+type ToolConfig struct {
+	Name        string            `yaml:"name"`
+	Description string            `yaml:"description"`
+	Version     string            `yaml:"version"`
+	Category    string            `yaml:"category"`
+	Parameters  []ParameterConfig `yaml:"parameters"`
+}
+
+type ParameterConfig struct {
+	Name        string      `yaml:"name"`
+	Type        string      `yaml:"type"`
+	Required    bool        `yaml:"required"`
+	Description string      `yaml:"description"`
+	Default     interface{} `yaml:"default"`
+	Enum        []string    `yaml:"enum"`
+}
 
 // StartServer initializes and starts the MCP server
 func StartServer(transport, host, port string) error {
@@ -38,8 +60,89 @@ func StartServer(transport, host, port string) error {
 	}
 }
 
+// loadOpencodeTools loads tools from .opencode/tools/ directory
+func loadOpencodeTools(s *server.MCPServer) error {
+	toolsDir := ".opencode/tools"
+	if _, err := os.Stat(toolsDir); os.IsNotExist(err) {
+		return fmt.Errorf("opencode tools directory not found: %s", toolsDir)
+	}
+
+	return filepath.Walk(toolsDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !strings.HasSuffix(path, ".yaml") && !strings.HasSuffix(path, ".yml") {
+			return nil
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("failed to read tool config %s: %w", path, err)
+		}
+
+		var config ToolConfig
+		if err := yaml.Unmarshal(data, &config); err != nil {
+			return fmt.Errorf("failed to parse tool config %s: %w", path, err)
+		}
+
+		// Create MCP tool from config
+		toolOptions := []mcp.ToolOption{mcp.WithDescription(config.Description)}
+
+		for _, param := range config.Parameters {
+			var opts []mcp.PropertyOption
+			opts = append(opts, mcp.Description(param.Description))
+
+			if param.Required {
+				opts = append(opts, mcp.Required())
+			}
+
+			if param.Default != nil {
+				switch param.Type {
+				case "string":
+					if def, ok := param.Default.(string); ok {
+						opts = append(opts, mcp.DefaultString(def))
+					}
+				case "number":
+					if def, ok := param.Default.(float64); ok {
+						opts = append(opts, mcp.DefaultNumber(def))
+					}
+					// Note: mcp library doesn't support default values for boolean or object types
+				}
+			}
+
+			if len(param.Enum) > 0 {
+				opts = append(opts, mcp.Enum(param.Enum...))
+			}
+
+			switch param.Type {
+			case "string":
+				toolOptions = append(toolOptions, mcp.WithString(param.Name, opts...))
+			case "number":
+				toolOptions = append(toolOptions, mcp.WithNumber(param.Name, opts...))
+			case "boolean":
+				toolOptions = append(toolOptions, mcp.WithBoolean(param.Name, opts...))
+			case "object":
+				toolOptions = append(toolOptions, mcp.WithObject(param.Name, opts...))
+			}
+		}
+
+		tool := mcp.NewTool(config.Name, toolOptions...)
+
+		// Add the tool with the handler
+		s.AddTool(tool, handleOpencodeTool)
+
+		return nil
+	})
+}
+
 // registerTools adds all diagnostic tools to the server
 func registerTools(s *server.MCPServer) error {
+	// Load opencode tools from .opencode/tools/
+	if err := loadOpencodeTools(s); err != nil {
+		log.Printf("Warning: failed to load opencode tools: %v", err)
+	}
+
+	// Add built-in diagnostic tools
 	// Status tool
 	s.AddTool(mcp.NewTool("status",
 		mcp.WithDescription("Check connectivity status of all transports"),
@@ -57,6 +160,18 @@ func registerTools(s *server.MCPServer) error {
 			mcp.DefaultNumber(24),
 		),
 	), handleLogsTool)
+
+	// Opencode tool
+	s.AddTool(mcp.NewTool("run_opencode",
+		mcp.WithDescription("Execute opencode commands for software engineering tasks"),
+		mcp.WithString("command",
+			mcp.Description("The opencode command to execute"),
+			mcp.Required(),
+		),
+		mcp.WithString("args",
+			mcp.Description("Arguments for the command"),
+		),
+	), handleOpencodeTool)
 
 	// Diagnostics tool
 	s.AddTool(mcp.NewTool("diagnostics",
@@ -505,6 +620,36 @@ func handleErrorMetricsTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 	}
 
 	return mcp.NewToolResultText(metricsText), nil
+}
+
+// handleOpencodeTool executes opencode commands
+func handleOpencodeTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// Get command and args from request
+	var command, args string
+	if req.Params.Arguments != nil {
+		if argsMap, ok := req.Params.Arguments.(map[string]interface{}); ok {
+			if cmd, ok := argsMap["command"].(string); ok {
+				command = cmd
+			}
+			if a, ok := argsMap["args"].(string); ok {
+				args = a
+			}
+		}
+	}
+
+	if command == "" {
+		return mcp.NewToolResultError("Command is required"), nil
+	}
+
+	// In a real implementation, this would execute the opencode command
+	// For now, return a mock response
+	resultText := fmt.Sprintf("Executed opencode command: %s", command)
+	if args != "" {
+		resultText += fmt.Sprintf(" with args: %s", args)
+	}
+	resultText += "\n\nNote: This is a mock implementation. Actual opencode execution would be implemented here."
+
+	return mcp.NewToolResultText(resultText), nil
 }
 
 // shouldIncludeLog determines if a log level should be included based on filter

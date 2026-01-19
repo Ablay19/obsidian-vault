@@ -9,6 +9,14 @@ import (
 )
 
 func main() {
+	// Recover from any panics
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintf(os.Stderr, "Panic recovered: %v\n", r)
+			os.Exit(1)
+		}
+	}()
+
 	// Check for TUI mode flag
 	tuiMode := false
 	args := os.Args[1:]

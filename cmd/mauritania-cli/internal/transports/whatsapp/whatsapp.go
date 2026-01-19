@@ -356,3 +356,100 @@ func parseJID(jid string) (types.JID, error) {
 		Server: types.DefaultUserServer,
 	}, nil
 }
+
+// SendFile sends a file via WhatsApp Business API
+func (w *WhatsAppTransport) SendFile(recipient, filePath string, metadata map[string]interface{}) (*models.FileResponse, error) {
+	// WhatsApp Business API supports media uploads
+	w.logger.Printf("WhatsApp SendFile not yet implemented: %s to %s", filePath, recipient)
+
+	// Placeholder implementation
+	return &models.FileResponse{
+		FileID:      "whatsapp_file_pending",
+		FileSize:    0,
+		ContentType: "application/octet-stream",
+		Status:      "pending_implementation",
+		Timestamp:   time.Now(),
+	}, fmt.Errorf("SendFile not yet implemented for WhatsApp transport")
+}
+
+// SendBinary sends binary data via WhatsApp Business API
+func (w *WhatsAppTransport) SendBinary(recipient string, data []byte, metadata map[string]interface{}) (*models.FileResponse, error) {
+	// WhatsApp Business API supports binary media uploads
+	w.logger.Printf("WhatsApp SendBinary not yet implemented: %d bytes to %s", len(data), recipient)
+
+	// Placeholder implementation
+	return &models.FileResponse{
+		FileID:      "whatsapp_binary_pending",
+		FileSize:    int64(len(data)),
+		ContentType: "application/octet-stream",
+		Status:      "pending_implementation",
+		Timestamp:   time.Now(),
+	}, fmt.Errorf("SendBinary not yet implemented for WhatsApp transport")
+}
+
+// HandleAICommand processes AI-related commands
+func (w *WhatsAppTransport) HandleAICommand(recipient string, userID string, command string, args []string) error {
+	switch command {
+	case "math", "animate":
+		return w.handleMathVideoCommand(recipient, userID, args)
+	case "status":
+		return w.handleStatusCommand(recipient, userID)
+	default:
+		w.sendMessage(recipient, "Unknown AI command. Reply with 'help' for available commands.")
+		return nil
+	}
+}
+
+// handleMathVideoCommand processes math video generation requests
+func (w *WhatsAppTransport) handleMathVideoCommand(recipient string, userID string, args []string) error {
+	if len(args) == 0 {
+		w.sendMessage(recipient, "Please provide a mathematical problem or concept to visualize. Example: 'math Explain the Pythagorean theorem'")
+		return nil
+	}
+
+	problem := strings.Join(args, " ")
+
+	// Validate problem length
+	if len(problem) < 10 {
+		w.sendMessage(recipient, "Problem description too short. Please provide more detail.")
+		return nil
+	}
+
+	if len(problem) > 2000 {
+		w.sendMessage(recipient, "Problem description too long. Please keep it under 2000 characters.")
+		return nil
+	}
+
+	// Send confirmation
+	jobID := fmt.Sprintf("wa_%s_%d", recipient, time.Now().Unix())
+	w.sendMessage(recipient, fmt.Sprintf("🎬 Processing your request...\n\nProblem: %s\nJob ID: %s\n\nThis may take 2-5 minutes.", problem[:100]+"...", jobID))
+
+	// Here we would integrate with the AI service
+	// For now, send a placeholder response
+	go func() {
+		time.Sleep(3 * time.Second) // Simulate processing
+		w.sendMessage(recipient, fmt.Sprintf("✅ Video Generated!\n\nJob ID: %s\n\n[Video would be available here in production]", jobID))
+	}()
+
+	return nil
+}
+
+// handleStatusCommand shows current AI job status
+func (w *WhatsAppTransport) handleStatusCommand(recipient string, userID string) error {
+	// Placeholder status response
+	statusText := `AI Job Status
+
+No active jobs found.
+
+Use 'math' or 'animate' to create educational videos!`
+
+	w.sendMessage(recipient, statusText)
+	return nil
+}
+
+// sendMessage is a helper to send messages via WhatsApp API
+func (w *WhatsAppTransport) sendMessage(recipient string, text string) error {
+	// Implementation would use WhatsApp Business API
+	w.logger.Printf("WhatsApp AI response to %s: %s", recipient, text[:100]+"...")
+	return nil
+}
