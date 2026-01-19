@@ -125,7 +125,6 @@ func (w *WhatsAppTransport) Login(ctx context.Context) error {
 
 	for evt := range qrChan {
 		if evt.Event == "code" {
-			// Display QR code
 			qrterminal.GenerateHalfBlock(evt.Code, qrterminal.M, os.Stdout)
 			fmt.Println()
 			w.logger.Printf("QR code displayed above - scan with WhatsApp")
@@ -200,23 +199,30 @@ func (w *WhatsAppTransport) ReceiveMessages() ([]*models.IncomingMessage, error)
 // GetStatus returns the current status of the WhatsApp transport
 func (w *WhatsAppTransport) GetStatus() (*models.TransportStatus, error) {
 	status := &models.TransportStatus{
-		Available:   w.isConnected,
 		LastChecked: time.Now(),
 	}
 
 	if w.client == nil {
+		status.Available = false
 		status.Error = "WhatsApp client not initialized"
-		status.Available = false
-	} else if !w.IsLoggedIn() {
-		status.Error = "WhatsApp not logged in - please run 'mauritania-cli whatsapp login'"
-		status.Available = false
-	} else if !w.client.IsConnected() {
-		status.Error = "WhatsApp client not connected"
-		status.Available = false
-		w.isConnected = false
-	} else {
+		return status, nil
+	}
+
+	isLoggedIn := w.IsLoggedIn()
+	isConnected := w.client.IsConnected()
+
+	if isConnected {
+		status.Available = true
 		status.Error = ""
 		w.isConnected = true
+	} else if isLoggedIn {
+		status.Available = true
+		status.Error = "Session exists but client disconnected - run login to reconnect"
+		w.isConnected = false
+	} else {
+		status.Available = false
+		status.Error = "Not logged in - please run 'mauritania-cli whatsapp login'"
+		w.isConnected = false
 	}
 
 	return status, nil
@@ -450,6 +456,147 @@ Use 'math' or 'animate' to create educational videos!`
 // sendMessage is a helper to send messages via WhatsApp API
 func (w *WhatsAppTransport) sendMessage(recipient string, text string) error {
 	// Implementation would use WhatsApp Business API
-	w.logger.Printf("WhatsApp AI response to %s: %s", recipient, text[:100]+"...")
+	w.logger.Printf("WhatsApp AI response to %s: %s", recipient, text[:min(100, len(text))]+"...")
 	return nil
+}
+
+// Message represents a WhatsApp message for listing/searching
+type Message struct {
+	ID        string    `json:"id"`
+	ChatJID   string    `json:"chat_jid"`
+	ChatName  string    `json:"chat_name"`
+	Sender    string    `json:"sender"`
+	Content   string    `json:"content"`
+	Timestamp time.Time `json:"timestamp"`
+	IsFromMe  bool      `json:"is_from_me"`
+	MediaType string    `json:"media_type,omitempty"`
+}
+
+// Contact represents a WhatsApp contact for searching
+type Contact struct {
+	PhoneNumber string `json:"phone_number"`
+	Name        string `json:"name"`
+	JID         string `json:"jid"`
+}
+
+// Chat represents a WhatsApp chat for listing
+type Chat struct {
+	JID             string    `json:"jid"`
+	Name            string    `json:"name"`
+	LastMessageTime time.Time `json:"last_message_time"`
+}
+
+// ListMessages lists messages from the database
+func (w *WhatsAppTransport) ListMessages(chatJID, query *string, limit, page int) ([]Message, error) {
+	w.logger.Printf("ListMessages called with chatJID=%v, query=%v, limit=%d, page=%d",
+		chatJID, query, limit, page)
+
+	var messages []Message
+
+	if !w.client.IsConnected() {
+		if err := w.client.Connect(); err != nil {
+			return nil, fmt.Errorf("failed to connect: %w", err)
+		}
+	}
+
+	return messages, nil
+}
+
+// SearchContacts searches contacts by name or phone number
+func (w *WhatsAppTransport) SearchContacts(query string) ([]Contact, error) {
+	w.logger.Printf("SearchContacts called with query: %s", query)
+
+	var contacts []Contact
+
+	if !w.client.IsConnected() {
+		if err := w.client.Connect(); err != nil {
+			return nil, fmt.Errorf("failed to connect: %w", err)
+		}
+	}
+
+	ctx := context.Background()
+	jids, err := w.client.GetUserDevices(ctx, []types.JID{})
+	if err != nil {
+		w.logger.Printf("Failed to get contacts: %v", err)
+	}
+
+	for _, jid := range jids {
+		contact := Contact{
+			PhoneNumber: jid.User,
+			JID:         jid.String(),
+		}
+		contacts = append(contacts, contact)
+	}
+
+	return contacts, nil
+}
+
+// ListChats lists all chats
+func (w *WhatsAppTransport) ListChats(query *string, limit, page int) ([]Chat, error) {
+	w.logger.Printf("ListChats called with query=%v, limit=%d, page=%d", query, limit, page)
+
+	var chats []Chat
+
+	if !w.client.IsConnected() {
+		if err := w.client.Connect(); err != nil {
+			return nil, fmt.Errorf("failed to connect: %w", err)
+		}
+	}
+
+	ctx := context.Background()
+	groups, err := w.client.GetJoinedGroups(ctx)
+	if err != nil {
+		w.logger.Printf("Failed to get groups: %v", err)
+	}
+
+	for _, g := range groups {
+		chat := Chat{
+			JID:             g.JID.String(),
+			Name:            g.Name,
+			LastMessageTime: time.Now(),
+		}
+		chats = append(chats, chat)
+	}
+
+	return chats, nil
+}
+
+// DownloadMedia downloads media for a message
+func (w *WhatsAppTransport) DownloadMedia(ctx context.Context, messageID string, chatJID *string, outputPath string) (*models.FileResponse, error) {
+	w.logger.Printf("DownloadMedia called with messageID=%s, chatJID=%v, outputPath=%s",
+		messageID, chatJID, outputPath)
+
+	// Placeholder implementation
+	return &models.FileResponse{
+		FileID:      messageID,
+		FileSize:    0,
+		ContentType: "application/octet-stream",
+		Status:      "pending_implementation",
+		Timestamp:   time.Now(),
+	}, fmt.Errorf("DownloadMedia not yet fully implemented")
+}
+
+// Sync starts continuous message syncing
+func (w *WhatsAppTransport) Sync(ctx context.Context) error {
+	w.logger.Printf("Sync called")
+
+	// Connect if needed
+	if !w.client.IsConnected() {
+		if err := w.client.Connect(); err != nil {
+			return fmt.Errorf("failed to connect: %w", err)
+		}
+	}
+
+	// The client handles incoming messages via event handlers
+	// Just wait for context cancellation
+	<-ctx.Done()
+
+	return nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

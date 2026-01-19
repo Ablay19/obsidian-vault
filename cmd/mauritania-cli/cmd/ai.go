@@ -66,8 +66,8 @@ func runMathCommand(cmd *cobra.Command, args []string) {
 	problem := strings.Join(args, " ")
 
 	// Validate problem
-	if len(problem) < 10 {
-		fmt.Println("Error: Problem description too short (minimum 10 characters)")
+	if len(problem) < 1 {
+		fmt.Println("Error: Problem description too short (minimum 1 character)")
 		return
 	}
 
